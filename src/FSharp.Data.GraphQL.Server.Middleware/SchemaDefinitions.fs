@@ -182,13 +182,14 @@ let rec private jsonElementToInputValue (element : JsonElement) =
     | _ -> raise (NotSupportedException "Unsupported JSON element type")
 
 /// Defines an object list filter for use as an argument for filter list of object fields.
-let ObjectListFilterType : ScalarDefinition<ObjectListFilter> = {
+let ObjectListFilterType : InputCustomDefinition<ObjectListFilter> = {
     Name = "ObjectListFilter"
     Description =
         Some
             "The `Filter` scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query."
     CoerceInput =
-        (function
+        (fun input variables ->
+        match input with
         | InlineConstant c ->
             coerceObjectListFilterInput c
             |> Result.map ValueOption.toObj
@@ -197,5 +198,4 @@ let ObjectListFilterType : ScalarDefinition<ObjectListFilter> = {
             |> jsonElementToInputValue
             |> coerceObjectListFilterInput
             |> Result.map ValueOption.toObj)
-    CoerceOutput = coerceObjectListFilterValue
 }

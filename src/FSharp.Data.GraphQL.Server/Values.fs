@@ -103,6 +103,9 @@ let rec internal compileByType
 
     | Scalar scalardef -> variableOrElse (InlineConstant >> scalardef.CoerceInput)
 
+    | InputCustom customDef ->
+        fun value variables -> customDef.CoerceInput (InlineConstant value) variables
+
     | InputObject objDef ->
         let objtype = objDef.Type
         let ctor = ReflectionHelper.matchConstructor objtype (objDef.Fields |> Array.map (fun x -> x.Name))
@@ -400,14 +403,28 @@ let rec internal compileByType
         Debug.Fail "Unexpected InputDef"
         failwithf "Unexpected value of inputDef: %O" inputDef
 
-let rec internal coerceVariableValue
-    isNullable
-    inputObjectPath
-    (objectFieldErrorDetails : ObjectFieldErrorDetails voption)
-    (originalTypeDef, typeDef)
-    (varDef : VarDef)
-    (input : JsonElement)
+type CoerceVariableContext = {
+    IsNullable : bool
+    InputObjectPath : FieldPath
+    ObjectFieldErrorDetails : ObjectFieldErrorDetails voption
+    OriginalTypeDef : InputDef
+    TypeDef : InputDef
+    VarDef : VarDef
+    Input : JsonElement
+}
+
+let rec internal coerceVariableValue (ctx : CoerceVariableContext)
     : Result<obj, IGQLError list> =
+
+    let {
+        IsNullable = isNullable
+        InputObjectPath = inputObjectPath
+        ObjectFieldErrorDetails = objectFieldErrorDetails
+        OriginalTypeDef = originalTypeDef
+        TypeDef = typeDef
+        VarDef = varDef
+        Input = input
+    } = ctx
 
     let createVariableCoercionError message =
         Error [
@@ -463,12 +480,26 @@ let rec internal coerceVariableValue
         if input.ValueKind = JsonValueKind.Null then
             Ok null
         else
-            coerceVariableValue true inputObjectPath ValueNone (typeDef, innerdef :> InputDef) varDef input
+            let ctx' = {
+                ctx with
+                    IsNullable = true
+                    ObjectFieldErrorDetails = ValueNone
+                    OriginalTypeDef = typeDef
+                    TypeDef = innerdef :> InputDef
+            }
+            coerceVariableValue ctx'
     | Nullable (Input innerdef) ->
         if input.ValueKind = JsonValueKind.Null then
             Ok null
         else
-            coerceVariableValue true inputObjectPath ValueNone (typeDef, innerdef) varDef input
+            let ctx' = {
+                ctx with
+                    IsNullable = true
+                    ObjectFieldErrorDetails = ValueNone
+                    OriginalTypeDef = typeDef
+                    TypeDef = innerdef
+            }
+            coerceVariableValue ctx'
     | List (Input innerDef) ->
         let cons, nil = ReflectionHelper.listOfType innerDef.Type
 
@@ -487,7 +518,15 @@ let rec internal coerceVariableValue
                         let! items =
                             input.EnumerateArray ()
                             |> Seq.mapi (fun i elem ->
-                                coerceVariableValue areItemsNullable ((box i) :: inputObjectPath) ValueNone (originalTypeDef, innerDef) varDef elem)
+                                let ctx' = {
+                                    ctx with
+                                        IsNullable = areItemsNullable
+                                        InputObjectPath = (box i) :: inputObjectPath
+                                        ObjectFieldErrorDetails = ValueNone
+                                        TypeDef = innerDef
+                                        Input = elem
+                                }
+                                coerceVariableValue ctx')
                             |> Seq.toList
                             |> splitSeqErrorsList
                         if areItemsNullable then
@@ -501,7 +540,14 @@ let rec internal coerceVariableValue
                     }
                 else
                     result {
-                        let! single = coerceVariableValue areItemsNullable inputObjectPath ValueNone (innerDef, innerDef) varDef input
+                        let ctx' = {
+                            ctx with
+                                IsNullable = areItemsNullable
+                                ObjectFieldErrorDetails = ValueNone
+                                OriginalTypeDef = innerDef
+                                TypeDef = innerDef
+                        }
+                        let! single = coerceVariableValue ctx'
 
                         if areItemsNullable then
                             let some, none, _ = ReflectionHelper.optionOfType innerDef.Type.GenericTypeArguments[0]
@@ -548,7 +594,16 @@ and private coerceVariableInputObject inputObjectPath (originalObjDef, objDef) (
                         <| { ObjectDef = originalObjDef; FieldDef = ValueSome field }
                     let fieldTypeDef = field.TypeDef
                     let value =
-                        coerceVariableValue false inputObjectPath' objectFieldErrorDetails (fieldTypeDef, fieldTypeDef) varDef value
+                        let ctx = {
+                            IsNullable = false
+                            InputObjectPath = inputObjectPath'
+                            ObjectFieldErrorDetails = objectFieldErrorDetails
+                            OriginalTypeDef = fieldTypeDef
+                            TypeDef = fieldTypeDef
+                            VarDef = varDef
+                            Input = value
+                        }
+                        coerceVariableValue ctx
                     KeyValuePair (field.Name, value)
                 match input.TryGetProperty field.Name with
                 | true, value -> coerce value |> ValueSome

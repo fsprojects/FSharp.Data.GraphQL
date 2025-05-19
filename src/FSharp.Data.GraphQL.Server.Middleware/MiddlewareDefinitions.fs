@@ -93,7 +93,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                     |> Seq.map (fun x ->
                         match x.Name, x.Value with
                         | "filter", (VariableName variableName) -> Ok (ValueSome (ctx.Variables[variableName] :?> ObjectListFilter))
-                        | "filter", inlineConstant -> ObjectListFilterType.CoerceInput (InlineConstant inlineConstant) |> Result.map ValueOption.ofObj
+                        | "filter", inlineConstant -> ObjectListFilterType.CoerceInput (InlineConstant inlineConstant) ctx.Variables |> Result.map ValueOption.ofObj
                         | _ -> Ok ValueNone)
                     |> Seq.toList
                 match filterResults |> splitSeqErrorsList with

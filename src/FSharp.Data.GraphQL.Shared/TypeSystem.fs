@@ -1757,6 +1757,56 @@ and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> = {
 
     override x.ToString () = x.Name + ": " + x.TypeDef.ToString ()
 
+and internal InputCustomDef =
+    interface
+        /// Name of the input field / argument.
+        abstract Name : string
+        /// Optional input field / argument description.
+        abstract Description : string option
+        /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
+        abstract CoerceInput : InputParameterValue -> IReadOnlyDictionary<string, obj> -> Result<obj, IGQLError list>
+        inherit TypeDef
+        inherit NamedDef
+        inherit InputDef
+        inherit LeafDef
+    end
+
+and InputCustomDefinition<'Val> = internal {
+    Name : string
+    Description : string option
+    CoerceInput : InputParameterValue -> IReadOnlyDictionary<string, obj> -> Result<'Val, IGQLError list>
+} with
+    interface TypeDef with
+        member _.Type = typeof<'Val>
+
+        member x.MakeNullable () =
+            let nullable : NullableDefinition<_> = { OfType = x }
+            upcast nullable
+
+        member x.MakeList () =
+            let list : ListOfDefinition<_, _> = { OfType = x }
+            upcast list
+
+    interface InputDef
+    interface InputDef<'Val>
+    interface LeafDef
+
+    interface InputCustomDef with
+        member x.Name = x.Name
+        member x.Description = x.Description
+        member x.CoerceInput input variables = x.CoerceInput input variables |> Result.map box
+
+    interface NamedDef with
+        member x.Name = x.Name
+
+    override x.Equals y =
+        match y with
+        | :? InputCustomDefinition<'Val> as f -> x.Name = f.Name
+        | _ -> false
+
+    override x.GetHashCode () = x.Name.GetHashCode ()
+    override x.ToString () = x.Name + "!"
+
 and Tag = System.IComparable
 
 and TagsResolver = ResolveFieldContext -> Tag seq
@@ -2402,6 +2452,12 @@ module Patterns =
     let (|InputObject|_|) (tdef : TypeDef) =
         match tdef with
         | :? InputObjectDef as x -> ValueSome x
+        | _ -> ValueNone
+
+    /// Active pattern to match GraphQL type defintion with input object.
+    let internal (|InputCustom|_|) (tdef : TypeDef) =
+        match tdef with
+        | :? InputCustomDef as x -> ValueSome x
         | _ -> ValueNone
 
     /// Active patter to match GraphQL subscription object definitions
