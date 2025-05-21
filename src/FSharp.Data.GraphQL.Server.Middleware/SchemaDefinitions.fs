@@ -3,9 +3,6 @@
 module FSharp.Data.GraphQL.Server.Middleware.SchemaDefinitions
 
 open System
-open System.Collections.Generic
-open System.Collections.Immutable
-open System.Text.Json
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Ast
@@ -22,7 +19,7 @@ type private ComparisonOperator =
     | LessThanOrEqual of string
     | In of string
 
-let rec private coerceObjectListFilterInput x : Result<ObjectListFilter voption, IGQLError list> =
+let rec private coerceObjectListFilterInput (variables : Variables) inputValue : Result<ObjectListFilter voption, IGQLError list> =
 
     let parseFieldCondition (s : string) =
         let s = s.ToLowerInvariant ()
@@ -81,17 +78,17 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter voption,
                 | ValueSome acc -> build (ValueSome (Or (acc, x))) xs
         build ValueNone x
 
-    let rec mapFilter (name : string, value : InputValue) =
+    let rec mapFilter (condition : ComparisonOperator) (value : InputValue) =
         let mapFilters fields =
             let coerceResults =
                 fields
-                |> Seq.map coerceObjectListFilterInput
+                |> Seq.map (coerceObjectListFilterInput variables)
                 |> Seq.toList
                 |> splitSeqErrorsList
             match coerceResults with
             | Error errs -> Error errs
             | Ok coerced -> coerced |> Seq.vchoose id |> Seq.toList |> Ok
-        match parseFieldCondition name, value with
+        match condition, value with
         | Equals "and", ListValue fields -> fields |> mapFilters |> Result.map buildAnd
         | Equals "or", ListValue fields -> fields |> mapFilters |> Result.map buildOr
         | Equals "not", ObjectValue value ->
@@ -126,60 +123,42 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter voption,
                 |> splitSeqErrors
             return ValueSome (ObjectListFilter.In { FieldName = fname; Value = parsedValues |> Array.toList })
           }
+        | condition, VariableName variableName ->
+            match variables.TryGetValue variableName with
+            | true, value -> mapFilter condition (value |> InputValue.OfObject)
+            | false, _ -> Errors.Variables.getVariableNotFoundError variableName
         | _ -> Ok ValueNone
 
     and mapInput value =
         let filterResults =
             value
-            |> Map.toSeq
-            |> Seq.map mapFilter
+            |> Seq.map (fun kvp -> mapFilter (parseFieldCondition kvp.Key) kvp.Value)
             |> Seq.toList
             |> splitSeqErrorsList
         match filterResults with
         | Error errs -> Error errs
         | Ok filters -> filters |> Seq.vchoose id |> List.ofSeq |> buildAnd |> Ok
 
-    match x with
-    | ObjectValue x -> mapInput x
-    | NullValue -> ValueNone |> Ok
-    // TODO: Get union case
-    | _ ->
-        Error [
-            { new IGQLError with
-                member _.Message = $"'ObjectListFilter' must be defined as object but got '{x.GetType ()}'"
-            }
-        ]
+    let rec parse inputValue =
+        match inputValue with
+        | ObjectValue x -> mapInput x
+        | NullValue -> ValueNone |> Ok
+        | VariableName variableName ->
+            match variables.TryGetValue variableName with
+            | true, (:? ObjectListFilter as filter) -> ValueSome filter |> Ok
+            | true, value ->
+                System.Diagnostics.Debug.Fail "We expect the root value is parsed into ObjectListFilter"
+                value |> InputValue.OfObject |> parse
+            | false, _ -> Errors.Variables.getVariableNotFoundError variableName
+        // TODO: Get union case
+        | _ ->
+            Error [
+                { new IGQLError with
+                    member _.Message = $"'ObjectListFilter' must be defined as object but got '{inputValue.GetType ()}'"
+                }
+            ]
+    parse inputValue
 
-let private coerceObjectListFilterValue (x : obj) : ObjectListFilter option =
-    match x with
-    | :? ObjectListFilter as x -> Some x
-    | _ -> None
-//let private coerceObjectListFilterValue (x : obj) =
-//    match x with
-//    | :? ObjectListFilter as x -> Ok x
-//    | _ -> Error [{ new IGQLError with member _.Message = $"Cannot coerce ObjectListFilter output. '%s{x.GetType().FullName}' is not 'ObjectListFilter'" }]
-
-// TODO: Move to shared and make public
-let rec private jsonElementToInputValue (element : JsonElement) =
-    match element.ValueKind with
-    | JsonValueKind.Null -> NullValue
-    | JsonValueKind.True -> BooleanValue true
-    | JsonValueKind.False -> BooleanValue false
-    | JsonValueKind.String -> StringValue (element.GetString ())
-    | JsonValueKind.Number -> FloatValue (element.GetDouble ())
-    | JsonValueKind.Array ->
-        ListValue (
-            element.EnumerateArray ()
-            |> Seq.map jsonElementToInputValue
-            |> List.ofSeq
-        )
-    | JsonValueKind.Object ->
-        ObjectValue (
-            element.EnumerateObject ()
-            |> Seq.map (fun p -> p.Name, jsonElementToInputValue p.Value)
-            |> Map.ofSeq
-        )
-    | _ -> raise (NotSupportedException "Unsupported JSON element type")
 
 /// Defines an object list filter for use as an argument for filter list of object fields.
 let ObjectListFilterType : InputCustomDefinition<ObjectListFilter> = {
@@ -189,13 +168,13 @@ let ObjectListFilterType : InputCustomDefinition<ObjectListFilter> = {
             "The `Filter` scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query."
     CoerceInput =
         (fun input variables ->
-        match input with
-        | InlineConstant c ->
-            coerceObjectListFilterInput c
-            |> Result.map ValueOption.toObj
-        | Variable json ->
-            json
-            |> jsonElementToInputValue
-            |> coerceObjectListFilterInput
-            |> Result.map ValueOption.toObj)
+            match input with
+            | InlineConstant c ->
+                (coerceObjectListFilterInput variables c)
+                |> Result.map ValueOption.toObj
+            | Variable json ->
+                json
+                |> InputValue.OfJsonElement
+                |> (coerceObjectListFilterInput variables)
+                |> Result.map ValueOption.toObj)
 }

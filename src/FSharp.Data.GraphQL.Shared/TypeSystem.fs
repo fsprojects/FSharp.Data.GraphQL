@@ -304,6 +304,7 @@ module Introspection =
         Directives : IntrospectionDirective array
     }
 
+type Variables = IReadOnlyDictionary<string, obj>
 /// Represents a subscription as described in the schema.
 type Subscription = {
     /// The name of the subscription type in the schema.
@@ -1691,7 +1692,7 @@ and InputObjectDefinition<'Val> = {
     override x.ToString () = x.Name + "!"
 
 /// Function type used for resolving input object field values.
-and ExecuteInput = InputValue -> IReadOnlyDictionary<string, obj> -> Result<obj, IGQLError list>
+and ExecuteInput = InputValue -> Variables -> Result<obj, IGQLError list>
 
 /// GraphQL field input definition. Can be used as fields for
 /// input objects or as arguments for any ordinary field definition.
@@ -1764,7 +1765,7 @@ and internal InputCustomDef =
         /// Optional input field / argument description.
         abstract Description : string option
         /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
-        abstract CoerceInput : InputParameterValue -> IReadOnlyDictionary<string, obj> -> Result<obj, IGQLError list>
+        abstract CoerceInput : InputParameterValue -> Variables -> Result<obj, IGQLError list>
         inherit TypeDef
         inherit NamedDef
         inherit InputDef
@@ -1774,7 +1775,7 @@ and internal InputCustomDef =
 and InputCustomDefinition<'Val> = internal {
     Name : string
     Description : string option
-    CoerceInput : InputParameterValue -> IReadOnlyDictionary<string, obj> -> Result<'Val, IGQLError list>
+    CoerceInput : InputParameterValue -> Variables -> Result<'Val, IGQLError list>
 } with
     interface TypeDef with
         member _.Type = typeof<'Val>
@@ -2087,6 +2088,7 @@ and TypeMap () =
                     | _ -> failwith "Expected a Named type!")
                 |> Seq.filter (fun x -> not (map.ContainsKey (x.Name)))
                 |> Seq.iter insert
+            | :? InputCustomDef as icdef -> add icdef.Name def overwrite
             | _ -> failwith "Unexpected type!"
         insert def
 

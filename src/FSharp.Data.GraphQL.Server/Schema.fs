@@ -321,6 +321,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
                 getPossibleTypes idef
                 |> Array.map (fun tdef -> Map.find tdef.Name namedTypes)
             IntrospectionType.Interface(idef.Name, idef.Description, fields, possibleTypes)
+        | InputCustom inCustDef ->
+            IntrospectionType.InputObject(inCustDef.Name, inCustDef.Description, [||])
         | _ -> failwithf "Unexpected value of typedef: %O" typedef
 
     let introspectSchema (types : TypeMap) : IntrospectionSchema =
@@ -334,6 +336,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
                 | Union x -> typeName, { Kind = TypeKind.UNION; Name = Some typeName; Description = x.Description; OfType = None }
                 | Enum x -> typeName, { Kind = TypeKind.ENUM; Name = Some typeName; Description = x.Description; OfType = None }
                 | Interface x -> typeName, { Kind = TypeKind.INTERFACE; Name = Some typeName; Description = x.Description; OfType = None }
+                | InputCustom x -> typeName, { Kind = TypeKind.INPUT_OBJECT; Name = Some typeName; Description = x.Description; OfType = None }
                 | _ -> failwithf "Unexpected value of typedef: %O" typedef)
             |> Map.ofSeq
         let itypes =

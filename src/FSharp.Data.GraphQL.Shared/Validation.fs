@@ -78,6 +78,7 @@ module Types =
                 else
                     ValidationError [ idef.Name + " must have at least one field defined" ]
             nonEmptyResult
+        | InputCustom _ -> Success
         | _ -> failwithf "Unexpected value of typedef: %O" typedef
 
     let validateTypeMap (namedTypes : TypeMap) : ValidationResult<string> =

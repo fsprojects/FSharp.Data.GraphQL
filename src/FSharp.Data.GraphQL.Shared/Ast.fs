@@ -2,6 +2,8 @@
 // Copyright (c) 2016 Bazinga Technologies Inc
 namespace FSharp.Data.GraphQL.Ast
 
+open System
+open System.Text.Json
 //NOTE: For references, see https://facebook.github.io/graphql/
 
 /// 2.2 Query Document
@@ -110,6 +112,59 @@ and InputValue =
     | ObjectValue of Map<string, InputValue>
     /// 2.10 Variables
     | VariableName of string
+
+    with
+        static member OfObject (obj : obj) =
+            match obj with
+            | null -> NullValue
+            | :? int64 as value -> IntValue value
+            | :? int32 as value -> IntValue (int64 value)
+            | :? int16 as value -> IntValue (int64 value)
+            | :? double as value -> FloatValue value
+            | :? single as value -> FloatValue (double value)
+            | :? bool as value -> BooleanValue value
+            | :? string as value -> StringValue value
+            | :? uint64 as value -> IntValue (int64 value)
+            | :? uint32 as value -> IntValue (int64 value)
+            | :? uint16 as value -> IntValue (int64 value)
+            | value ->
+                let ``type`` = value.GetType()
+                if ``type``.IsArray then
+                    let array = value :?> System.Array
+                    let list = [ for i in 0 .. array.Length - 1 -> InputValue.OfObject (array.GetValue i) ]
+                    ListValue list
+                else
+                    let genericType = ``type``.GetGenericTypeDefinition()
+                    if typeof<System.Collections.Generic.IReadOnlyDictionary<string, obj>>.IsAssignableFrom genericType then
+                        let dict = value :?> System.Collections.Generic.IReadOnlyDictionary<string, obj>
+                        let map =
+                            dict
+                            |> Seq.map (fun kv -> kv.Key.ToString(), InputValue.OfObject kv.Value)
+                            |> Map.ofSeq
+                        ObjectValue map
+                    else
+                        failwith "Cannot convert object to 'InputValue'"
+
+        static member OfJsonElement (element : JsonElement) =
+            match element.ValueKind with
+            | JsonValueKind.Null -> NullValue
+            | JsonValueKind.True -> BooleanValue true
+            | JsonValueKind.False -> BooleanValue false
+            | JsonValueKind.String -> StringValue (element.GetString ())
+            | JsonValueKind.Number -> FloatValue (element.GetDouble ())
+            | JsonValueKind.Array ->
+                ListValue (
+                    element.EnumerateArray ()
+                    |> Seq.map InputValue.OfJsonElement
+                    |> List.ofSeq
+                )
+            | JsonValueKind.Object ->
+                ObjectValue (
+                    element.EnumerateObject ()
+                    |> Seq.map (fun p -> p.Name, InputValue.OfJsonElement p.Value)
+                    |> Map.ofSeq
+                )
+            | _ -> raise (NotSupportedException "Unsupported JSON element type")
 
 /// 2.2.8 Variables
 and VariableDefinition = { VariableName : string; Type : InputType; DefaultValue : InputValue option }

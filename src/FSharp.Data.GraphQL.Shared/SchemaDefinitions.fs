@@ -62,6 +62,10 @@ module SchemaDefinitions =
         let getParseError destinationType value =
             Error [{ new IGQLError with member _.Message = $"Inline value '%s{value}' cannot be parsed into %s{destinationType}" }]
 
+        module Variables =
+
+            let getVariableNotFoundError (variableName : string) =
+                Error [{ new IGQLError with member _.Message = $"A variable '$%s{variableName}' not found" }]
 
     open System.Globalization
     open Errors
