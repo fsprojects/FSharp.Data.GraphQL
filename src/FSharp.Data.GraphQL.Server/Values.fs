@@ -425,35 +425,35 @@ type CoerceVariableInputContext = {
 
 let rec internal coerceVariableValue (ctx : CoerceVariableContext) : Result<obj, IGQLError list> =
 
-    let {
-            IsNullable = isNullable
-            InputObjectPath = inputObjectPath
-            ObjectFieldErrorDetails = objectFieldErrorDetails
-            OriginalTypeDef = originalTypeDef
-            TypeDef = typeDef
-            VarDef = varDef
-            Input = input
-        } =
-        ctx
+    //let {
+    //        IsNullable = isNullable
+    //        InputObjectPath = inputObjectPath
+    //        ObjectFieldErrorDetails = objectFieldErrorDetails
+    //        OriginalTypeDef = originalTypeDef
+    //        TypeDef = typeDef
+    //        VarDef = varDef
+    //        Input = input
+    //    } =
+    //    ctx
 
     let createVariableCoercionError message =
         Error [
             {
-                CoercionError.InputSource = Variable varDef
+                CoercionError.InputSource = Variable ctx.VarDef
                 CoercionError.Message = message
                 CoercionError.ErrorKind = InputCoercion
-                CoercionError.Path = inputObjectPath
-                CoercionError.FieldErrorDetails = objectFieldErrorDetails
+                CoercionError.Path = ctx.InputObjectPath
+                CoercionError.FieldErrorDetails = ctx.ObjectFieldErrorDetails
             }
             :> IGQLError
         ]
 
     let createNullError typeDef =
         let message =
-            match objectFieldErrorDetails with
+            match ctx.ObjectFieldErrorDetails with
             | ValueSome details ->
                 $"Non-nullable field '%s{details.FieldDef.Value.Name}' expected value of type '%s{string typeDef}', but got 'null'."
-            | ValueNone -> $"Non-nullable variable '$%s{varDef.Name}' expected value of type '%s{string typeDef}', but got 'null'."
+            | ValueNone -> $"Non-nullable variable '$%s{ctx.VarDef.Name}' expected value of type '%s{string typeDef}', but got 'null'."
         createVariableCoercionError message
 
     let mapInputError varDef inputObjectPath (objectFieldErrorDetails : ObjectFieldErrorDetails voption) (err : IGQLError) : IGQLError = {
@@ -464,58 +464,58 @@ let rec internal coerceVariableValue (ctx : CoerceVariableContext) : Result<obj,
         FieldErrorDetails = objectFieldErrorDetails
     }
 
-    match typeDef with
+    match ctx.TypeDef with
     | Scalar scalardef ->
-        if input.ValueKind = JsonValueKind.Null then
-            createNullError originalTypeDef
+        if ctx.Input.ValueKind = JsonValueKind.Null then
+            createNullError ctx.OriginalTypeDef
         else
-            match scalardef.CoerceInput (InputParameterValue.Variable input) with
-            | Ok null when isNullable -> Ok null
+            match scalardef.CoerceInput (InputParameterValue.Variable ctx.Input) with
+            | Ok null when ctx.IsNullable -> Ok null
             // TODO: Capture position in the JSON document
-            | Ok null -> createNullError originalTypeDef
-            | Ok value when not isNullable ->
+            | Ok null -> createNullError ctx.OriginalTypeDef
+            | Ok value when not ctx.IsNullable ->
                 let ``type`` = value.GetType ()
                 if
                     ``type``.IsValueType
                     && ``type``.FullName.StartsWith ReflectionHelper.ValueOptionTypeName
                     && value = Activator.CreateInstance ``type``
                 then
-                    createNullError originalTypeDef
+                    createNullError ctx.OriginalTypeDef
                 else
                     Ok value
             | result ->
                 result
-                |> Result.mapError (List.map (mapInputError varDef inputObjectPath objectFieldErrorDetails))
+                |> Result.mapError (List.map (mapInputError ctx.VarDef ctx.InputObjectPath ctx.ObjectFieldErrorDetails))
     | Nullable (InputObject innerdef) ->
-        if input.ValueKind = JsonValueKind.Null then
+        if ctx.Input.ValueKind = JsonValueKind.Null then
             Ok null
         else
             let ctx' = {
                 ctx with
                     IsNullable = true
                     ObjectFieldErrorDetails = ValueNone
-                    OriginalTypeDef = typeDef
+                    OriginalTypeDef = ctx.TypeDef
                     TypeDef = innerdef :> InputDef
             }
             coerceVariableValue ctx'
     | Nullable (Input innerdef) ->
-        if input.ValueKind = JsonValueKind.Null then
+        if ctx.Input.ValueKind = JsonValueKind.Null then
             Ok null
         else
             let ctx' = {
                 ctx with
                     IsNullable = true
                     ObjectFieldErrorDetails = ValueNone
-                    OriginalTypeDef = typeDef
+                    OriginalTypeDef = ctx.TypeDef
                     TypeDef = innerdef
             }
             coerceVariableValue ctx'
     | List (Input innerDef) ->
         let cons, nil = ReflectionHelper.listOfType innerDef.Type
 
-        match input with
-        | _ when input.ValueKind = JsonValueKind.Null && isNullable -> Ok null
-        | _ when input.ValueKind = JsonValueKind.Null -> createNullError typeDef
+        match ctx.Input with
+        | _ when ctx.Input.ValueKind = JsonValueKind.Null && ctx.IsNullable -> Ok null
+        | _ when ctx.Input.ValueKind = JsonValueKind.Null -> createNullError ctx.TypeDef
         | _ -> result {
             let areItemsNullable =
                 match innerDef with
@@ -523,15 +523,15 @@ let rec internal coerceVariableValue (ctx : CoerceVariableContext) : Result<obj,
                 | _ -> false
 
             let! items =
-                if input.ValueKind = JsonValueKind.Array then
+                if ctx.Input.ValueKind = JsonValueKind.Array then
                     result {
                         let! items =
-                            input.EnumerateArray ()
+                            ctx.Input.EnumerateArray ()
                             |> Seq.mapi (fun i elem ->
                                 let ctx' = {
                                     ctx with
                                         IsNullable = areItemsNullable
-                                        InputObjectPath = (box i) :: inputObjectPath
+                                        InputObjectPath = (box i) :: ctx.InputObjectPath
                                         ObjectFieldErrorDetails = ValueNone
                                         TypeDef = innerDef
                                         Input = elem
@@ -568,7 +568,7 @@ let rec internal coerceVariableValue (ctx : CoerceVariableContext) : Result<obj,
                             return [ single ]
                     }
 
-            let isArray = typeDef.Type.IsArray
+            let isArray = ctx.TypeDef.Type.IsArray
             if isArray then
                 return ReflectionHelper.arrayOfList innerDef.Type items
             else
@@ -576,48 +576,48 @@ let rec internal coerceVariableValue (ctx : CoerceVariableContext) : Result<obj,
           }
     | InputObject objdef ->
         coerceVariableInputObject {
-            InputObjectPath = inputObjectPath
-            OriginalObjectDef = originalTypeDef
+            InputObjectPath = ctx.InputObjectPath
+            OriginalObjectDef = ctx.OriginalTypeDef
             ObjectDef = objdef
-            VarDef = varDef
-            Input = input
+            VarDef = ctx.VarDef
+            Input = ctx.Input
         }
     | Enum enumdef ->
-        match input with
-        | _ when input.ValueKind = JsonValueKind.Null && isNullable -> Ok null
-        | _ when input.ValueKind = JsonValueKind.Null ->
-            createVariableCoercionError $"A variable '$%s{varDef.Name}' expected value of type '%s{enumdef.Name}!', but no value was found."
-        | _ when input.ValueKind = JsonValueKind.String ->
-            let value = input.GetString ()
+        match ctx.Input with
+        | _ when ctx.Input.ValueKind = JsonValueKind.Null && ctx.IsNullable -> Ok null
+        | _ when ctx.Input.ValueKind = JsonValueKind.Null ->
+            createVariableCoercionError $"A variable '$%s{ctx.VarDef.Name}' expected value of type '%s{enumdef.Name}!', but no value was found."
+        | _ when ctx.Input.ValueKind = JsonValueKind.String ->
+            let value = ctx.Input.GetString ()
             match
                 enumdef.Options
                 |> Array.tryFind (fun o -> o.Name.Equals (value, StringComparison.InvariantCultureIgnoreCase))
             with
             | Some option -> Ok option.Value
             | None -> createVariableCoercionError $"A value '%s{value}' is not defined in Enum '%s{enumdef.Name}'."
-        | _ -> createVariableCoercionError $"Enum values must be strings but got '%O{input.ValueKind}'."
+        | _ -> createVariableCoercionError $"Enum values must be strings but got '%O{ctx.Input.ValueKind}'."
     | InputCustom custDef ->
-        if input.ValueKind = JsonValueKind.Null then
-            createNullError originalTypeDef
+        if ctx.Input.ValueKind = JsonValueKind.Null then
+            createNullError ctx.OriginalTypeDef
         else
-            match custDef.CoerceInput (InputParameterValue.Variable input) ImmutableDictionary.Empty with
-            | Ok null when isNullable -> Ok null
+            match custDef.CoerceInput (InputParameterValue.Variable ctx.Input) ImmutableDictionary.Empty with
+            | Ok null when ctx.IsNullable -> Ok null
             // TODO: Capture position in the JSON document
-            | Ok null -> createNullError originalTypeDef
-            | Ok value when not isNullable ->
+            | Ok null -> createNullError ctx.OriginalTypeDef
+            | Ok value when not ctx.IsNullable ->
                 let ``type`` = value.GetType ()
                 if
                     ``type``.IsValueType
                     && ``type``.FullName.StartsWith ReflectionHelper.ValueOptionTypeName
                     && value = Activator.CreateInstance ``type``
                 then
-                    createNullError originalTypeDef
+                    createNullError ctx.OriginalTypeDef
                 else
                     Ok value
             | result ->
                 result
-                |> Result.mapError (List.map (mapInputError varDef inputObjectPath objectFieldErrorDetails))
-    | _ -> failwith $"Variable '$%s{varDef.Name}': Only Scalars, Nullables, Lists, and InputObjects are valid type definitions."
+                |> Result.mapError (List.map (mapInputError ctx.VarDef ctx.InputObjectPath ctx.ObjectFieldErrorDetails))
+    | _ -> failwith $"Variable '$%s{ctx.VarDef.Name}': Only Scalars, Nullables, Lists, and InputObjects are valid type definitions."
 
 and private coerceVariableInputObject (ctx : CoerceVariableInputContext) =
     match ctx.Input.ValueKind with

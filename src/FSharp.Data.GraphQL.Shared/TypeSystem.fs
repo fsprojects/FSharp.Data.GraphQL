@@ -70,7 +70,7 @@ module Introspection =
         Args : IntrospectionInputVal[]
     }
 
-    /// Introspection descriptor of a GraphQL type defintion.
+    /// Introspection descriptor of a GraphQL type definition.
     and IntrospectionType = {
         /// Which kind category current type belongs to.
         Kind : TypeKind
@@ -81,7 +81,7 @@ module Introspection =
         /// Array of field descriptors defined within current type.
         /// Only present for Object and Interface types.
         Fields : IntrospectionField[] option
-        /// Array of interfaces implemented by output object type defintion.
+        /// Array of interfaces implemented by output object type definition.
         Interfaces : IntrospectionTypeRef[] option
         /// Array of type references being possible implementation of current type.
         /// Only present for Union types (list of union cases) and Interface types
@@ -234,7 +234,7 @@ module Introspection =
         }
 
         /// <summary>
-        /// Constructs an introspection type reference for any named type defintion
+        /// Constructs an introspection type reference for any named type definition
         /// (any type other than List or NonNull) with unique name included.
         /// </summary>
         /// <param name="inner">Introspection type descriptor to construct reference from.</param>
@@ -305,6 +305,7 @@ module Introspection =
     }
 
 type Variables = IReadOnlyDictionary<string, obj>
+
 /// Represents a subscription as described in the schema.
 type Subscription = {
     /// The name of the subscription type in the schema.
@@ -572,7 +573,7 @@ and TypeDef<'Val> =
         inherit TypeDef
     end
 
-/// Representation of all type defintions, that can be uses as inputs.
+/// Representation of all type definitions, that can be uses as inputs.
 /// By default only scalars, enums, lists, nullables and input objects
 /// are valid input types.
 and InputDef =
@@ -580,7 +581,7 @@ and InputDef =
         inherit TypeDef
     end
 
-/// Representation of all type defintions, that can be uses as inputs.
+/// Representation of all type definitions, that can be uses as inputs.
 /// By default only scalars, enums, lists, nullables and input objects
 /// are valid input types. Constrained to represent .NET type provided
 /// as generic parameter.
@@ -590,7 +591,7 @@ and InputDef<'Val> =
         inherit TypeDef<'Val>
     end
 
-/// Representation of all type defintions, that can be uses as outputs.
+/// Representation of all type definitions, that can be uses as outputs.
 /// By default only scalars, enums, lists, nullables, unions, interfaces
 /// and objects are valid output types.
 and OutputDef =
@@ -598,7 +599,7 @@ and OutputDef =
         inherit TypeDef
     end
 
-/// Representation of all type defintions, that can be uses as outputs.
+/// Representation of all type definitions, that can be uses as outputs.
 /// By default only scalars, enums, lists, nullables, unions, interfaces
 /// and objects are valid input types. Constrained to represent .NET type
 /// provided as generic parameter.
@@ -662,7 +663,7 @@ and Includer = ImmutableDictionary<string, obj> -> Result<bool, IGQLError list>
 
 /// A node representing part of the current GraphQL query execution plan.
 /// It contains info about both document AST fragment of incoming query as well,
-/// as field defintion and type info of related fields, defined in schema.
+/// as field definition and type info of related fields, defined in schema.
 and ExecutionInfo = {
     /// Field identifier, which may be either field name or alias. For top level execution plan it will be None.
     Identifier : string
@@ -865,7 +866,7 @@ and SchemaCompileContext = { Schema : ISchema; TypeMap : TypeMap; FieldExecuteMa
 and ExecutionPlan = {
     /// Unique identifier of the current execution plan.
     DocumentId : int
-    /// AST defintion of current operation.
+    /// AST definition of current operation.
     Operation : OperationDefinition
     /// Definition of the root type (either query or mutation) used by the
     /// current operation.
@@ -953,7 +954,7 @@ and ResolveFieldContext = {
 /// Function type for the compiled field executor.
 and ExecuteField = ResolveFieldContext -> obj -> AsyncVal<obj>
 
-/// Untyped representation of the GraphQL field defintion.
+/// Untyped representation of the GraphQL field definition.
 /// Can be used only withing object and interface definitions.
 and FieldDef =
     interface
@@ -975,7 +976,7 @@ and FieldDef =
         inherit IEquatable<FieldDef>
     end
 
-/// A paritally typed representation of the GraphQL field defintion.
+/// A paritally typed representation of the GraphQL field definition.
 /// Contains type parameter describing .NET type used as it's container.
 /// Can be used only withing object and interface definitions.
 and FieldDef<'Val> =
@@ -1302,7 +1303,7 @@ and [<CustomEquality; NoComparison>] internal ObjectDefinition<'Val> = {
 
     override x.ToString () = x.Name + "!"
 
-/// A GraphQL interface type defintion. Interfaces are composite
+/// A GraphQL interface type definition. Interfaces are composite
 /// output types, that can be implemented by GraphQL objects.
 and InterfaceDef =
     interface
@@ -1324,7 +1325,7 @@ and InterfaceDef =
         inherit NamedDef
     end
 
-/// A GraphQL interface type defintion. Interfaces are composite
+/// A GraphQL interface type definition. Interfaces are composite
 /// output types, that can be implemented by GraphQL objects.
 and InterfaceDef<'Val> =
     interface
@@ -1341,7 +1342,7 @@ and [<CustomEquality; NoComparison>] internal InterfaceDefinition<'Val> = {
     Name : string
     /// Optional interface description.
     Description : string option
-    /// Lazy defintion of fields to be defined by implementing
+    /// Lazy definition of fields to be defined by implementing
     /// object definition in order to satisfy current interface.
     /// Must be lazy in order to allow self-referencing types.
     FieldsFn : unit -> FieldDef<'Val>[]
@@ -1941,7 +1942,7 @@ and [<CustomEquality; NoComparison>] SubscriptionObjectDefinition<'Val> = {
 
     override x.ToString () = x.Name + "!"
 
-/// GraphQL directive defintion.
+/// GraphQL directive definition.
 and DirectiveDef = {
     /// Directive's name - it's NOT '@' prefixed.
     Name : string
@@ -2420,43 +2421,43 @@ module Resolve =
 
 module Patterns =
 
-    /// Active pattern to match GraphQL type defintion with Scalar.
+    /// Active pattern to match GraphQL type definition with Scalar.
     let (|Scalar|_|) (tdef : TypeDef) =
         match tdef with
         | :? ScalarDef as x -> ValueSome x
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with Object.
+    /// Active pattern to match GraphQL type definition with Object.
     let (|Object|_|) (tdef : TypeDef) =
         match tdef with
         | :? ObjectDef as x -> ValueSome x
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with Interface.
+    /// Active pattern to match GraphQL type definition with Interface.
     let (|Interface|_|) (tdef : TypeDef) =
         match tdef with
         | :? InterfaceDef as x -> ValueSome x
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with Union.
+    /// Active pattern to match GraphQL type definition with Union.
     let (|Union|_|) (tdef : TypeDef) =
         match tdef with
         | :? UnionDef as x -> ValueSome x
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with Enum.
+    /// Active pattern to match GraphQL type definition with Enum.
     let (|Enum|_|) (tdef : TypeDef) =
         match tdef with
         | :? EnumDef as x -> ValueSome x
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with input object.
+    /// Active pattern to match GraphQL type definition with input object.
     let (|InputObject|_|) (tdef : TypeDef) =
         match tdef with
         | :? InputObjectDef as x -> ValueSome x
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with input object.
+    /// Active pattern to match GraphQL type definition with custom object.
     let internal (|InputCustom|_|) (tdef : TypeDef) =
         match tdef with
         | :? InputCustomDef as x -> ValueSome x
@@ -2469,43 +2470,43 @@ module Patterns =
         | :? SubscriptionObjectDef as x -> ValueSome x
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with List.
+    /// Active pattern to match GraphQL type definition with List.
     let (|List|_|) (tdef : TypeDef) =
         match tdef with
         | :? ListOfDef as x -> ValueSome x.OfType
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with nullable / optional types.
+    /// Active pattern to match GraphQL type definition with nullable / optional types.
     let (|Nullable|_|) (tdef : TypeDef) =
         match tdef with
         | :? NullableDef as x -> ValueSome x.OfType
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with non-null types.
+    /// Active pattern to match GraphQL type definition with non-null types.
     let (|NonNull|_|) (tdef : TypeDef) =
         match tdef with
         | :? NullableDef -> ValueNone
         | other -> ValueSome other
 
-    /// Active pattern to match GraphQL type defintion with valid input types.
+    /// Active pattern to match GraphQL type definition with valid input types.
     let (|Input|_|) (tdef : TypeDef) =
         match tdef with
         | :? InputDef as i -> ValueSome i
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with valid output types.
+    /// Active pattern to match GraphQL type definition with valid output types.
     let (|Output|_|) (tdef : TypeDef) =
         match tdef with
         | :? OutputDef as o -> ValueSome o
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with valid leaf types.
+    /// Active pattern to match GraphQL type definition with valid leaf types.
     let (|Leaf|_|) (tdef : TypeDef) =
         match tdef with
         | :? LeafDef as ldef -> ValueSome ldef
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with valid composite types.
+    /// Active pattern to match GraphQL type definition with valid composite types.
     let (|Composite|_|) (tdef : TypeDef) =
         match tdef with
         | :? ObjectDef
@@ -2513,7 +2514,7 @@ module Patterns =
         | :? UnionDef -> ValueSome tdef
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with valid abstract types.
+    /// Active pattern to match GraphQL type definition with valid abstract types.
     let (|Abstract|_|) (tdef : TypeDef) =
         match tdef with
         | :? InterfaceDef
@@ -2527,5 +2528,5 @@ module Patterns =
         | List inner -> named inner
         | _ -> ValueNone
 
-    /// Active pattern to match GraphQL type defintion with named types.
+    /// Active pattern to match GraphQL type definition with named types.
     let rec (|Named|_|) (tdef : TypeDef) = named tdef

@@ -1045,47 +1045,14 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
 [<Fact>]
-let ``Object list filter: Must return empty filter when all discriminated union types are specified`` () =
-    let query =
-        parse
-            """query testQuery() { Properties { ...Value } }
-
-        fragment Value on Property {
-                ...on Complex {
-                    id
-                    name
-                    discriminator
-                }
-                ...on Building {
-                    id
-                    name
-                    discriminator
-                }
-                ...on Community {
-                    id
-                    name
-                    discriminator
-                }
-        }"""
-    let result = execute query
-    ensureDirect result <| fun _ errors -> empty errors
-
-[<Fact>]
-let ``Object list filter: Must return empty filter when no discriminated union types are specified`` () =
-    let query = parse """query testQuery() { Properties { __typename } }"""
-    let result = execute query
-    ensureDirect result <| fun _ errors -> empty errors
-
-[<Fact>]
-let ``Object list filter: Must parse filter value through variable`` () =
-    // TODO: fix parsing in SchemaDefinitions.fs : line 94
+let ``Object list filter: Must parse filter that references variables`` () =
     let query =
         parse
             """query testQuery($filter: String) {
                 A (id : 1) {
                     id
                     value
-                    subjects (filter : {value_starts_with : $filter}) { ...Value }
+                    subjects (filter : { value_starts_with : $filter }) { ...Value }
                 }
         }
 
@@ -1125,3 +1092,35 @@ let ``Object list filter: Must parse filter value through variable`` () =
             empty errors
             data |> equals (upcast expected)
         result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
+
+[<Fact>]
+let ``Object list filter: Must return empty filter when all discriminated union types are specified`` () =
+    let query =
+        parse
+            """query testQuery() { Properties { ...Value } }
+
+        fragment Value on Property {
+                ...on Complex {
+                    id
+                    name
+                    discriminator
+                }
+                ...on Building {
+                    id
+                    name
+                    discriminator
+                }
+                ...on Community {
+                    id
+                    name
+                    discriminator
+                }
+        }"""
+    let result = execute query
+    ensureDirect result <| fun _ errors -> empty errors
+
+[<Fact>]
+let ``Object list filter: Must return empty filter when no discriminated union types are specified`` () =
+    let query = parse """query testQuery() { Properties { __typename } }"""
+    let result = execute query
+    ensureDirect result <| fun _ errors -> empty errors
