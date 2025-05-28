@@ -599,7 +599,16 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
             fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(varDef, jsonElement) -> validation {
                     let! value =
                         let varTypeDef = varDef.TypeDef
-                        coerceVariableValue false [] ValueNone (varTypeDef, varTypeDef) varDef jsonElement
+                        let ctx = {
+                            IsNullable = false
+                            InputObjectPath = []
+                            ObjectFieldErrorDetails = ValueNone
+                            OriginalTypeDef = varTypeDef
+                            TypeDef = varTypeDef
+                            VarDef = varDef
+                            Input = jsonElement
+                        }
+                        coerceVariableValue ctx
                         |> Result.mapError (
                             List.map (fun err ->
                                 match err with

@@ -1045,6 +1045,55 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
 [<Fact>]
+let ``Object list filter: Must parse filter that references variables`` () =
+    let query =
+        parse
+            """query testQuery($filter: String) {
+                A (id : 1) {
+                    id
+                    value
+                    subjects (filter : { value_starts_with : $filter }) { ...Value }
+                }
+        }
+
+        fragment Value on Subject {
+                ...on A {
+                    id
+                    value
+                }
+                ...on B {
+                    id
+                    value
+                }
+        }"""
+    let expected =
+        NameValueLookup.ofList [
+            "A",
+            upcast
+                NameValueLookup.ofList [
+                    "id", upcast 1
+                    "value", upcast "A1"
+                    "subjects",
+                    upcast
+                        [
+                            NameValueLookup.ofList [ "id", upcast 2; "value", upcast "A2" ]
+                            NameValueLookup.ofList [ "id", upcast 6; "value", upcast "3000" ]
+                        ]
+                ]
+        ]
+    do
+        let filterValue = "3" |> JsonDocument.Parse |> _.RootElement
+        let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", filterValue)
+        let filter = (StartsWith { FieldName = "value"; Value = "3" })
+        let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
+
+        ensureDirect result <| fun data errors ->
+            empty errors
+            data |> equals (upcast expected)
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
+
+[<Fact>]
 let ``Object list filter: Must return empty filter when all discriminated union types are specified`` () =
     let query =
         parse
