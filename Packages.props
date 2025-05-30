@@ -4,6 +4,7 @@
     <SystemVersion>8.0.*</SystemVersion>
     <MicrosoftExtensionsVersion>8.0.*</MicrosoftExtensionsVersion>
     <AspNetCoreVersion>8.0.*</AspNetCoreVersion>
+    <FSharpCoreVersion>9.0.202</FSharpCoreVersion>
     <FsToolkitVersion>4.18.*</FsToolkitVersion>
     <XUnitVersion>2.9.3</XUnitVersion>
     <FAKEVersion>6.*</FAKEVersion>

@@ -27,7 +27,6 @@
 
   <ItemGroup>
     <PackageReference Include="Collections.Pooled" />
-    <PackageReference Include="FSharp.Core" VersionOverride="9.0.*" />
     <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
     <PackageReference Include="Oxpecker" />
