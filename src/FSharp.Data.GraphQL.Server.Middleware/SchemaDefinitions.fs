@@ -167,7 +167,7 @@ let ObjectListFilterType : InputCustomDefinition<ObjectListFilter> = {
         Some
             "The `Filter` scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query."
     CoerceInput =
-        (fun input variables ->
+        (fun _ input variables ->
             match input with
             | InlineConstant c ->
                 (coerceObjectListFilterInput variables c)

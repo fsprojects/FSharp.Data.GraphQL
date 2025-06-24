@@ -17,11 +17,11 @@ open FSharp.Data.GraphQL.Shared
 
 type DefaultGraphQLRequestHandler<'Root>
     (
-        /// The accessor to the current HTTP context
+        // The accessor to the current HTTP context
         httpContextAccessor : IHttpContextAccessor,
-        /// The options monitor for GraphQL options
+        // The options monitor for GraphQL options
         options : IOptionsMonitor<GraphQLOptions<'Root>>,
-        /// The logger to log messages
+        // The logger to log messages
         logger : ILogger<DefaultGraphQLRequestHandler<'Root>>
     ) =
     inherit GraphQLRequestHandler<'Root> (httpContextAccessor, options, logger)
@@ -29,15 +29,16 @@ type DefaultGraphQLRequestHandler<'Root>
 /// Provides logic to parse and execute GraphQL request
 and [<AbstractClass>] GraphQLRequestHandler<'Root>
     (
-        /// The accessor to the current HTTP context
+        // The accessor to the current HTTP context
         httpContextAccessor : IHttpContextAccessor,
-        /// The options monitor for GraphQL options
+        // The options monitor for GraphQL options
         options : IOptionsMonitor<GraphQLOptions<'Root>>,
-        /// The logger to log messages
+        // The logger to log messages
         logger : ILogger
     ) =
 
     let ctx = httpContextAccessor.HttpContext
+    let inputContext = fun () -> (HttpContextRequestExecutionContext ctx) :> IInputExecutionContext
 
     let toResponse { DocumentId = documentId; Content = content; Metadata = metadata } =
 
@@ -142,8 +143,8 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
     let executeIntrospectionQuery (executor : Executor<_>) (ast : Ast.Document voption) : Task<IResult> = task {
         let! result =
             match ast with
-            | ValueNone -> executor.AsyncExecute IntrospectionQuery.Definition
-            | ValueSome ast -> executor.AsyncExecute ast
+            | ValueNone -> executor.AsyncExecute (IntrospectionQuery.Definition, inputContext)
+            | ValueSome ast -> executor.AsyncExecute (ast, inputContext)
 
         let response = result |> toResponse
         return (TypedResults.Ok response) :> IResult
@@ -228,7 +229,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
 
         let! result =
             Async.StartImmediateAsTask (
-                executor.AsyncExecute (content.Ast, root, ?variables = variables, ?operationName = operationName),
+                executor.AsyncExecute (content.Ast, inputContext, root, ?variables = variables, ?operationName = operationName),
                 cancellationToken = ctx.RequestAborted
             )
 

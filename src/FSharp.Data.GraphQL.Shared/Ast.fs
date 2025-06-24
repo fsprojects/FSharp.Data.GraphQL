@@ -195,7 +195,7 @@ and Directive = {
 
 and OperationTypeDefinition = { Type : string; Operation : OperationType }
 
-and SchemaDefintion = { OperationTypes : OperationTypeDefinition }
+and SchemaDefinition = { OperationTypes : OperationTypeDefinition }
 
 and ObjectTypeDefinition = { Name : string; Interfaces : string[]; Fields : FieldDefinition[] }
 

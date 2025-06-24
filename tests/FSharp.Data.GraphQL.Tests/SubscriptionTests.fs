@@ -115,7 +115,7 @@ let ``Can subscribe to sync field and get results``() =
             data
         }
     }"""
-    let result = executor.AsyncExecute(query) |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     match result with
     | Stream data ->
         use sub = Observer.create data
@@ -142,7 +142,7 @@ let ``Can subscribe to tagged sync field and get results with expected tag``() =
             data
         }
     }"""
-    let result = executor.AsyncExecute(query) |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     match result with
     | Stream data ->
         use sub = Observer.create data
@@ -162,7 +162,7 @@ let ``Can subscribe to tagged sync field and do not get results with unexpected 
             data
         }
     }"""
-    let result = executor.AsyncExecute(query) |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     match result with
     | Stream data ->
         use sub = Observer.create data
@@ -184,7 +184,7 @@ let ``Can subscribe to async field and get results``() =
     data
   }
 }"""
-    let result = executor.AsyncExecute(query) |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     match result with
     | Stream data ->
         use sub = Observer.create data
@@ -211,7 +211,7 @@ let ``Can subscribe to tagged async field and get results with expected tag``() 
     data
   }
 }"""
-    let result = executor.AsyncExecute(query) |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     match result with
     | Stream data ->
         use sub = Observer.create data
@@ -231,7 +231,7 @@ let ``Can subscribe to tagged async field and do not get results with unexpected
             data
         }
     }"""
-    let result = executor.AsyncExecute(query) |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     match result with
     | Stream data ->
         use sub = Observer.create data

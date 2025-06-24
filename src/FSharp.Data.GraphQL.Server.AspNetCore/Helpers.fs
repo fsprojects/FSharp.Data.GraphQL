@@ -2,6 +2,9 @@ namespace FSharp.Data.GraphQL.Server.AspNetCore
 
 open System
 open System.Text
+open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Shared
+open Microsoft.AspNetCore.Http
 
 
 [<AutoOpen>]
@@ -49,3 +52,17 @@ module ReflectionHelpers =
         | FieldGet (_, fieldInfo) -> fieldInfo.DeclaringType
         | _ -> failwith "Expression is no property."
 
+type HttpContextRequestExecutionContext (httpContext : HttpContext) =
+    interface IInputExecutionContext with
+        member this.GetFile(key) =
+            if not httpContext.Request.HasFormContentType then
+                Error "Request does not have form content type"
+            else
+                let form = httpContext.Request.Form
+                let maybeFile =
+                    form.Files
+                    |> Seq.tryFind (fun f -> f.Name = key)
+
+                match maybeFile with
+                | Some file -> Ok (file.OpenReadStream())
+                | None -> Error $"File with key '{key}' not found"

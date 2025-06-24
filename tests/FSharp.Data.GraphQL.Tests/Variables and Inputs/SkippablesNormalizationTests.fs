@@ -295,7 +295,7 @@ let ``Execute handles validation of valid inline input records with all fields``
         structOptional: { zipCode: "12345", city: "Miami" }
       )
     }"""
-    let result = sync <| (schema Nothing).AsyncExecute(parse query)
+    let result = sync <| (schema Nothing).AsyncExecute(parse query, mockInputContext)
     ensureDirect result <| fun data errors -> empty errors
 
 [<Fact>]
@@ -313,7 +313,7 @@ let ``Execute handles validation of valid inline input records with mandatory-on
         struct: { zipCode: "12345", city: "Miami" },
       )
     }"""
-    let result = sync <| (schema Nothing).AsyncExecute(parse query)
+    let result = sync <| (schema Nothing).AsyncExecute(parse query, mockInputContext)
     ensureDirect result <| fun data errors -> empty errors
 
 [<Fact>]
@@ -334,8 +334,8 @@ let ``Execute handles validation of valid inline input records with null mandato
         structOptional: { zipCode: null, city: null }
       )
     }"""
-    let result = sync <| (schema Skip).AsyncExecute(parse query)
-    ensureDirect result <| fun data errors -> empty errors
+    let result = sync <| (schema Skip).AsyncExecute(parse query, mockInputContext)
+    ensureDirect result <| fun _ errors -> empty errors
 
 [<Fact>]
 let ``Execute handles validation of valid inline input records with null optional field`` () =
@@ -355,5 +355,5 @@ let ``Execute handles validation of valid inline input records with null optiona
         structOptional: { line2: null }
       )
     }"""
-    let result = sync <| (schema SkipAndIncludeNull).AsyncExecute(parse query)
-    ensureDirect result <| fun data errors -> empty errors
+    let result = sync <| (schema SkipAndIncludeNull).AsyncExecute(parse query, mockInputContext)
+    ensureDirect result <| fun _ errors -> empty errors

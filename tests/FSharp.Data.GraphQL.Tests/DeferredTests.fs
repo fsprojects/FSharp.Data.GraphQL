@@ -286,7 +286,7 @@ let ``Resolver error`` () =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -321,7 +321,7 @@ let ``Resolver list error`` () =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -354,7 +354,7 @@ let ``Nullable error`` () =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -386,7 +386,7 @@ let ``Single Root object field - Defer and Stream`` () =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -423,7 +423,7 @@ let ``Single Root object list field - Defer`` () =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -465,7 +465,7 @@ let ``Single Root object list field - Stream`` () =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -497,7 +497,7 @@ let ``Interface field - Defer`` () =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -532,7 +532,7 @@ let ``Interface list field - Defer`` () =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -572,7 +572,7 @@ let ``Each live result should be sent as soon as it is computed`` () =
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
     resetLiveData()
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -611,7 +611,7 @@ let ``Live Query`` () =
         }
     }"""
     resetLiveData()
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -653,7 +653,7 @@ let ``Parallel Defer`` () =
                 }
             }
         }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -705,7 +705,7 @@ let ``Parallel Stream`` () =
                 }
             }
         }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -742,7 +742,7 @@ let ``Inner Object List Defer`` () =
                 }
             }
         }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -775,7 +775,7 @@ let ``Inner Object List Stream`` () =
                 }
             }
         }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -823,7 +823,7 @@ let ``Nested Inner Object List Defer`` () =
                 }
             }
         }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -880,7 +880,7 @@ let ``Nested Inner Object List Stream`` () =
                 }
             }
         }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -909,7 +909,7 @@ let ``Simple Defer and Stream`` () =
             b
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -955,7 +955,7 @@ let ``List Defer``() =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -982,7 +982,7 @@ let ``List Fragment Defer and Stream - Exclusive``() =
             ]
         ]
     let expectedDeferred = DeferredResult ("Union A", [ "testData"; "list"; 0; "a" ])
-    let query = sprintf """{
+    let query = """{
         testData {
             a
             list {
@@ -997,7 +997,7 @@ let ``List Fragment Defer and Stream - Exclusive``() =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -1024,7 +1024,7 @@ let ``List Fragment Defer and Stream - Common``() =
             ]
         ]
     let expectedDeferred = DeferredResult ("2", [ "testData"; "list"; 0; "id" ])
-    let query = sprintf """{
+    let query = """{
         testData {
             a
             list {
@@ -1039,7 +1039,7 @@ let ``List Fragment Defer and Stream - Common``() =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -1083,7 +1083,7 @@ let ``List inside root - Stream``() =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -1137,7 +1137,7 @@ let ``List Stream``() =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -1188,7 +1188,7 @@ let ``Should buffer stream list correctly by timing information``() =
         |> parse
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -1249,7 +1249,7 @@ let ``Should buffer stream list correctly by count information``() =
     }"""
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -1290,7 +1290,7 @@ let ``Union Defer`` () =
             NameValueLookup.ofList [ "id", upcast "1"; "a", upcast "Union A" ],
             [ "testData"; "union" ]
         )
-    let query = sprintf """{
+    let query = """{
         testData {
             a
             b
@@ -1306,7 +1306,7 @@ let ``Union Defer`` () =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -1336,7 +1336,7 @@ let ``Each deferred result should be sent as soon as it is computed``() =
     }"""
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -1345,7 +1345,7 @@ let ``Each deferred result should be sent as soon as it is computed``() =
             elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
         // The second result is a delayed async field, which is set to compute the value for 5 seconds.
         // The first result should come almost instantly, as it is not a delayed computed field.
-        // Therefore, let's assume that if it does not come in at least 3 seconds, test has failed.
+        // Therefore, let's assume that if it does not come in at least 3 seconds, the test has failed.
         if TimeSpan.FromSeconds(float (ms 3)) |> mre1.WaitOne |> not
         then fail "Timeout while waiting for first deferred result"
         if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
@@ -1383,7 +1383,7 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
     }"""
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)
@@ -1392,7 +1392,7 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
             elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
         // The first result is a delayed async field, which is set to compute the value for 5 seconds.
         // The second result should come first, almost instantly, as it is not a delayed computed field.
-        // Therefore, let's assume that if it does not come in at least 4 seconds, test has failed.
+        // Therefore, let's assume that if it does not come in at least 4 seconds, the test has failed.
         if TimeSpan.FromSeconds(float (ms 4)) |> mre1.WaitOne |> not
         then fail "Timeout while waiting for first deferred result"
         if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
@@ -1425,7 +1425,7 @@ let ``Each streamed result should be sent as soon as it is computed - async seq`
     }"""
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
-    let result = query |> executor.AsyncExecute |> sync
+    let result = executor.AsyncExecute(query, mockInputContext) |> sync
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expectedDirect)

@@ -933,6 +933,7 @@ module Ast =
                 let invalidScalars = [| "Int"; "Float"; "Boolean" |]
                 match tref.Name, tref.Kind with
                 | (Some x, TypeKind.SCALAR) when not (Array.contains x invalidScalars) -> Success
+                | (Some x, TypeKind.INPUT_OBJECT) when x = FileType.Name -> Success
                 | _ -> canNotCoerce
             | EnumValue _ ->
                 match tref.Kind with

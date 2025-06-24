@@ -113,7 +113,7 @@ let ``Execute can introspect on union and intersection types`` () =
           inputFields { name }
         }
       }"""
-    let result = sync <| Executor(schema).AsyncExecute(ast)
+    let result = sync <| Executor(schema).AsyncExecute(ast, mockInputContext)
     let expected =
       NameValueLookup.ofList [
         "Named", upcast NameValueLookup.ofList [
@@ -155,7 +155,7 @@ let ``Executes union types`` () =
           meows
         }
       }"""
-    let result = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, mockInputContext, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -191,7 +191,7 @@ let ``Executes union types with inline fragments`` () =
           }
         }
       }"""
-    let result = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, mockInputContext, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -222,7 +222,7 @@ let ``Executes interface types`` () =
           meows
         }
       }"""
-    let result = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, mockInputContext, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -256,7 +256,7 @@ let ``Executes interface types with inline fragments`` () =
           }
         }
       }"""
-    let result = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, mockInputContext, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -304,7 +304,7 @@ let ``Execute allows fragment conditions to be abstract types`` () =
           meows
         }
       }"""
-    let result = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, mockInputContext, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"

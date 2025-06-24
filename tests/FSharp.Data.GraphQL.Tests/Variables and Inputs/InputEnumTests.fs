@@ -56,7 +56,7 @@ let ``Execute handles enum input as variable`` () =
 
     let testInputValue = "\"Foo\""
     let params' = paramsWithEnumInput testInputValue
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "\"Foo\"" ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -72,7 +72,7 @@ let ``Execute handles nullable null enum input as variable`` () =
 
     let testInputValue = "null"
     let params' = paramsWithEnumInput testInputValue
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast testInputValue ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -88,7 +88,7 @@ let ``Execute handles union enum input as variable`` () =
 
     let testInputValue = "\"Bar\""
     let params' = paramsWithEnumInput testInputValue
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "\"Bar\"" ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -104,7 +104,7 @@ let ``Execute handles Some union enum input as variable`` () =
 
     let testInputValue = "\"Bar\""
     let params' = paramsWithEnumInput testInputValue
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast "\"Bar\"" ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -120,7 +120,7 @@ let ``Execute handles None enum input as variable`` () =
 
     let testInputValue = "null"
     let params' = paramsWithEnumInput testInputValue
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast testInputValue ]
     ensureDirect result <| fun data errors ->
         empty errors

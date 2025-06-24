@@ -55,10 +55,10 @@ let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext 
 
 // After the schema has been compiled, update the input fields to flip every boolean input
 let postCompileMiddleware (schema : ISchema) (next : ISchema -> unit) =
-    let flipBools execute value vars =
+    let flipBools ctx execute value vars =
         match value with
-        | BooleanValue b -> execute (BooleanValue (not b)) vars
-        | _ -> execute value vars
+        | BooleanValue b -> ctx execute (BooleanValue (not b)) vars
+        | _ -> ctx execute value vars
     schema.TypeMap.ToSeq()
     |> Seq.iter(fun (n, def) ->
                     match def with
@@ -79,7 +79,7 @@ let planningMiddleware (ctx : PlanningContext) (next : PlanningContext -> Execut
     { result with Metadata = metadata }
 
 // On the execution phase, we remove the evaluation of the c field
-let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
+let executionMiddleware (inputContext : InputExecutionContextProvider) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
     let chooserS set =
         set |> List.choose (fun x -> match x with Field f when f.Name <> "c" -> Some x | _ -> None)
     let chooserK kind =
@@ -108,7 +108,7 @@ let executor = Executor(schema, [ middleware ])
 
 [<Fact>]
 let ``Executor middleware: change fields and measure planning time`` () =
-    let result = sync <| executor.AsyncExecute(ast)
+    let result = sync <| executor.AsyncExecute(ast, mockInputContext)
     let expected =
             NameValueLookup.ofList
                 [ "testData",

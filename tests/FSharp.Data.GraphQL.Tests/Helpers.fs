@@ -5,10 +5,13 @@ module internal Helpers
 
 open System
 open System.Collections.Generic
+open System.IO
 open System.Linq
+open System.Text
 open System.Text.Json.Serialization
 open System.Threading
 open System.Threading.Tasks
+open FSharp.Data.GraphQL.Shared
 open Xunit
 open FSharp.Data.GraphQL
 
@@ -180,3 +183,26 @@ type ExecutorExtensions =
         match executor.CreateExecutionPlan(queryOrMutation, ?operationName = operationName, ?meta = meta) with
         | Ok executionPlan -> executionPlan
         | Error _ -> fail "invalid query"; Unchecked.defaultof<_>
+
+
+module MockInputContext =
+    let mockFileKey = "fileKey"
+    let mockFileText = "fileText"
+
+    type MockInputExecutionContext () =
+        member _.FileKey = mockFileKey
+        member _.FileText = mockFileText
+        member context.Stream =
+            let bytes = Encoding.UTF8.GetBytes(context.FileText)
+            new MemoryStream(bytes) :> Stream
+
+        interface IInputExecutionContext with
+            member context.GetFile( key ) =
+                if (key = context.FileKey) then
+                    Ok context.Stream
+                else
+                    failwith "todo"
+
+    let mockInputContextInstance = MockInputExecutionContext()
+
+let mockInputContext = fun () -> MockInputContext.mockInputContextInstance :> IInputExecutionContext

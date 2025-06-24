@@ -6,6 +6,7 @@ open System.Collections.Immutable
 open System.IO
 open System.Runtime.CompilerServices
 open System.Text.Json
+open FSharp.Data.GraphQL
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Options

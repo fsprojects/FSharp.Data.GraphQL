@@ -134,7 +134,7 @@ let ``Property tracker can track indirect properties`` () =
                 Tracker.Direct (track "LastName" typeof<Person> typeof<string>, [])
             ]
         )
-    let actual = tracker ImmutableDictionary.Empty info
+    let actual = tracker mockInputContext ImmutableDictionary.Empty info
     actual |> equals expected
 
 [<Fact>]
@@ -175,5 +175,5 @@ let ``Property tracker can correctly jump over properties not being part of the 
             ]
         )
 
-    let actual = tracker ImmutableDictionary.Empty info
+    let actual = tracker mockInputContext ImmutableDictionary.Empty info
     actual |> equals expected

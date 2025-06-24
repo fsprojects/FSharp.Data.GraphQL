@@ -11,6 +11,7 @@ open System.Collections.Immutable
 open System.Runtime.InteropServices
 open System.Text.Json
 
+open FSharp.Data.GraphQL.Shared
 open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL
@@ -893,11 +894,11 @@ and ExecutionContext = {
     Schema : ISchema
     /// Boxed value of the top level type, root query/mutation.
     RootValue : obj
-    /// Execution plan describing, what fiedls are going to be resolved.
+    /// Execution plan describing, what fields are going to be resolved.
     ExecutionPlan : ExecutionPlan
-    /// Collection of variables provided to execute current operation.
+    /// Collection of variables provided to execute a current operation.
     Variables : ImmutableDictionary<string, obj>
-    /// Collection of errors that occurred while executing current operation.
+    /// Collection of errors that occurred while executing a current operation.
     Errors : ConcurrentDictionary<ResolveFieldContext, ConcurrentBag<IGQLError>>
     /// A map of all fields of the query and their respective execution operations.
     FieldExecuteMap : FieldExecuteMap
@@ -1114,8 +1115,59 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Primitive, 'Val> = {
     override x.ToString () = x.Name + "!"
 
 and ScalarDefinition<'Val> = ScalarDefinition<'Val, 'Val>
+and FileDef =
+    interface
+        /// Name of the file type.
+        abstract Name : string
+        /// Optional scalar type description.
+        abstract Description : string option
+        /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
+        abstract Coerce : IInputExecutionContext -> InputParameterValue -> Result<obj, string>
+        inherit TypeDef
+        inherit NamedDef
+        inherit InputDef
+    end
+and [<CustomEquality; NoComparison>] FileDefinition = {
+    /// Name of the file type.
+    Name : string
+    /// Optional type description.
+    Description : string option
+    /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
+    Coerce : IInputExecutionContext -> InputParameterValue -> Result<System.IO.Stream, string>
+} with
 
-/// A GraphQL representation of single case of the enum type.
+    interface TypeDef with
+        member _.Type = typeof<System.IO.Stream>
+
+        member x.MakeNullable () =
+            let nullable : NullableDefinition<System.IO.Stream> = { OfType = x }
+            upcast nullable
+
+        member x.MakeList () =
+            let list : ListOfDefinition<_, _> = { OfType = x }
+            upcast list
+
+    interface TypeDef<System.IO.Stream>
+    interface InputDef
+
+    interface FileDef with
+        member x.Name = x.Name
+        member x.Description = x.Description
+        member x.Coerce context value  =
+            x.Coerce context value |> Result.map box
+
+    interface NamedDef with
+        member x.Name = x.Name
+
+    override x.Equals y =
+        match y with
+        | :? FileDefinition as s -> x.Name = s.Name
+        | _ -> false
+
+    override x.GetHashCode () = x.Name.GetHashCode ()
+    override x.ToString () = x.Name + "!"
+
+/// A GraphQL representation for a single value of the enum type.
 /// Enum value return value is always represented as string.
 and EnumVal =
     interface
@@ -1693,7 +1745,7 @@ and InputObjectDefinition<'Val> = {
     override x.ToString () = x.Name + "!"
 
 /// Function type used for resolving input object field values.
-and ExecuteInput = InputValue -> Variables -> Result<obj, IGQLError list>
+and ExecuteInput = InputExecutionContextProvider -> InputValue -> Variables -> Result<obj, IGQLError list>
 
 /// GraphQL field input definition. Can be used as fields for
 /// input objects or as arguments for any ordinary field definition.
@@ -1766,7 +1818,7 @@ and internal InputCustomDef =
         /// Optional input field / argument description.
         abstract Description : string option
         /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
-        abstract CoerceInput : InputParameterValue -> Variables -> Result<obj, IGQLError list>
+        abstract CoerceInput : InputExecutionContextProvider -> InputParameterValue -> Variables -> Result<obj, IGQLError list>
         inherit TypeDef
         inherit NamedDef
         inherit InputDef
@@ -1776,7 +1828,7 @@ and internal InputCustomDef =
 and InputCustomDefinition<'Val> = internal {
     Name : string
     Description : string option
-    CoerceInput : InputParameterValue -> Variables -> Result<'Val, IGQLError list>
+    CoerceInput : InputExecutionContextProvider -> InputParameterValue -> Variables -> Result<'Val, IGQLError list>
 } with
     interface TypeDef with
         member _.Type = typeof<'Val>
@@ -1796,7 +1848,7 @@ and InputCustomDefinition<'Val> = internal {
     interface InputCustomDef with
         member x.Name = x.Name
         member x.Description = x.Description
-        member x.CoerceInput input variables = x.CoerceInput input variables |> Result.map box
+        member x.CoerceInput input variables context = x.CoerceInput input variables context |> Result.map box
 
     interface NamedDef with
         member x.Name = x.Name

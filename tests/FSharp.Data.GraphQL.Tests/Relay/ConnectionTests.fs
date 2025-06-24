@@ -145,7 +145,7 @@ let ``Connection definition includes connection and edge fields for simple cases
             }
         }
     }"""
-    let result = sync <| Executor(schema).AsyncExecute (query)
+    let result = sync <| Executor(schema).AsyncExecute (query, mockInputContext)
     let expected =
         NameValueLookup.ofList [
             "strings", upcast NameValueLookup.ofList [
@@ -186,7 +186,7 @@ let ``Connection definition includes connection and edge fields for complex case
             }
         }
     }"""
-    let result = sync <| Executor(schema).AsyncExecute (query)
+    let result = sync <| Executor(schema).AsyncExecute (query, mockInputContext)
     let expected =
         NameValueLookup.ofList [
             "people", upcast NameValueLookup.ofList [

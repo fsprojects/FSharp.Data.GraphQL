@@ -105,7 +105,7 @@ let schema = Schema (TestType)
 let ``Execute handles nested input objects and nullability using inline structs and properly coerces complex scalar types`` () =
     let ast =
         parse """{ fieldWithNestedInputObject(input: {n:"optSeq", no:{mand:"mand"}, nvo:{mand:"mand"}, nl: []})}"""
-    let result = sync <| Executor(schema).AsyncExecute (ast)
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext)
     let expected =
         NameValueLookup.ofList [
             "fieldWithNestedInputObject",
@@ -122,7 +122,7 @@ let ``Execute handles nested input objects and nullability using inline structs 
 let ``Execute handles nested input objects and nullability using inline structs and properly coerces complex scalar types with empty lists`` () =
     let ast =
         parse """{ fieldWithNestedInputObject(input: {n:"optSeq", no:{mand:"mand"}, nvo:{mand:"mand"}, nl:[], nlo: [], nlvo: []})}"""
-    let result = sync <| Executor(schema).AsyncExecute (ast)
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext)
     let expected =
         NameValueLookup.ofList [
             "fieldWithNestedInputObject",
@@ -139,7 +139,7 @@ let ``Execute handles nested input objects and nullability using inline structs 
 let ``Execute handles nested input objects and nullability using inline structs and properly coerces complex scalar types with lists`` () =
     let ast =
         parse """{ fieldWithNestedInputObject(input: {n:"optSeq", nl:[{mand:"mand"}], nlo: [{mand:"mand"}], nlvo: [{mand:"mand"}]})}"""
-    let result = sync <| Executor(schema).AsyncExecute (ast)
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext)
     let expected =
         NameValueLookup.ofList [
             "fieldWithNestedInputObject",
@@ -156,7 +156,7 @@ let ``Execute handles nested input objects and nullability using inline structs 
 let ``Execute handles recursive input objects and nullability using inline structs and properly coerces complex scalar types`` () =
     let ast =
         parse """{ fieldWithRecursiveInputObject(input: {r:"optSeq", ro:{r:"mand"}, rvo:{r:"mand"}})}"""
-    let result = sync <| Executor(schema).AsyncExecute (ast)
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext)
     let expected =
         NameValueLookup.ofList [
             "fieldWithRecursiveInputObject",

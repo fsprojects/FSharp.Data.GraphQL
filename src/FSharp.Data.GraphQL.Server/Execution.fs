@@ -25,26 +25,26 @@ let (|RequestError|Direct|Deferred|Stream|) (response : GQLExecutionResult) =
     | Deferred (data, errors, deferred) -> Deferred (data, errors, deferred)
     | Stream data -> Stream data
 
-let private collectDefaultArgValue acc (argdef: InputFieldDef) =
-    match argdef.DefaultValue with
-    | Some defVal -> Map.add argdef.Name defVal acc
+let private collectDefaultArgValue acc (argDef: InputFieldDef) =
+    match argDef.DefaultValue with
+    | Some defVal -> Map.add argDef.Name defVal acc
     | None -> acc
 
-let internal argumentValue variables (argdef: InputFieldDef) (argument: Argument) =
-    match argdef.ExecuteInput argument.Value variables with
+let internal argumentValue inputContext variables (argDef: InputFieldDef) (argument: Argument) =
+    match argDef.ExecuteInput inputContext argument.Value variables with
     | Ok null ->
-        match argdef.DefaultValue with
+        match argDef.DefaultValue with
         | Some value -> Ok value
         | None -> Ok null
     | result -> result
 
-let private getArgumentValues (argDefs: InputFieldDef []) (args: Argument list) (variables: ImmutableDictionary<string, obj>) : Result<Map<string, obj>, IGQLError list> =
+let private getArgumentValues (argDefs: InputFieldDef []) (args: Argument list) (inputContext : InputExecutionContextProvider) (variables: ImmutableDictionary<string, obj>) : Result<Map<string, obj>, IGQLError list> =
     argDefs
     |> Array.fold (fun acc argdef ->
         match List.tryFind (fun (a: Argument) -> a.Name = argdef.Name) args with
         | Some argument -> validation {
                 let! acc = acc
-                and! arg = argumentValue variables argdef argument
+                and! arg = argumentValue inputContext variables argdef argument
                 match arg with
                 | null -> return acc
                 | v -> return Map.add argdef.Name v acc
@@ -90,9 +90,9 @@ let private resolveUnionType possibleTypesFn (uniondef: UnionDef) =
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn uniondef
 
-let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) (path : FieldPath) = result {
+let private createFieldContext objdef inputContext argDefs ctx (info: ExecutionInfo) (path : FieldPath) = result {
     let fdef = info.Definition
-    let! args = getArgumentValues argDefs info.Ast.Arguments ctx.Variables
+    let! args = getArgumentValues argDefs info.Ast.Arguments inputContext ctx.Variables
     return
         { ExecutionInfo = info
           Context = ctx.Context
@@ -181,7 +181,7 @@ let collectFields (strategy : ExecutionStrategy) (rs : AsyncVal<ResolverResult<K
             |> ResolverResult.mapValue(fun _ -> data)
     }
 
-let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> =
+let rec private direct (returnDef : OutputDef) (inputContext : InputExecutionContextProvider) (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> =
     let name = ctx.ExecutionInfo.Identifier
     match returnDef with
 
@@ -189,8 +189,8 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
         let fields =
             match ctx.ExecutionInfo.Kind with
             | SelectFields fields -> fields
-            | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
-        executeObjectFields fields name objDef ctx path value
+            | kind -> failwithf $"Unexpected value of ctx.ExecutionPlan.Kind: %A{kind}"
+        executeObjectFields fields name objDef inputContext ctx path value
 
     | Scalar scalarDef ->
         match scalarDef.CoerceOutput (downcast value) with
@@ -209,7 +209,7 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
             | ResolveCollection innerPlan -> { ctx with ExecutionInfo = { innerPlan with ReturnDef = innerDef } }
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
         let resolveItem index item =
-            executeResolvers innerCtx (box index :: path) value (toOption item |> AsyncVal.wrap)
+            executeResolvers inputContext innerCtx (box index :: path) value (toOption item |> AsyncVal.wrap)
         match value with
         | :? System.Collections.IEnumerable as enumerable ->
             enumerable
@@ -222,7 +222,7 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
 
     | Nullable (Output innerDef) ->
         let innerCtx = { ctx with ExecutionInfo = { ctx.ExecutionInfo with IsNullable = true; ReturnDef = innerDef } }
-        executeResolvers innerCtx path parent (toOption value |> AsyncVal.wrap)
+        executeResolvers inputContext innerCtx path parent (toOption value |> AsyncVal.wrap)
         |> AsyncVal.map(Result.valueOr (fun errs -> (KeyValuePair(name, null), None, errs)) >> Ok)
 
     | Interface iDef ->
@@ -232,9 +232,9 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
         let typeMap =
             match ctx.ExecutionInfo.Kind with
             | ResolveAbstraction typeMap -> typeMap
-            | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
+            | kind -> failwithf $"Unexpected value of ctx.ExecutionPlan.Kind: %A{kind}"
         match Map.tryFind resolvedDef.Name typeMap with
-        | Some fields -> executeObjectFields fields name resolvedDef ctx path value
+        | Some fields -> executeObjectFields fields name resolvedDef inputContext ctx path value
         | None -> KeyValuePair(name, obj()) |> ResolverResult.data |> AsyncVal.wrap
 
     | Union uDef ->
@@ -244,23 +244,22 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
         let typeMap =
             match ctx.ExecutionInfo.Kind with
             | ResolveAbstraction typeMap -> typeMap
-            | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
+            | kind -> failwithf $"Unexpected value of ctx.ExecutionPlan.Kind: %A{kind}"
         match Map.tryFind resolvedDef.Name typeMap with
-        | Some fields -> executeObjectFields fields name resolvedDef ctx path (uDef.ResolveValue value)
+        | Some fields -> executeObjectFields fields name resolvedDef inputContext ctx path (uDef.ResolveValue value)
         | None -> KeyValuePair(name, obj()) |> ResolverResult.data |> AsyncVal.wrap
 
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 
-and deferred (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
+and deferred (inputContext : InputExecutionContextProvider) (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
     let info = ctx.ExecutionInfo
-    let name = info.Identifier
     let deferred =
-        executeResolvers ctx path parent (toOption value |> AsyncVal.wrap)
+        executeResolvers inputContext ctx path parent (toOption value |> AsyncVal.wrap)
         |> Observable.ofAsyncVal
-        |> Observable.bind(ResolverResult.mapValue(fun d -> d.Value) >> deferResults path)
+        |> Observable.bind(ResolverResult.mapValue(_.Value) >> deferResults path)
     ResolverResult.defered (KeyValuePair (info.Identifier, null)) deferred |> AsyncVal.wrap
 
-and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
+and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (inputContext : InputExecutionContextProvider) (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
     let info = ctx.ExecutionInfo
     let name = info.Identifier
     let innerCtx =
@@ -296,7 +295,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (c
         |> Observable.bind collectBuffered
 
     let resolveItem index item = asyncVal {
-        let! result = executeResolvers innerCtx (box index :: path) parent (toOption item |> AsyncVal.wrap)
+        let! result = executeResolvers inputContext innerCtx (box index :: path) parent (toOption item |> AsyncVal.wrap)
         return (index, result)
     }
 
@@ -312,7 +311,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (c
         ResolverResult.defered (KeyValuePair (info.Identifier, box [])) stream |> AsyncVal.wrap
     | _ -> raise <| GQLMessageException (ErrorMessages.expectedEnumerableValue ctx.ExecutionInfo.Identifier (value.GetType()))
 
-and private live (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
+and private live (inputContext : InputExecutionContextProvider) (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
     let info = ctx.ExecutionInfo
     let name = info.Identifier
 
@@ -325,13 +324,13 @@ and private live (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (
         | Union uDef ->
             let resolver = resolveUnionType ctx.Schema.GetPossibleTypes uDef
             getObjectName (resolver value)
-        | returnDef -> failwithf "Unexpected value of returnDef: %O" returnDef
+        | returnDef -> failwithf $"Unexpected value of returnDef: {returnDef}"
 
     let typeName = getObjectName info.ParentDef
 
     /// So the updatedValue here is actually the fresh parent.
     let resolveUpdate updatedValue =
-        executeResolvers ctx path parent (updatedValue |> Some |> AsyncVal.wrap)
+        executeResolvers inputContext ctx path parent (updatedValue |> Some |> AsyncVal.wrap)
         |> AsyncVal.map(ResolverResult.mapValue(fun d -> d.Value) >> deferResults path)
         |> Observable.ofAsyncVal
         |> Observable.mergeInner
@@ -343,12 +342,12 @@ and private live (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (
         | Some filterFn -> provider.Add (filterFn parent) typeName name |> Observable.bind resolveUpdate
         | None -> failwithf "No live provider for %s:%s" typeName name
 
-    executeResolvers ctx path parent (value |> Some |> AsyncVal.wrap)
+    executeResolvers inputContext ctx path parent (value |> Some |> AsyncVal.wrap)
     // TODO: Add tests for `Observable.merge deferred updates` correct order
     |> AsyncVal.map(Result.map(fun (data, deferred, errs) -> (data, Some <| Option.foldBack Observable.merge deferred updates, errs)))
 
 /// Actually execute the resolvers.
-and private executeResolvers (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : AsyncVal<obj option>) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> =
+and private executeResolvers (inputContext : InputExecutionContextProvider) (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : AsyncVal<obj option>) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> =
     let info = ctx.ExecutionInfo
     let name = info.Identifier
     let returnDef = info.ReturnDef
@@ -384,30 +383,30 @@ and private executeResolvers (ctx : ResolveFieldContext) (path : FieldPath) (par
 
     match info.Kind, returnDef with
     | ResolveDeferred innerInfo, _ when innerInfo.IsNullable -> // We can only defer nullable fields
-        deferred
+        deferred inputContext
         |> resolveWith { ctx with ExecutionInfo = innerInfo }
     | ResolveDeferred innerInfo, _ ->
         raiseErrors <| deferredNullableError (innerInfo.Identifier) (innerInfo.ReturnDef.ToString()) path ctx
     | ResolveStreamed (innerInfo, mode), HasList innerDef -> // We can only stream lists
-        streamed mode innerDef
+        streamed mode innerDef inputContext
         |> resolveWith { ctx with ExecutionInfo = innerInfo }
     | ResolveStreamed (innerInfo, _), _ ->
         raiseErrors <| streamListError innerInfo.Identifier (returnDef.ToString()) path ctx
     | ResolveLive innerInfo, _ ->
-        live
+        live inputContext
         |> resolveWith { ctx with ExecutionInfo = innerInfo }
     | _ ->
-        direct returnDef
+        direct returnDef inputContext
         |> resolveWith ctx
 
 
-and executeObjectFields (fields : ExecutionInfo list) (objName : string) (objDef : ObjectDef) (ctx : ResolveFieldContext) (path : FieldPath) (value : obj) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = asyncVal {
+and executeObjectFields (fields : ExecutionInfo list) (objName : string) (objDef : ObjectDef) (inputContext: InputExecutionContextProvider) (ctx : ResolveFieldContext) (path : FieldPath) (value : obj) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = asyncVal {
     let executeField field =
         let argDefs = ctx.Context.FieldExecuteMap.GetArgs(objDef.Name, field.Definition.Name)
         let resolver = ctx.Context.FieldExecuteMap.GetExecute(objDef.Name, field.Definition.Name)
         let fieldPath = (box field.Identifier :: path)
-        match createFieldContext objDef argDefs ctx field fieldPath with
-        | Ok fieldCtx -> executeResolvers fieldCtx fieldPath value (resolveField resolver fieldCtx value)
+        match createFieldContext objDef inputContext argDefs ctx field fieldPath with
+        | Ok fieldCtx -> executeResolvers inputContext fieldCtx fieldPath value (resolveField resolver fieldCtx value)
         | Error errs -> asyncVal { return Error (errs |> List.map GQLProblemDetails.OfError) }
 
     let! res =
@@ -446,11 +445,11 @@ let private (|String|Other|) (o : obj) =
     | :? string as s -> String s
     | _ -> Other
 
-let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: ObjectDef) (rootValue : obj) : AsyncVal<GQLExecutionResult> =
+let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objDef: ObjectDef) (inputContext : InputExecutionContextProvider) (rootValue : obj) : AsyncVal<GQLExecutionResult> =
     let executeRootOperation (name, info) =
         let fDef = info.Definition
         let argDefs = ctx.FieldExecuteMap.GetArgs(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
-        match getArgumentValues argDefs info.Ast.Arguments ctx.Variables with
+        match getArgumentValues argDefs info.Ast.Arguments inputContext ctx.Variables with
         | Error errs -> asyncVal { return Error (errs |> List.map GQLProblemDetails.OfError) }
         | Ok args ->
             let path = [ box info.Identifier ]
@@ -458,7 +457,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 { ExecutionInfo = info
                   Context = ctx
                   ReturnType = fDef.TypeDef
-                  ParentType = objdef
+                  ParentType = objDef
                   Schema = ctx.Schema
                   Args = args
                   Variables = ctx.Variables
@@ -466,7 +465,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             let execute = ctx.FieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
             asyncVal {
                 let! result =
-                    executeResolvers fieldCtx path rootValue (resolveField execute fieldCtx rootValue)
+                    executeResolvers inputContext fieldCtx path rootValue (resolveField execute fieldCtx rootValue)
                     |> AsyncVal.rescue path ctx.Schema.ParseError
                 let result =
                     match result with
@@ -487,51 +486,51 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         | Error errs -> return GQLExecutionResult.RequestError(documentId, errs, ctx.Metadata)
     }
 
-let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: SubscriptionObjectDef) value = result {
+let private executeSubscription (resultSet: (string * ExecutionInfo) []) (inputContext : InputExecutionContextProvider) (ctx: ExecutionContext) (objDef: SubscriptionObjectDef) value = result {
     // Subscription queries can only have one root field
     let nameOrAlias, info = Array.head resultSet
-    let subdef = info.Definition :?> SubscriptionFieldDef
-    let! args = getArgumentValues subdef.Args info.Ast.Arguments ctx.Variables
-    let returnType = subdef.OutputTypeDef
+    let subDef = info.Definition :?> SubscriptionFieldDef
+    let! args = getArgumentValues subDef.Args info.Ast.Arguments inputContext ctx.Variables
+    let returnType = subDef.OutputTypeDef
     let fieldPath = [ box info.Identifier ]
     let fieldCtx =
         { ExecutionInfo = info
           Context = ctx
           ReturnType = returnType
-          ParentType = objdef
+          ParentType = objDef
           Schema = ctx.Schema
           Args = args
           Variables = ctx.Variables
           Path = fieldPath |> List.rev }
     let onValue v = asyncVal {
-            match! executeResolvers fieldCtx fieldPath value (toOption v |> AsyncVal.wrap) with
+            match! executeResolvers inputContext fieldCtx fieldPath value (toOption v |> AsyncVal.wrap) with
             | Ok (data, None, []) -> return SubscriptionResult (NameValueLookup.ofList [nameOrAlias, data.Value])
             | Ok (data, None, errs) -> return SubscriptionErrors (NameValueLookup.ofList [nameOrAlias, data.Value], errs)
             | Ok (_, Some _, _) -> return failwith "Deferred/Streamed/Live are not supported for subscriptions!"
             | Error errs -> return SubscriptionErrors (null, errs)
         }
     return
-        ctx.Schema.SubscriptionProvider.Add fieldCtx value subdef
+        ctx.Schema.SubscriptionProvider.Add fieldCtx value subDef
         |> Observable.bind(onValue >> Observable.ofAsyncVal)
 }
 
-let private compileInputObject (indef: InputObjectDef) =
-    indef.Fields
+let private compileInputObject (inputDef: InputObjectDef) (inputContext : InputExecutionContextProvider) =
+    inputDef.Fields
     |> Array.iter(fun inputField ->
         // TODO: Implement compilation cache to reuse for the same type
         let inputFieldTypeDef = inputField.TypeDef
-        inputField.ExecuteInput <- compileByType [ box inputField.Name ] Unknown (inputFieldTypeDef, inputFieldTypeDef)
+        inputField.ExecuteInput <- compileByType [ box inputField.Name ] Unknown (inputFieldTypeDef, inputFieldTypeDef) inputContext
         match inputField.TypeDef with
         | InputObject inputObjDef -> inputObjDef.ExecuteInput <- inputField.ExecuteInput
         | _ -> ()
     )
 #if DEBUG
-    if isNull (box indef.ExecuteInput) then
-        System.Diagnostics.Debug.Fail($"Input object '{indef.Name}' has no ExecuteInput function!")
+    if isNull (box inputDef.ExecuteInput) then
+        System.Diagnostics.Debug.Fail($"Input object '{inputDef.Name}' has no ExecuteInput function!")
 #endif
 
-let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) =
-    objdef.Fields
+let private compileObject (objDef: ObjectDef) (executeFields: FieldDef -> unit) (inputContext : InputExecutionContextProvider) =
+    objDef.Fields
     |> Map.iter (fun _ fieldDef ->
         executeFields fieldDef
         fieldDef.Args
@@ -539,30 +538,30 @@ let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) 
             //let errMsg = $"Object '%s{objdef.Name}': field '%s{fieldDef.Name}': argument '%s{arg.Name}': "
             // TODO: Pass arg name
             let argTypeDef = arg.TypeDef
-            arg.ExecuteInput <- compileByType [] (Argument arg) (argTypeDef, argTypeDef)
+            arg.ExecuteInput <- compileByType [] (Argument arg) (argTypeDef, argTypeDef) inputContext
             match arg.TypeDef with
             | InputObject inputObjDef -> inputObjDef.ExecuteInput <- arg.ExecuteInput
             | _ -> ()
         )
     )
 
-let internal compileSchema (ctx : SchemaCompileContext) =
+let internal compileSchema (inputContext : InputExecutionContextProvider) (ctx : SchemaCompileContext)  =
     ctx.Schema.TypeMap.ToSeq()
     |> Seq.iter (fun (tName, x) ->
         match x with
-        | SubscriptionObject subdef ->
-            compileObject subdef (fun sub ->
+        | SubscriptionObject subDef ->
+            compileObject subDef (fun sub ->
                 let filter =
                     match sub with
                     | :? SubscriptionFieldDef as subField -> compileSubscriptionField subField
-                    | _ -> failwith $"Schema error: subscription object '%s{subdef.Name}' does have a field '%s{sub.Name}' that is not a subscription field definition."
-                ctx.Schema.SubscriptionProvider.Register { Name = sub.Name; Filter = filter })
-        | Object objdef ->
-            compileObject objdef (fun fieldDef -> ctx.FieldExecuteMap.SetExecute(tName, fieldDef))
-        | InputObject indef -> compileInputObject indef
+                    | _ -> failwith $"Schema error: subscription object '%s{subDef.Name}' does have a field '%s{sub.Name}' that is not a subscription field definition."
+                ctx.Schema.SubscriptionProvider.Register { Name = sub.Name; Filter = filter }) inputContext
+        | Object objDef ->
+            compileObject objDef (fun fieldDef -> ctx.FieldExecuteMap.SetExecute(tName, fieldDef)) inputContext
+        | InputObject inputDef -> compileInputObject inputDef inputContext
         | _ -> ())
 
-let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary<string, JsonElement>) = result {
+let internal coerceVariables (variables: VarDef list) (inputContext : InputExecutionContextProvider) (vars: ImmutableDictionary<string, JsonElement>) = result {
     let variables, inlineValues, nulls =
         variables
         |> List.fold
@@ -608,7 +607,7 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
                             VarDef = varDef
                             Input = jsonElement
                         }
-                        coerceVariableValue ctx
+                        coerceVariableValue(ctx, inputContext)
                         |> Result.mapError (
                             List.map (fun err ->
                                 match err with
@@ -625,7 +624,7 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
                 })
                 (ImmutableDictionary.CreateBuilder<string, obj>() |> Ok)
 
-    let suppliedVaribles = variablesBuilder.ToImmutable()
+    let suppliedVariables = variablesBuilder.ToImmutable()
 
     // TODO: consider how to execute inline objects validation having some variables coercion or validation failed
     // Having variables we can coerce inline values that contain on variables
@@ -634,8 +633,8 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
         |> List.fold (
             fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(varDef, defaultValue) -> validation {
                     let varTypeDef = varDef.TypeDef
-                    let executeInput = compileByType [] (Variable varDef) (varTypeDef, varTypeDef)
-                    let! value = executeInput defaultValue suppliedVaribles
+                    let executeInput = compileByType [] (Variable varDef) (varTypeDef, varTypeDef) inputContext
+                    let! value = executeInput inputContext defaultValue suppliedVariables
                     and! acc = acc
                     acc.Add (varDef.Name, value)
                     return acc
@@ -651,7 +650,7 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
 
 #nowarn "0046"
 
-let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLExecutionResult> =
+let internal executeOperation (inputContext : InputExecutionContextProvider) (ctx : ExecutionContext) : AsyncVal<GQLExecutionResult> =
     let includeResults =
         ctx.ExecutionPlan.Fields
         |> List.map (
@@ -670,15 +669,15 @@ let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLExecutionRe
         |> Seq.map (fun info -> (info.Identifier, info))
         |> Seq.toArray
     match ctx.ExecutionPlan.Operation.OperationType with
-    | Query -> executeQueryOrMutation resultSet ctx ctx.Schema.Query ctx.RootValue
+    | Query -> executeQueryOrMutation resultSet ctx ctx.Schema.Query inputContext ctx.RootValue
     | Mutation ->
         match ctx.Schema.Mutation with
-        | Some m -> executeQueryOrMutation resultSet ctx m ctx.RootValue
+        | Some m -> executeQueryOrMutation resultSet ctx m inputContext ctx.RootValue
         | None -> raise(InvalidOperationException("Attempted to make a mutation but no mutation schema was present!"))
     | Subscription ->
         match ctx.Schema.Subscription with
         | Some s ->
-            match executeSubscription resultSet ctx s ctx.RootValue with
+            match executeSubscription resultSet inputContext ctx s ctx.RootValue with
             | Ok data -> AsyncVal.wrap(GQLExecutionResult.Stream(ctx.ExecutionPlan.DocumentId, data, ctx.Metadata))
             | Error errs -> asyncVal { return GQLExecutionResult.Error(ctx.ExecutionPlan.DocumentId, errs, ctx.Metadata) }
 

@@ -73,7 +73,7 @@ let schema = Schema (TestType)
 let ``Execute handles objects and nullability using inline structs with complex input`` () =
     let ast =
         parse """{ fieldWithObjectInput(input: {mand: "baz", opt: "foo", optSeq: ["bar"], optArr: ["baf"]}) }"""
-    let result = sync <| Executor(schema).AsyncExecute (ast)
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext)
 
     let expected =
         NameValueLookup.ofList
@@ -88,7 +88,7 @@ let ``Execute handles objects and nullability using inline structs with complex 
 [<Fact(Skip = "Validation needs to be updated to allow")>]
 let ``Execute handles objects and nullability using inline structs and properly parses single value to list`` () =
     let ast = parse """{ fieldWithObjectInput(input: {mand:"baz", opt: "foo", optSeq: "bar"}) }"""
-    let result = sync <| Executor(schema).AsyncExecute (ast)
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext)
     let expected =
         NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"mand":"baz", "opt":"foo", "optSeq":["bar"], "glCode":null, "optArr":null}""" ]
     ensureDirect result <| fun data errors ->
@@ -98,7 +98,7 @@ let ``Execute handles objects and nullability using inline structs and properly 
 [<Fact>]
 let ``Execute handles objects and nullability using inline structs and properly coerces complex scalar types`` () =
     let ast = parse """{ fieldWithObjectInput(input: {mand: "foo", glCode: "SerializedValue"}) }"""
-    let result = sync <| Executor(schema).AsyncExecute (ast)
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext)
     let expected =
         NameValueLookup.ofList
             [ "fieldWithObjectInput",
@@ -127,7 +127,7 @@ let ``Execute handles variables with complex inputs`` () =
         }"""
 
     let params' = paramsWithValueInput testInputObject
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast testInputObject ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -141,7 +141,7 @@ let ``Execute handles variables with default value when no value was provided`` 
             fieldWithObjectInput(input: $input)
           }"""
 
-    let result = sync <| Executor(schema).AsyncExecute (ast)
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext)
     let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast testInputObject ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -157,7 +157,7 @@ let ``Execute handles variables and errors on null for nested non-nulls`` () =
 
     let testInputObject = """{"mand":null, "opt":"foo", "optSeq":["bar"], "voptSeq":["bar"]}"""
     let params' = paramsWithValueInput testInputObject
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
     ensureRequestError result <| fun [ error ] ->
         let message = "Non-nullable field 'mand' expected value of type 'String!', but got 'null'."
         error |> ensureInputObjectFieldCoercionError (Variable "input") message [] "TestInputObject" "String!"
@@ -172,7 +172,7 @@ let ``Execute handles variables and errors on incorrect type`` () =
 
     let testInputObject = "\"foo bar\""
     let params' = paramsWithValueInput testInputObject
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
     ensureRequestError result <| fun [ error ] ->
         let message = $"A variable '$input' expected to be '%O{JsonValueKind.Object}' but got '%O{JsonValueKind.String}'."
         error |> ensureInputCoercionError (Variable "input") message "TestInputObject"
@@ -187,7 +187,7 @@ let ``Execute handles variables and errors on omission of nested non-nulls`` () 
 
     let testInputObject = """{"opt":"foo","optSeq":["bar"]}"""
     let params' = paramsWithValueInput testInputObject
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
     ensureRequestError result <| fun [ error ] ->
         let message = "Non-nullable field 'mand' expected value of type 'String!', but got 'null'."
         error |> ensureInputObjectFieldCoercionError (Variable "input") message [] "TestInputObject" "String!"
@@ -202,7 +202,7 @@ let ``Execute handles list inputs and nullability and does not allow invalid typ
     // as that kind of an error inside of opt query is guaranteed to fail in every call, we're gonna to fail noisy here
     let testInputList = "[\"A\",\"B\"]"
     let params' = paramsWithValueInput testInputList
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
     ensureRequestError result <| fun [ error ] ->
         let message = $"A variable '$input' expected to be '%O{JsonValueKind.Object}' but got '%O{JsonValueKind.Array}'."
         error |> ensureInputCoercionError (Variable "input") message "TestInputObject!"
@@ -220,7 +220,7 @@ let ``Execute handles list inputs and nullability and does not allow unknown typ
     // as that kind of an error inside of opt query is guaranteed to fail in every call, we're gonna to fail noisy here
     let testInputValue = "\"whoknows\""
     let params' = paramsWithValueInput testInputValue
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
     let expectedError =
         let message = "A variable '$input' in operation 'q' has a type that is not an input type defined by the schema (UnknownType!)."
         GQLProblemDetails.CreateWithKind (message, Validation)
