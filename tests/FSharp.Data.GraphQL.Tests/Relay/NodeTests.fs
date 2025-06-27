@@ -58,7 +58,7 @@ let schema =
 
 
 let execAndValidateNode (query : string) expectedDirect expectedDeferred =
-    let result = sync <| Executor(schema).AsyncExecute (query, mockInputContext)
+    let result = sync <| Executor(schema).AsyncExecute (query, getMockInputContext)
     match expectedDeferred with
     | Some expectedDeferred ->
         ensureDeferred result

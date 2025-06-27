@@ -8,8 +8,6 @@ open System.Collections.Generic
 open System.Text.Json
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
-open FSharp.Data.GraphQL.Extensions
-open FSharp.Data.GraphQL.Shared
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Validation
 open FSharp.Quotations
@@ -193,12 +191,10 @@ module SchemaDefinitions =
         | _ -> Some(x.ToString())
 
     /// Tries to convert any value to string.
-    let coerceFileValue (context : IInputExecutionContext) (x : obj) : Result<System.IO.Stream, string>  =
-        let strOpt = coerceStringValue x
-        match strOpt with
-            | Some str ->
-                context.GetFile str
-            | None -> Error "Cannot coerce the value"
+    let coerceFileValue (context : IInputExecutionContext) (value : obj) : Result<System.IO.Stream, string>  =
+        match coerceStringValue value with
+        | Some str -> context.GetFile str
+        | None -> Error "Cannot coerce the value"
 
     /// Tries to convert any value to generic type parameter.
     let coerceIdValue (x : obj) : string option =

@@ -10,14 +10,12 @@ open System.Collections.Immutable
 open System.Diagnostics
 open System.Linq
 open System.Text.Json
-open FSharp.Data.GraphQL.Shared
 open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Validation
-open FSharp.Data.GraphQL
 
 let private wrapOptionalNone (outputType : Type) (inputType : Type) =
     if inputType.Name <> outputType.Name then
@@ -99,7 +97,7 @@ let rec internal compileByType
     (inputObjectPath : FieldPath)
     (inputSource : InputSource)
     (originalInputDef : InputDef, inputDef : InputDef)
-    (inputContext : InputExecutionContextProvider)
+    (getInputContext : InputExecutionContextProvider)
     : ExecuteInput =
     match inputDef with
 
@@ -210,7 +208,7 @@ let rec internal compileByType
             FieldErrorDetails = ValueSome { ObjectDef = objectType; FieldDef = ValueNone }
         }
 
-        fun inputContext value variables ->
+        fun getInputContext value variables ->
 #if DEBUG
             let objDef = objDef
 #endif
@@ -226,7 +224,7 @@ let rec internal compileByType
                             | None -> return wrapOptionalNone param.ParameterType field.TypeDef.Type
                             | Some prop ->
                                 let! value =
-                                    field.ExecuteInput inputContext prop variables
+                                    field.ExecuteInput getInputContext prop variables
                                     |> attachErrorExtensionsIfScalar inputSource inputObjectPath originalInputDef field
                                 if field.IsSkippable then
                                     let innerType = param.ParameterType.GenericTypeArguments[0]
@@ -270,7 +268,7 @@ let rec internal compileByType
                                     return (Activator.CreateInstance param.ParameterType)
                                 | ValueSome field ->
                                     let! value =
-                                        field.ExecuteInput inputContext (VariableName field.Name) objectFields
+                                        field.ExecuteInput getInputContext (VariableName field.Name) objectFields
                                         // TODO: Take into account variable name
                                         |> attachErrorExtensionsIfScalar inputSource inputObjectPath originalInputDef field
                                     if field.IsSkippable then
@@ -323,21 +321,21 @@ let rec internal compileByType
         match innerDef with
         | InputObject inputObjDef
         | Nullable (InputObject inputObjDef) ->
-            let inner = compileByType inputObjectPath inputSource (inputDef, innerDef) inputContext
+            let inner = compileByType inputObjectPath inputSource (inputDef, innerDef) getInputContext
             inputObjDef.ExecuteInput <- inner
         | _ -> ()
 
         let isArray = inputDef.Type.IsArray
         // TODO: Improve creation of inner
-        let inner index = compileByType ((box index) :: inputObjectPath) inputSource (innerDef, innerDef) inputContext
+        let inner index = compileByType ((box index) :: inputObjectPath) inputSource (innerDef, innerDef) getInputContext
         let cons, nil = ReflectionHelper.listOfType innerDef.Type
 
-        fun inputContext value variables ->
+        fun getInputContext value variables ->
             match value with
             | ListValue list -> result {
                 let! mappedValues =
                     list
-                    |> Seq.mapi (fun i value -> inner i inputContext value variables)
+                    |> Seq.mapi (fun i value -> inner i getInputContext value variables)
                     |> Seq.toList
                     |> splitSeqErrorsList
                 let mappedValues =
@@ -353,7 +351,7 @@ let rec internal compileByType
             | VariableName variableName -> Ok variables[variableName]
             | _ -> result {
                 // try to construct a list from single element
-                let! single = inner 0 inputContext value variables
+                let! single = inner 0 getInputContext value variables
 
                 if single = null then
                     return null
@@ -364,17 +362,17 @@ let rec internal compileByType
               }
 
     | Nullable (Input innerDef) ->
-        let inner = compileByType inputObjectPath inputSource (inputDef, innerDef) inputContext
+        let inner = compileByType inputObjectPath inputSource (inputDef, innerDef) getInputContext
         match innerDef with
         | InputObject inputObjDef -> inputObjDef.ExecuteInput <- inner
         | _ -> ()
-        fun inputContext value variables ->
+        fun getInputContext value variables ->
             match value with
             | NullValue -> Ok null
-            | _ -> inner inputContext value variables
+            | _ -> inner getInputContext value variables
 
     | Enum enumDef ->
-        fun inputContext value variables ->
+        fun _ value variables ->
             match value with
             | VariableName variableName ->
                 match variables.TryGetValue variableName with
@@ -435,7 +433,7 @@ let rec internal coerceVariableValue (ctx : CoerceVariableContext, inputContext 
     let createVariableCoercionError message =
         Error [
             {
-                CoercionError.InputSource = Variable ctx.VarDef
+                CoercionError.InputSource = InputSource.Variable ctx.VarDef
                 CoercionError.Message = message
                 CoercionError.ErrorKind = InputCoercion
                 CoercionError.Path = ctx.InputObjectPath
@@ -455,7 +453,7 @@ let rec internal coerceVariableValue (ctx : CoerceVariableContext, inputContext 
     let mapInputError varDef inputObjectPath (objectFieldErrorDetails : ObjectFieldErrorDetails voption) (err : IGQLError) : IGQLError = {
         InnerError = err
         ErrorKind = InputCoercion
-        InputSource = Variable varDef
+        InputSource = InputSource.Variable varDef
         Path = inputObjectPath
         FieldErrorDetails = objectFieldErrorDetails
     }
@@ -615,7 +613,7 @@ let rec internal coerceVariableValue (ctx : CoerceVariableContext, inputContext 
                 |> Result.mapError (List.map (mapInputError ctx.VarDef ctx.InputObjectPath ctx.ObjectFieldErrorDetails))
     | _ -> failwith $"Variable '$%s{ctx.VarDef.Name}': Only Scalars, Nullables, Lists, and InputObjects are valid type definitions."
 
-and private coerceVariableInputObject (ctx : CoerceVariableInputContext, inputContext : InputExecutionContextProvider) =
+and private coerceVariableInputObject (ctx : CoerceVariableInputContext, getInputContext : InputExecutionContextProvider) =
     match ctx.Input.ValueKind with
     | JsonValueKind.Object -> result {
         let mappedResult =
@@ -637,7 +635,7 @@ and private coerceVariableInputObject (ctx : CoerceVariableInputContext, inputCo
                             VarDef = ctx.VarDef
                             Input = value
                         }
-                        coerceVariableValue(ctx, inputContext)
+                        coerceVariableValue(ctx, getInputContext)
                     KeyValuePair (field.Name, value)
                 match ctx.Input.TryGetProperty field.Name with
                 | true, value -> coerce value |> ValueSome
@@ -656,13 +654,13 @@ and private coerceVariableInputObject (ctx : CoerceVariableInputContext, inputCo
             seq { KeyValuePair (ctx.VarDef.Name, mapped :> obj) }
             |> ImmutableDictionary.CreateRange
 
-        return! ctx.ObjectDef.ExecuteInput inputContext (VariableName ctx.VarDef.Name) variables
+        return! ctx.ObjectDef.ExecuteInput getInputContext (VariableName ctx.VarDef.Name) variables
       }
     | JsonValueKind.Null -> Ok null
     | valueKind ->
         Error [
             {
-                InputSource = Variable ctx.VarDef
+                InputSource = InputSource.Variable ctx.VarDef
                 Message = $"A variable '$%s{ctx.VarDef.Name}' expected to be '%O{JsonValueKind.Object}' but got '%O{valueKind}'."
                 ErrorKind = InputCoercion
                 Path = ctx.InputObjectPath

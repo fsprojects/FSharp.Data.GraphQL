@@ -11,7 +11,6 @@ open System.Collections.Immutable
 open System.Runtime.InteropServices
 open System.Text.Json
 
-open FSharp.Data.GraphQL.Shared
 open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL
@@ -860,7 +859,12 @@ and VarDef = {
 
 
 /// The context used to hold all the information for a schema compiling proccess.
-and SchemaCompileContext = { Schema : ISchema; TypeMap : TypeMap; FieldExecuteMap : FieldExecuteMap }
+and SchemaCompileContext = {
+    Schema : ISchema
+    TypeMap : TypeMap
+    FieldExecuteMap : FieldExecuteMap
+    GetInputContext : InputExecutionContextProvider
+}
 
 /// A planning of an execution phase.
 /// It is used by the execution process to execute an operation.
@@ -896,6 +900,8 @@ and ExecutionContext = {
     RootValue : obj
     /// Execution plan describing, what fields are going to be resolved.
     ExecutionPlan : ExecutionPlan
+    ///Get input execution context
+    GetInputContext : InputExecutionContextProvider
     /// Collection of variables provided to execute a current operation.
     Variables : ImmutableDictionary<string, obj>
     /// Collection of errors that occurred while executing a current operation.
@@ -1115,6 +1121,7 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Primitive, 'Val> = {
     override x.ToString () = x.Name + "!"
 
 and ScalarDefinition<'Val> = ScalarDefinition<'Val, 'Val>
+
 and FileDef =
     interface
         /// Name of the file type.
@@ -1127,6 +1134,7 @@ and FileDef =
         inherit NamedDef
         inherit InputDef
     end
+
 and [<CustomEquality; NoComparison>] FileDefinition = {
     /// Name of the file type.
     Name : string

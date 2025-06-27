@@ -6,7 +6,6 @@ open System.Collections.Immutable
 open System.IO
 open System.Runtime.CompilerServices
 open System.Text.Json
-open FSharp.Data.GraphQL
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Options
@@ -22,7 +21,7 @@ type HttpContext with
     /// </summary>
     /// <typeparam name="'T">Type to deserialize to</typeparam>
     /// <returns>
-    /// Retruns a <see cref="System.Threading.Tasks.Task{T}"/>Deserialized object or
+    /// Returns a <see cref="System.Threading.Tasks.Task{T}"/>Deserialized object or
     /// <see cref="ProblemDetails">ProblemDetails</see> as <see cref="IResult">IResult</see>
     /// if a body could not be deserialized.
     /// </returns>
@@ -32,10 +31,23 @@ type HttpContext with
         let request = ctx.Request
 
         try
-            if not request.Body.CanSeek then
-                request.EnableBuffering()
+            let! jsonStream =
+                task {
+                    if request.HasFormContentType then
+                        let! form = request.ReadFormAsync(ctx.RequestAborted)
+                        match form.TryGetValue("operations") with
+                        | true, values when values.Count > 0 ->
+                            let bytes = System.Text.Encoding.UTF8.GetBytes(values[0])
+                            return new MemoryStream(bytes) :> Stream
+                        | _ ->
+                            return request.Body
+                    else
+                        if not request.Body.CanSeek then
+                            request.EnableBuffering()
+                        return request.Body
+                }
 
-            return! JsonSerializer.DeserializeAsync<'T>(request.Body, serializerOptions, ctx.RequestAborted)
+            return! JsonSerializer.DeserializeAsync<'T>(jsonStream, serializerOptions, ctx.RequestAborted)
         with :? JsonException ->
             let body = request.Body
             body.Seek(0, SeekOrigin.Begin) |> ignore

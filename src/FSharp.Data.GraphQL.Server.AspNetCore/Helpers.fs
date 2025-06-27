@@ -3,9 +3,7 @@ namespace FSharp.Data.GraphQL.Server.AspNetCore
 open System
 open System.Text
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Shared
 open Microsoft.AspNetCore.Http
-
 
 [<AutoOpen>]
 module Helpers =
@@ -59,10 +57,7 @@ type HttpContextRequestExecutionContext (httpContext : HttpContext) =
                 Error "Request does not have form content type"
             else
                 let form = httpContext.Request.Form
-                let maybeFile =
-                    form.Files
-                    |> Seq.tryFind (fun f -> f.Name = key)
 
-                match maybeFile with
-                | Some file -> Ok (file.OpenReadStream())
-                | None -> Error $"File with key '{key}' not found"
+                match (form.Files |> Seq.vtryFind (fun f -> f.Name = key)) with
+                | ValueSome file -> Ok (file.OpenReadStream())
+                | ValueNone -> Error $"File with key '{key}' not found"

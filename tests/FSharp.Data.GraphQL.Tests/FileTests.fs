@@ -6,10 +6,8 @@ open System.Text
 open System.Text.Json
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Parser
-open FSharp.Data.GraphQL.Shared
-open Xunit
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Types.SchemaDefinitions
+open Xunit
 
 type Root = { File : Stream }
 
@@ -38,15 +36,20 @@ let MutationType =
                     let stream = ctx.Arg<Stream> "input"
                     use reader = new StreamReader(stream, Encoding.UTF8, true)
                     reader.ReadToEnd()
+                ));
+                Define.Field ("uploadFileComplex", StringType, "", [ Define.Input ("input", InputObject) ],
+                (fun ctx () ->
+                    let input = ctx.Arg<Input> "input"
+                    use reader = new StreamReader(input.File, Encoding.UTF8, true)
+                    reader.ReadToEnd()
                 ))
-                // Define.Field ("uploadFileWithinObject", StringType, "", [ Define.Input ("input", InputObject) ], stringifyInput)
             ]
     )
 let schema = Schema (QueryType, MutationType)
 let executor = Executor (schema, [])
-let execute (query : string) = executor.AsyncExecute (query, mockInputContext) |> sync
+let execute (query : string) = executor.AsyncExecute (query, getMockInputContext) |> sync
 let executeWithVariables ( query : string, variables : ImmutableDictionary<string, JsonElement>) =
-    executor.AsyncExecute (ast = parse query, inputContext = mockInputContext, variables = variables) |> sync
+    executor.AsyncExecute (ast = parse query, getInputContext = getMockInputContext, variables = variables) |> sync
 
 let mutationWithVariable = """mutation uploadFile ($file : FileType!) {
     uploadFile (input : $file)
@@ -55,6 +58,10 @@ let mutationWithVariable = """mutation uploadFile ($file : FileType!) {
 
 let mutationWithConstant = """mutation uploadFile () {
     uploadFile (input : "fileKey")
+}"""
+
+let mutationComplexObject = """mutation uploadFile () {
+    uploadFileComplex (input : {file : "fileKey"})
 }"""
 
 [<Fact>]
@@ -72,6 +79,15 @@ let ``File type: Must return file text when as using variable`` () =
     let jsonVariable = "\"fileKey\"" |> JsonDocument.Parse |> _.RootElement
     let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("file", jsonVariable)
     let result = executeWithVariables (mutationWithVariable, variables)
+    ensureDirect result <| fun data errors ->
+            empty errors
+            data |> equals (upcast expected)
+    ()
+
+[<Fact>]
+let ``File type: Must return file text for complex object`` () =
+    let expected = NameValueLookup.ofList [ "uploadFileComplex", MockInputContext.mockFileText ]
+    let result = execute mutationComplexObject
     ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)

@@ -10,7 +10,6 @@ open System.Text.Json
 open System.Text.Json.Serialization
 open System.Threading
 open System.Threading.Tasks
-open FSharp.Data.GraphQL.Shared
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
@@ -169,7 +168,7 @@ type GraphQLWebSocketMiddleware<'Root>
 
         let sendMsg = sendMessageViaSocket serializerOptions socket
         let rcv () = socket |> rcvMsgViaSocket serializerOptions
-        let inputContext = fun () -> (HttpContextRequestExecutionContext httpContext) :> IInputExecutionContext
+        let getInputContext = fun () -> (HttpContextRequestExecutionContext httpContext) :> IInputExecutionContext
 
         let sendOutput id (output : SubscriptionExecutionResult) =
             sendMsg (Next (id, output))
@@ -177,16 +176,16 @@ type GraphQLWebSocketMiddleware<'Root>
         let sendSubscriptionResponseOutput id subscriptionResult =
             match subscriptionResult with
             | SubscriptionResult output -> { Data = ValueSome output; Errors = [] } |> sendOutput id
-            | SubscriptionErrors (_, errors) ->
+            | SubscriptionErrors (output, errors) ->
                 logger.LogWarning ("Subscription errors: {subscriptionErrors}", (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}"))))
                 { Data = ValueNone; Errors = errors } |> sendOutput id
 
         let sendDeferredResponseOutput id deferredResult =
             match deferredResult with
-            | DeferredResult (obj, _) ->
+            | DeferredResult (obj, path) ->
                 let output = obj :?> Dictionary<string, obj>
                 { Data = ValueSome output; Errors = [] } |> sendOutput id
-            | DeferredErrors (_, errors, _) ->
+            | DeferredErrors (obj, errors, _) ->
                 logger.LogWarning (
                     "Deferred response errors: {deferredErrors}",
                     (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
@@ -276,11 +275,11 @@ type GraphQLWebSocketMiddleware<'Root>
                                     let variables = query.Variables |> Skippable.toOption
                                     let! planExecutionResult =
                                         let root = options.RootFactory httpContext
-                                        options.SchemaExecutor.AsyncExecute (query.Query, inputContext, root, ?variables = variables)
+                                        options.SchemaExecutor.AsyncExecute (query.Query, getInputContext, root, ?variables = variables)
                                     do! planExecutionResult |> applyPlanExecutionResult id socket
                             with ex ->
                                 logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
-                                do! sendMsg (Error (id, [Shared.NameValueLookup([ ("subscription", "Unexpected error during subscription" :> obj) ])]))
+                                do! sendMsg (Error (id, [NameValueLookup([ ("subscription", "Unexpected error during subscription" :> obj) ])]))
                         | ClientComplete id ->
                             "ClientComplete" |> logMsgWithIdReceived id
                             subscriptions

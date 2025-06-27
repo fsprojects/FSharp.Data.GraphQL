@@ -27,7 +27,7 @@ type SimpleExecutionWithMiddlewaresBenchmark() =
     let mutable nestedExecutionPlan : ExecutionPlan = Unchecked.defaultof<ExecutionPlan>
     let mutable filteredExecutionPlan : ExecutionPlan = Unchecked.defaultof<ExecutionPlan>
     let mutable filteredAst : Ast.Document = Unchecked.defaultof<Ast.Document>
-    let inputContext = fun () -> MockInputExecutionContext() :> IInputExecutionContext
+    let getInputContext = fun () -> MockInputExecutionContext() :> IInputExecutionContext
 
     [<GlobalSetup>]
     member _.Setup() =
@@ -44,37 +44,37 @@ type SimpleExecutionWithMiddlewaresBenchmark() =
         filteredExecutionPlan <- schemaProcessor.CreateExecutionPlanOrFail(filteredAst)
 
     [<Benchmark>]
-    member _.BenchmarkSimpleQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.simple, inputContext) |> Async.RunSynchronously
+    member _.BenchmarkSimpleQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.simple, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkSimpleQueryParsed() = schemaProcessor.AsyncExecute(simpleAst, inputContext) |> Async.RunSynchronously
+    member _.BenchmarkSimpleQueryParsed() = schemaProcessor.AsyncExecute(simpleAst, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkSimpleQueryPlanned() = schemaProcessor.AsyncExecute(simpleExecutionPlan, inputContext) |> Async.RunSynchronously
+    member _.BenchmarkSimpleQueryPlanned() = schemaProcessor.AsyncExecute(simpleExecutionPlan, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFlatQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.flat, inputContext) |> Async.RunSynchronously
+    member _.BenchmarkFlatQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.flat, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFlatQueryParsed() = schemaProcessor.AsyncExecute(flatAst, inputContext) |> Async.RunSynchronously
+    member _.BenchmarkFlatQueryParsed() = schemaProcessor.AsyncExecute(flatAst, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFlatQueryPlanned() = schemaProcessor.AsyncExecute(flatExecutionPlan, inputContext) |> Async.RunSynchronously
+    member _.BenchmarkFlatQueryPlanned() = schemaProcessor.AsyncExecute(flatExecutionPlan, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkNestedQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.nested, inputContext) |> Async.RunSynchronously
+    member _.BenchmarkNestedQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.nested, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkNestedQueryParsed() = schemaProcessor.AsyncExecute(nestedAst, inputContext) |> Async.RunSynchronously
+    member _.BenchmarkNestedQueryParsed() = schemaProcessor.AsyncExecute(nestedAst, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkNestedQueryPlanned() = schemaProcessor.AsyncExecute(nestedExecutionPlan, inputContext) |> Async.RunSynchronously
+    member _.BenchmarkNestedQueryPlanned() = schemaProcessor.AsyncExecute(nestedExecutionPlan, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFilteredQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.filtered, inputContext) |> Async.RunSynchronously
+    member _.BenchmarkFilteredQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.filtered, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFilteredQueryParsed() = schemaProcessor.AsyncExecute(filteredAst, inputContext) |> Async.RunSynchronously
+    member _.BenchmarkFilteredQueryParsed() = schemaProcessor.AsyncExecute(filteredAst, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFilteredQueryPlanned() = schemaProcessor.AsyncExecute(filteredExecutionPlan, inputContext) |> Async.RunSynchronously
+    member _.BenchmarkFilteredQueryPlanned() = schemaProcessor.AsyncExecute(filteredExecutionPlan, getInputContext) |> Async.RunSynchronously

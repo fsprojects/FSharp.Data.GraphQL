@@ -4,7 +4,6 @@ open System.Collections.Concurrent
 open System.Collections.Immutable
 open System.Runtime.InteropServices
 open System.Text.Json
-open FSharp.Data.GraphQL.Shared
 open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL.Types
@@ -14,7 +13,7 @@ open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Planning
 
-/// A function signature that represents a middleware for schema compile phase.
+/// A function signature that represents middleware for the schema compile phase.
 /// It takes two arguments: A schema compile context, containing all the data used for the
 /// compilation phase, and another function that can be called to pass
 /// the execution for the next middleware.
@@ -83,7 +82,6 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                            (onComplete : 'ctx -> 'res)
                            : 'res =
         let rec go ctx (middlewares: IExecutorMiddleware list) =
-            let inputContext = Unchecked.defaultof<InputExecutionContextProvider>
             match middlewares with
             | [] -> onComplete ctx
             | m :: ms ->
@@ -93,15 +91,15 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         go initialCtx middlewaresList
 
     do
-        let compileCtx = { Schema = schema; TypeMap = schema.TypeMap; FieldExecuteMap = fieldExecuteMap }
-        let inputContext = Unchecked.defaultof<InputExecutionContextProvider>
-        runMiddlewares _.CompileSchema compileCtx (compileSchema inputContext)
+        let getInputContext = Unchecked.defaultof<InputExecutionContextProvider>
+        let compileCtx = { Schema = schema; TypeMap = schema.TypeMap; FieldExecuteMap = fieldExecuteMap; GetInputContext = getInputContext }
+        runMiddlewares _.CompileSchema compileCtx compileSchema
         runMiddlewares _.PostCompileSchema (upcast schema) ignore
         match Validation.Types.validateTypeMap schema.TypeMap with
         | Success -> ()
         | ValidationError errors -> raise (GQLMessageException (System.String.Join("\n", errors)))
 
-    let eval (executionPlan: ExecutionPlan, data: 'Root option, variables: ImmutableDictionary<string, JsonElement>, inputContext : InputExecutionContextProvider): Async<GQLExecutionResult> =
+    let eval (executionPlan: ExecutionPlan, data: 'Root option, variables: ImmutableDictionary<string, JsonElement>, getInputContext : InputExecutionContextProvider): Async<GQLExecutionResult> =
         let documentId = executionPlan.DocumentId
         let prepareOutput res =
             match res with
@@ -113,29 +111,30 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
             try
                 let errors = ConcurrentDictionary<ResolveFieldContext, ConcurrentBag<IGQLError>>()
                 let root = data |> Option.map box |> Option.toObj
-                match coerceVariables executionPlan.Variables inputContext variables with
+                match coerceVariables executionPlan.Variables getInputContext variables with
                 | Error errs -> return prepareOutput (GQLExecutionResult.Error (documentId, errs, executionPlan.Metadata))
                 | Ok variables ->
                     let executionCtx =
                         { Schema = schema
                           RootValue = root
                           ExecutionPlan = executionPlan
+                          GetInputContext = getInputContext
                           Variables = variables
                           Errors = errors
                           FieldExecuteMap = fieldExecuteMap
                           Metadata = executionPlan.Metadata }
                     let executorMiddlewareFunc = fun (executorMiddleware : IExecutorMiddleware) ->
-                            executorMiddleware.ExecuteOperationAsync |> Option.map (fun x -> x(inputContext))
-                    let! res = runMiddlewares executorMiddlewareFunc executionCtx (executeOperation inputContext) |> AsyncVal.toAsync
+                            executorMiddleware.ExecuteOperationAsync |> Option.map (fun middleware -> middleware(getInputContext))
+                    let! res = runMiddlewares executorMiddlewareFunc executionCtx executeOperation |> AsyncVal.toAsync
                     return prepareOutput res
             with
             | :? GQLMessageException as ex -> return prepareOutput(GQLExecutionResult.Error (documentId, ex, executionPlan.Metadata))
             | ex -> return prepareOutput (GQLExecutionResult.ErrorFromException(documentId, ex, executionPlan.Metadata))
         }
 
-    let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: ImmutableDictionary<string, JsonElement> option, inputContext : InputExecutionContextProvider) =
+    let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: ImmutableDictionary<string, JsonElement> option, getInputContext : InputExecutionContextProvider) =
         let variables = defaultArg variables ImmutableDictionary.Empty
-        eval (executionPlan, data, variables, inputContext)
+        eval (executionPlan, data, variables, getInputContext)
 
     let createExecutionPlan (ast: Document, operationName: string option, meta : Metadata) =
         let documentId = ast.GetHashCode()
@@ -191,11 +190,11 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>
     /// <param name="executionPlan">Execution plan for the operation.</param>
-    /// <param name="inputContext">Request input context provider for the operation.</param>
+    /// <param name="getInputContext">Gets input context provider for the operation.</param>
     /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
     /// <param name="variables">Map of all variable values provided by the client request.</param>
-    member _.AsyncExecute(executionPlan: ExecutionPlan, inputContext : InputExecutionContextProvider, ?data: 'Root, ?variables: ImmutableDictionary<string, JsonElement>): Async<GQLExecutionResult> =
-        execute (executionPlan, data, variables, inputContext)
+    member _.AsyncExecute(executionPlan: ExecutionPlan, getInputContext : InputExecutionContextProvider, ?data: 'Root, ?variables: ImmutableDictionary<string, JsonElement>): Async<GQLExecutionResult> =
+        execute (executionPlan, data, variables, getInputContext)
 
     /// <summary>
     /// Asynchronously executes parsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
@@ -204,15 +203,15 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>
     /// <param name="ast">Parsed GraphQL query string.</param>
-    /// <param name="inputContext">Input context for the operation.</param>
+    /// <param name="getInputContext">Gets input context for the operation.</param>
     /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution customizations.</param>
-    member _.AsyncExecute(ast: Document, inputContext : InputExecutionContextProvider, ?data: 'Root, ?variables: ImmutableDictionary<string, JsonElement>, ?operationName: string, ?meta : Metadata): Async<GQLExecutionResult> =
+    member _.AsyncExecute(ast: Document, getInputContext : InputExecutionContextProvider, ?data: 'Root, ?variables: ImmutableDictionary<string, JsonElement>, ?operationName: string, ?meta : Metadata): Async<GQLExecutionResult> =
         let meta = defaultArg meta Metadata.Empty
         match createExecutionPlan (ast, operationName, meta) with
-        | Ok executionPlan -> execute (executionPlan, data, variables, inputContext)
+        | Ok executionPlan -> execute (executionPlan, data, variables, getInputContext)
         | Error (documentId, errors) -> async.Return <| GQLExecutionResult.Invalid(documentId, errors, meta)
 
     /// <summary>
@@ -222,16 +221,16 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>
     /// <param name="queryOrMutation">GraphQL query string.</param>
-    /// <param name="inputContext">Input context for the operation.</param>
+    /// <param name="getInputContext">Gets input context for the operation.</param>
     /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution customizations.</param>
-    member _.AsyncExecute(queryOrMutation: string, inputContext : InputExecutionContextProvider, ?data: 'Root, ?variables: ImmutableDictionary<string, JsonElement>, ?operationName: string, ?meta : Metadata): Async<GQLExecutionResult> =
+    member _.AsyncExecute(queryOrMutation: string, getInputContext : InputExecutionContextProvider, ?data: 'Root, ?variables: ImmutableDictionary<string, JsonElement>, ?operationName: string, ?meta : Metadata): Async<GQLExecutionResult> =
         let meta = defaultArg meta Metadata.Empty
         let ast = parse queryOrMutation
         match createExecutionPlan (ast, operationName, meta) with
-        | Ok executionPlan -> execute (executionPlan, data, variables, inputContext)
+        | Ok executionPlan -> execute (executionPlan, data, variables, getInputContext)
         | Error (documentId, errors) -> async.Return <| GQLExecutionResult.Invalid(documentId, errors, meta)
 
     /// Creates an execution plan for provided GraphQL document AST without

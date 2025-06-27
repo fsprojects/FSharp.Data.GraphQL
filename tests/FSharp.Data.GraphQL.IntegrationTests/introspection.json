@@ -1,5 +1,5 @@
 {
-  "documentId": -837497709,
+  "documentId": 1466593774,
   "data": {
     "__schema": {
       "queryType": {
@@ -1438,7 +1438,7 @@
                   "name": "filter",
                   "description": null,
                   "type": {
-                    "kind": "SCALAR",
+                    "kind": "INPUT_OBJECT",
                     "name": "ObjectListFilter",
                     "ofType": null
                   },
@@ -1551,6 +1551,22 @@
               },
               "isDeprecated": false,
               "deprecationReason": null
+            },
+            {
+              "name": "satelitesCount",
+              "description": "The number of satelites of the planet.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "Int",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
             }
           ],
           "inputFields": null,
@@ -1606,6 +1622,51 @@
           "description": null,
           "fields": [
             {
+              "name": "patchPlanet",
+              "description": null,
+              "args": [
+                {
+                  "name": "id",
+                  "description": null,
+                  "type": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "SCALAR",
+                      "name": "String",
+                      "ofType": null
+                    }
+                  },
+                  "defaultValue": null
+                },
+                {
+                  "name": "planet",
+                  "description": null,
+                  "type": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "INPUT_OBJECT",
+                      "name": "InputPatchPlanet",
+                      "ofType": null
+                    }
+                  },
+                  "defaultValue": null
+                }
+              ],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "OBJECT",
+                  "name": "Planet",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
               "name": "setMoon",
               "description": "Defines if a planet is actually a moon or not.",
               "args": [
@@ -1653,11 +1714,52 @@
           "possibleTypes": null
         },
         {
-          "kind": "SCALAR",
+          "kind": "INPUT_OBJECT",
+          "name": "InputPatchPlanet",
+          "description": "A planet in the Star Wars universe.",
+          "fields": null,
+          "inputFields": [
+            {
+              "name": "name",
+              "description": null,
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "defaultValue": null
+            },
+            {
+              "name": "satelitesCount",
+              "description": null,
+              "type": {
+                "kind": "SCALAR",
+                "name": "Int",
+                "ofType": null
+              },
+              "defaultValue": null
+            },
+            {
+              "name": "isMoon",
+              "description": null,
+              "type": {
+                "kind": "SCALAR",
+                "name": "Boolean",
+                "ofType": null
+              },
+              "defaultValue": null
+            }
+          ],
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "INPUT_OBJECT",
           "name": "ObjectListFilter",
           "description": "The `Filter` scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query.",
           "fields": null,
-          "inputFields": null,
+          "inputFields": [],
           "interfaces": null,
           "enumValues": null,
           "possibleTypes": null

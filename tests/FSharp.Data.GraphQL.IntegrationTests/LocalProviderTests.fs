@@ -9,6 +9,7 @@ let [<Literal>] ServerUrl = "http://localhost:8085"
 let [<Literal>] EmptyGuidAsString = "00000000-0000-0000-0000-000000000000"
 
 type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName = "Upload", explicitOptionalParameters = false>
+// type FileProvider = GraphQLProvider<ServerUrl, uploadInputTypeName = "FileType", explicitOptionalParameters = true>
 
 let context = Provider.GetContext(ServerUrl)
 
@@ -250,6 +251,13 @@ module SingleOptionalUploadOperation =
         result.Data.Value.NullableSingleUpload.Value.Name |> equals file.Name
         result.Data.Value.NullableSingleUpload.Value.ContentAsText |> equals file.Content
         result.Data.Value.NullableSingleUpload.Value.ContentType |> equals file.ContentType)
+
+
+// [<Fact>]
+// let ``Should be able to execute a upload by passing a file with new approach``() =
+//     let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
+//     let result = SingleOptionalUploadOperation.fileOperation.Run(file.MakeUpload())
+//     |> SingleOptionalUploadOperation.validateResult (Some file)
 
 [<Fact(Skip = "Temporary broken")>]
 let ``Should be able to execute a single optional upload by passing a file``() =

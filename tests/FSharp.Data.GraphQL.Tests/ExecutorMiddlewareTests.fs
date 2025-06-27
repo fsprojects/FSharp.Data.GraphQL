@@ -108,7 +108,7 @@ let executor = Executor(schema, [ middleware ])
 
 [<Fact>]
 let ``Executor middleware: change fields and measure planning time`` () =
-    let result = sync <| executor.AsyncExecute(ast, mockInputContext)
+    let result = sync <| executor.AsyncExecute(ast, getMockInputContext)
     let expected =
             NameValueLookup.ofList
                 [ "testData",

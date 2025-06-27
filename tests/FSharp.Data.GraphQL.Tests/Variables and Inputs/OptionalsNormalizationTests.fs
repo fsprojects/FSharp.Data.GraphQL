@@ -220,7 +220,7 @@ let ``Execute handles validation of valid inline input records with all fields``
         structOptional: { zipCode: "12345", city: "Miami" }
       )
     }"""
-    let result = sync <| schema.AsyncExecute(parse query, mockInputContext)
+    let result = sync <| schema.AsyncExecute(parse query, getMockInputContext)
     ensureDirect result <| fun data errors -> empty errors
 
 [<Fact>]
@@ -238,5 +238,5 @@ let ``Execute handles validation of valid inline input records with mandatory-on
         struct: { zipCode: "12345", city: "Miami" },
       )
     }"""
-    let result = sync <| schema.AsyncExecute(parse query, mockInputContext)
+    let result = sync <| schema.AsyncExecute(parse query, getMockInputContext)
     ensureDirect result <| fun data errors -> empty errors

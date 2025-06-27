@@ -50,7 +50,7 @@ let paramsWithValueInput input =
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be omitted`` () =
     let ast = parse """{ fieldWithNullableStringInput }"""
-    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext)
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext)
     let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", upcast "null" ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -64,7 +64,7 @@ let ``Execute handles variables and allows nullable inputs to be omitted in a va
         fieldWithNullableStringInput(input: $value)
       }"""
 
-    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext)
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext)
     let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", upcast "null" ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -81,7 +81,7 @@ let ``Execute handles variables and allows nullable inputs to be set to null in 
     let testInputValue = "null"
     let params' = paramsWithValueInput testInputValue
 
-    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", upcast testInputValue ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -103,7 +103,7 @@ let ``Execute handles variables and allows nullable inputs to be set to a value 
     let testInputValue = "\"a\""
     let params' = paramsWithValueInput testInputValue
 
-    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", upcast testInputValue ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -112,7 +112,7 @@ let ``Execute handles variables and allows nullable inputs to be set to a value 
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be set to a value directly`` () =
     let ast = parse """{ fieldWithNullableStringInput(input: "a") }"""
-    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext)
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext)
     let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", upcast "\"a\"" ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -133,7 +133,7 @@ let ``Execute handles non-nullable scalars and does not allow non-nullable input
 
     let testInputValue = "null"
     let params' = paramsWithValueInput testInputValue
-    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     ensureRequestError result <| fun [ error ] ->
         error |> ensureInputCoercionError (Variable "value") "Non-nullable variable '$value' expected value of type 'String!', but got 'null'." "String!"
 
@@ -153,7 +153,7 @@ let ``Execute handles non-nullable scalars and allows non-nullable inputs to be 
     let testInputValue = "\"a\""
     let params' = paramsWithValueInput testInputValue
 
-    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithNonNullableStringInput", upcast testInputValue ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -162,7 +162,7 @@ let ``Execute handles non-nullable scalars and allows non-nullable inputs to be 
 [<Fact>]
 let ``Execute handles non-nullable scalars and allows non-nullable inputs to be set to a value directly`` () =
     let ast = parse """{ fieldWithNonNullableStringInput(input: "a") }"""
-    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext)
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext)
     let expected = NameValueLookup.ofList [ "fieldWithNonNullableStringInput", upcast "\"a\"" ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -171,7 +171,7 @@ let ``Execute handles non-nullable scalars and allows non-nullable inputs to be 
 [<Fact>]
 let ``Execute uses argument default value when no argument was provided`` () =
     let ast = parse """{ fieldWithDefaultArgumentValue }"""
-    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext)
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext)
     let expected = NameValueLookup.ofList [ "fieldWithDefaultArgumentValue", upcast "\"hello world\"" ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -192,7 +192,7 @@ let ``Execute uses argument default value when nullable variable provided`` () =
 
     let testInputValue = "\"hello world\""
     let params' = paramsWithOptionalInput testInputValue
-    let result = sync <| Executor(schema).AsyncExecute (ast, mockInputContext, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithDefaultArgumentValue", upcast testInputValue ]
     ensureDirect result <| fun data errors ->
         empty errors

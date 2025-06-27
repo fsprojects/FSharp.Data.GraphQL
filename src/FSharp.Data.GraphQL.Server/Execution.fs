@@ -445,11 +445,11 @@ let private (|String|Other|) (o : obj) =
     | :? string as s -> String s
     | _ -> Other
 
-let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objDef: ObjectDef) (inputContext : InputExecutionContextProvider) (rootValue : obj) : AsyncVal<GQLExecutionResult> =
+let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objDef: ObjectDef) (rootValue : obj) : AsyncVal<GQLExecutionResult> =
     let executeRootOperation (name, info) =
         let fDef = info.Definition
         let argDefs = ctx.FieldExecuteMap.GetArgs(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
-        match getArgumentValues argDefs info.Ast.Arguments inputContext ctx.Variables with
+        match getArgumentValues argDefs info.Ast.Arguments ctx.GetInputContext ctx.Variables with
         | Error errs -> asyncVal { return Error (errs |> List.map GQLProblemDetails.OfError) }
         | Ok args ->
             let path = [ box info.Identifier ]
@@ -465,7 +465,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             let execute = ctx.FieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
             asyncVal {
                 let! result =
-                    executeResolvers inputContext fieldCtx path rootValue (resolveField execute fieldCtx rootValue)
+                    executeResolvers ctx.GetInputContext fieldCtx path rootValue (resolveField execute fieldCtx rootValue)
                     |> AsyncVal.rescue path ctx.Schema.ParseError
                 let result =
                     match result with
@@ -545,7 +545,7 @@ let private compileObject (objDef: ObjectDef) (executeFields: FieldDef -> unit) 
         )
     )
 
-let internal compileSchema (inputContext : InputExecutionContextProvider) (ctx : SchemaCompileContext)  =
+let internal compileSchema (ctx : SchemaCompileContext)  =
     ctx.Schema.TypeMap.ToSeq()
     |> Seq.iter (fun (tName, x) ->
         match x with
@@ -555,10 +555,10 @@ let internal compileSchema (inputContext : InputExecutionContextProvider) (ctx :
                     match sub with
                     | :? SubscriptionFieldDef as subField -> compileSubscriptionField subField
                     | _ -> failwith $"Schema error: subscription object '%s{subDef.Name}' does have a field '%s{sub.Name}' that is not a subscription field definition."
-                ctx.Schema.SubscriptionProvider.Register { Name = sub.Name; Filter = filter }) inputContext
+                ctx.Schema.SubscriptionProvider.Register { Name = sub.Name; Filter = filter }) ctx.GetInputContext
         | Object objDef ->
-            compileObject objDef (fun fieldDef -> ctx.FieldExecuteMap.SetExecute(tName, fieldDef)) inputContext
-        | InputObject inputDef -> compileInputObject inputDef inputContext
+            compileObject objDef (fun fieldDef -> ctx.FieldExecuteMap.SetExecute(tName, fieldDef)) ctx.GetInputContext
+        | InputObject inputDef -> compileInputObject inputDef ctx.GetInputContext
         | _ -> ())
 
 let internal coerceVariables (variables: VarDef list) (inputContext : InputExecutionContextProvider) (vars: ImmutableDictionary<string, JsonElement>) = result {
@@ -650,7 +650,7 @@ let internal coerceVariables (variables: VarDef list) (inputContext : InputExecu
 
 #nowarn "0046"
 
-let internal executeOperation (inputContext : InputExecutionContextProvider) (ctx : ExecutionContext) : AsyncVal<GQLExecutionResult> =
+let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLExecutionResult> =
     let includeResults =
         ctx.ExecutionPlan.Fields
         |> List.map (
@@ -669,15 +669,15 @@ let internal executeOperation (inputContext : InputExecutionContextProvider) (ct
         |> Seq.map (fun info -> (info.Identifier, info))
         |> Seq.toArray
     match ctx.ExecutionPlan.Operation.OperationType with
-    | Query -> executeQueryOrMutation resultSet ctx ctx.Schema.Query inputContext ctx.RootValue
+    | Query -> executeQueryOrMutation resultSet ctx ctx.Schema.Query ctx.RootValue
     | Mutation ->
         match ctx.Schema.Mutation with
-        | Some m -> executeQueryOrMutation resultSet ctx m inputContext ctx.RootValue
+        | Some m -> executeQueryOrMutation resultSet ctx m ctx.RootValue
         | None -> raise(InvalidOperationException("Attempted to make a mutation but no mutation schema was present!"))
     | Subscription ->
         match ctx.Schema.Subscription with
         | Some s ->
-            match executeSubscription resultSet inputContext ctx s ctx.RootValue with
+            match executeSubscription resultSet ctx.GetInputContext ctx s ctx.RootValue with
             | Ok data -> AsyncVal.wrap(GQLExecutionResult.Stream(ctx.ExecutionPlan.DocumentId, data, ctx.Metadata))
             | Error errs -> asyncVal { return GQLExecutionResult.Error(ctx.ExecutionPlan.DocumentId, errs, ctx.Metadata) }
 

@@ -101,7 +101,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
       }
     }"""
 
-    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, mockInputContext)
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, getMockInputContext)
 
     let expected =
         NameValueLookup.ofList
@@ -126,7 +126,7 @@ let ``Execute handles execution of abstract types: not specified Interface types
       }
     }"""
 
-    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, mockInputContext)
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, getMockInputContext)
 
     let expected = NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ]
 
@@ -146,7 +146,7 @@ let ``Execute handles execution of abstract types: not specified Interface types
       }
     }"""
 
-    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, mockInputContext)
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, getMockInputContext)
 
     let expected = NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ]
 
@@ -173,7 +173,7 @@ let ``Execute handles execution of abstract types: absent field resolution produ
       }
     }"""
 
-    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, mockInputContext)
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, getMockInputContext)
     ensureRequestError result <| fun [ dogError; catError ] ->
         dogError |> ensureValidationError "Field 'unknownField1' is not defined in schema type 'Dog'." [ "pets"; "unknownField1" ]
         catError |> ensureValidationError "Field 'unknownField2' is not defined in schema type 'Cat'." [ "pets"; "unknownField2" ]
@@ -195,7 +195,7 @@ let ``Execute handles execution of abstract types: absent type resolution produc
       }
     }"""
 
-    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, mockInputContext)
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, getMockInputContext)
     ensureRequestError result <| fun [ catError; dogError ] ->
         catError |> ensureValidationError "Field 'unknownField2' is not defined in schema type 'Cat'." [ "pets"; "unknownField2" ]
         dogError |> ensureValidationError "Inline fragment has type condition 'UnknownDog', but that type does not exist in the schema." [ "pets" ]
@@ -215,7 +215,7 @@ let ``Execute handles execution of abstract types: absent type resolution produc
       }
     }"""
 
-    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, mockInputContext)
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, getMockInputContext)
     ensureRequestError result <| fun [ catError; dogError ] ->
         catError |> ensureValidationError "Field 'unknownField1' is not defined in schema type 'Dog'." [ "pets"; "unknownField1" ]
         dogError |> ensureValidationError "Inline fragment has type condition 'UnknownCat', but that type does not exist in the schema." [ "pets" ]
@@ -272,7 +272,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
       }
     }"""
 
-    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query, mockInputContext)
+    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query, getMockInputContext)
 
     let expected =
         NameValueLookup.ofList
@@ -297,7 +297,7 @@ let ``Execute handles execution of abstract types: not specified Union types mus
       }
     }"""
 
-    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query, mockInputContext)
+    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query, getMockInputContext)
 
     let expected = NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ]
 
@@ -317,7 +317,7 @@ let ``Execute handles execution of abstract types: not specified Union types mus
       }
     }"""
 
-    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query, mockInputContext)
+    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query, getMockInputContext)
 
     let expected = NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ]
 
@@ -344,7 +344,7 @@ let ``Execute handles execution of abstract types: absent field resolution produ
       }
     }"""
 
-    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, mockInputContext)
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, getMockInputContext)
     ensureRequestError result <| fun [ dogError; catError ] ->
         dogError |> ensureValidationError "Field 'unknownField1' is not defined in schema type 'Dog'." [ "pets"; "unknownField1" ]
         catError |> ensureValidationError "Field 'unknownField2' is not defined in schema type 'Cat'." [ "pets"; "unknownField2" ]
@@ -366,7 +366,7 @@ let ``Execute handles execution of abstract types: absent type resolution produc
       }
     }"""
 
-    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, mockInputContext)
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query, getMockInputContext)
     ensureRequestError result <| fun [ dogError; catError ] ->
         dogError |> ensureValidationError "Field 'unknownField1' is not defined in schema type 'Dog'." [ "pets"; "unknownField1" ]
         catError |> ensureValidationError "Inline fragment has type condition 'UnknownCat', but that type does not exist in the schema." [ "pets" ]

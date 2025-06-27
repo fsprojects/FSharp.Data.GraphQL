@@ -10,10 +10,8 @@ open System.Linq
 open System.Text
 open System.Text.Json.Serialization
 open System.Threading
-open System.Threading.Tasks
-open FSharp.Data.GraphQL.Shared
-open Xunit
 open FSharp.Data.GraphQL
+open Xunit
 
 let serializerOptions = Shared.Json.getWSSerializerOptions Seq.empty
 
@@ -205,4 +203,4 @@ module MockInputContext =
 
     let mockInputContextInstance = MockInputExecutionContext()
 
-let mockInputContext = fun () -> MockInputContext.mockInputContextInstance :> IInputExecutionContext
+let getMockInputContext = fun () -> MockInputContext.mockInputContextInstance :> IInputExecutionContext

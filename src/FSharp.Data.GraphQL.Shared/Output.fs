@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Shared
+namespace FSharp.Data.GraphQL
 
 open System.Collections.Generic
 open System

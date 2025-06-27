@@ -24,7 +24,7 @@ let ``Execute uses default resolve to accesses properties`` () =
     let schema = testSchema [ Define.AutoField ("test", StringType) ]
     let expected = NameValueLookup.ofList [ "test", "testValue" :> obj ]
 
-    let result = sync <| Executor(schema).AsyncExecute (parse "{ test }", mockInputContext, { Test = "testValue" })
+    let result = sync <| Executor(schema).AsyncExecute (parse "{ test }", getMockInputContext, { Test = "testValue" })
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
@@ -37,7 +37,7 @@ let ``Execute uses provided resolve function to accesses properties`` () =
         ]
 
     let expected = NameValueLookup.ofList [ "test", "testValueString" :> obj ]
-    let result = sync <| Executor(schema) .AsyncExecute (parse "{ test(a: \"String\") }", mockInputContext, { Test = "testValue" })
+    let result = sync <| Executor(schema) .AsyncExecute (parse "{ test(a: \"String\") }", getMockInputContext, { Test = "testValue" })
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
@@ -77,7 +77,7 @@ let ``Execute resolves enums to their names`` () =
         ]
 
     let expected = NameValueLookup.ofList [ "fruits", [ "APPLE"; "BANANA"; "CHERRY"; "DRAGON_FRUIT" ] :> obj ]
-    let result = sync <| Executor(schema).AsyncExecute (parse "{ fruits() }", mockInputContext)
+    let result = sync <| Executor(schema).AsyncExecute (parse "{ fruits() }", getMockInputContext)
     ensureDirect result
     <| fun data errors ->
         empty errors
@@ -100,7 +100,7 @@ let ``Execute resolves enums arguments from their names`` () =
         ]
 
     let expected = NameValueLookup.ofList [ "foo", box "You asked for dragon fruit" ]
-    let result = sync <| Executor(schema).AsyncExecute (parse "{ foo(fruit: DRAGON_FRUIT) }", mockInputContext)
+    let result = sync <| Executor(schema).AsyncExecute (parse "{ foo(fruit: DRAGON_FRUIT) }", getMockInputContext)
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)

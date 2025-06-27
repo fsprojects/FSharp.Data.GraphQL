@@ -56,7 +56,7 @@ let internal undefined<'t> = Unchecked.defaultof<'t>
 let resolveRoot ctx () =
     let info = ctx.ExecutionInfo
     let queryable = data.AsQueryable()
-    let result = queryable.Apply(info, mockInputContext) |> Seq.toList
+    let result = queryable.Apply(info, getMockInputContext) |> Seq.toList
     result
 
 let linqArgs =
@@ -83,7 +83,7 @@ let schema =
                     fun ctx () ->
                         let info = ctx.ExecutionInfo
                         let queryable = data.AsQueryable ()
-                        let result = queryable.Apply (info, mockInputContext) |> Seq.toList
+                        let result = queryable.Apply (info, getMockInputContext) |> Seq.toList
                         result
                 )
             ]
@@ -102,7 +102,7 @@ let ``LINQ interpreter works with auto-fields``() =
     }
     """
     let info = plan.["people"]
-    let people = data.AsQueryable().Apply(info, mockInputContext) |> Seq.toList
+    let people = data.AsQueryable().Apply(info, getMockInputContext) |> Seq.toList
     List.length people |> equals 3
     let result = List.head people
     result.FirstName |> equals "Ben"
@@ -120,7 +120,7 @@ let ``LINQ interpreter works with fields with defined resolvers``() =
     }
     """
     let info = plan.["people"]
-    let people = data.AsQueryable().Apply(info, mockInputContext) |> Seq.toList
+    let people = data.AsQueryable().Apply(info, getMockInputContext) |> Seq.toList
     List.length people |> equals 3
     let result = List.head people
     result.FirstName |> equals undefined
@@ -138,7 +138,7 @@ let ``LINQ interpreter works with fields referring to nested property resolver``
     }
     """
     let info = plan.["people"]
-    let people = data.AsQueryable().Apply(info, mockInputContext) |> Seq.toList
+    let people = data.AsQueryable().Apply(info, getMockInputContext) |> Seq.toList
     List.length people |> equals 3
     let result = List.head people
     result.FirstName |> equals undefined
@@ -156,7 +156,7 @@ let ``LINQ interpreter works with nested collections``() =
     }
     """
     let info = plan.["people"]
-    let people = data.AsQueryable().Apply(info, mockInputContext) |> Seq.toList
+    let people = data.AsQueryable().Apply(info, getMockInputContext) |> Seq.toList
     List.length people |> equals 3
     let result = List.head people
     result.FirstName |> equals undefined
@@ -175,7 +175,7 @@ let ``LINQ interpreter works with nested property getters in resolve function``(
     }
     """
     let info = plan.["people"]
-    let people = data.AsQueryable().Apply(info, mockInputContext) |> Seq.toList
+    let people = data.AsQueryable().Apply(info, getMockInputContext) |> Seq.toList
     List.length people |> equals 3
     let result = List.head people
     result.FirstName |> equals undefined
@@ -194,7 +194,7 @@ let ``LINQ interpreter resolves multiple properties from complex resolvers``() =
     }
     """
     let info = plan.["people"]
-    let people = data.AsQueryable().Apply(info, mockInputContext) |> Seq.toList
+    let people = data.AsQueryable().Apply(info, getMockInputContext) |> Seq.toList
     List.length people |> equals 3
     let result = List.head people
     // both FirstName and LastName should be resolved, because
@@ -215,7 +215,7 @@ let ``LINQ interpreter works with id arg``() =
     }
     """
     let info = plan.["people"]
-    let people = data.AsQueryable().Apply(info, mockInputContext) |> Seq.toList
+    let people = data.AsQueryable().Apply(info, getMockInputContext) |> Seq.toList
     List.length people |> equals 1
     let result = List.head people
     result.ID |> equals 2
@@ -235,7 +235,7 @@ let ``LINQ interpreter works with skip arg``() =
     }
     """
     let info = plan.["people"]
-    let people = data.AsQueryable().Apply(info, mockInputContext) |> Seq.toList
+    let people = data.AsQueryable().Apply(info, getMockInputContext) |> Seq.toList
     List.length people |> equals 1
     let result = List.head people
     result.ID |> equals 7
@@ -255,7 +255,7 @@ let ``LINQ interpreter works with take arg``() =
     }
     """
     let info = plan.["people"]
-    let people = data.AsQueryable().Apply(info, mockInputContext) |> Seq.toList
+    let people = data.AsQueryable().Apply(info, getMockInputContext) |> Seq.toList
     List.length people |> equals 2
     let result = people |> List.map (fun p -> (p.ID, p.FirstName))
     result |> equals [ (4, "Ben")
@@ -272,7 +272,7 @@ let ``LINQ interpreter works with orderBy arg``() =
     }
     """
     let info = plan.["people"]
-    let people = data.AsQueryable().Apply(info, mockInputContext) |> Seq.toList
+    let people = data.AsQueryable().Apply(info, getMockInputContext) |> Seq.toList
     List.length people |> equals 3
     let result = people |> List.map (fun p -> (p.ID, p.FirstName))
     result |> equals [ (4, "Ben")
@@ -290,7 +290,7 @@ let ``LINQ interpreter works with orderByDesc arg``() =
     }
     """
     let info = plan.["people"]
-    let people = data.AsQueryable().Apply(info, mockInputContext) |> Seq.toList
+    let people = data.AsQueryable().Apply(info, getMockInputContext) |> Seq.toList
     List.length people |> equals 3
     let result = people |> List.map (fun p -> (p.ID, p.FirstName))
     result |> equals [ (2, "Jonathan")

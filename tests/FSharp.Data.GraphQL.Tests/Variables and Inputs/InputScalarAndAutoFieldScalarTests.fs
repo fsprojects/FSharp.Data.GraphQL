@@ -184,7 +184,7 @@ let ``Execute handles nullable auto-fields in input and output record fields coe
       }
     }"""
 
-    let result = sync <| schema.Value.AsyncExecute (parse query, mockInputContext)
+    let result = sync <| schema.Value.AsyncExecute (parse query, getMockInputContext)
     let expected =
         NameValueLookup.ofList [ "record", upcast NameValueLookup.ofList [ "a", "a" :> obj; "b", "b"; "c", "c"] ]
 
@@ -203,7 +203,7 @@ let ``Execute handles nullable auto-fields in input and output object fields coe
       }
     }"""
 
-    let result = sync <| schema.Value.AsyncExecute (parse query, mockInputContext)
+    let result = sync <| schema.Value.AsyncExecute (parse query, getMockInputContext)
     let expected =
         NameValueLookup.ofList [ "record", upcast NameValueLookup.ofList [ "a", "a" :> obj; "b", "b"; "c", "c" ] ]
 
