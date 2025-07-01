@@ -168,7 +168,7 @@ type GraphQLWebSocketMiddleware<'Root>
 
         let sendMsg = sendMessageViaSocket serializerOptions socket
         let rcv () = socket |> rcvMsgViaSocket serializerOptions
-        let getInputContext = fun () -> (HttpContextRequestExecutionContext httpContext) :> IInputExecutionContext
+        let getInputContext() = (HttpContextRequestExecutionContext httpContext) :> IInputExecutionContext
 
         let sendOutput id (output : SubscriptionExecutionResult) =
             sendMsg (Next (id, output))

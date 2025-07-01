@@ -19,9 +19,9 @@ type InputField =
       Int : int
       StringOption : string option
       IntOption : int option
-      Uri : System.Uri
-      Guid : System.Guid
-      GuidOption : System.Guid option }
+      Uri : Uri
+      Guid : Guid
+      GuidOption : Guid option }
 
 type Input =
     { Single : InputField option
@@ -142,6 +142,57 @@ module Schema =
             [
                 Define.Input("file", FileType)
             ])
+
+        // let MutationType =
+        // let contentAsText (stream : System.IO.Stream) =
+        //     use reader = new System.IO.StreamReader(stream, Encoding.UTF8)
+        //     reader.ReadToEnd()
+        // let mapUploadToOutput (file : File) =
+        //     { Name = file.Name; ContentType = file.ContentType; ContentAsText = contentAsText file.Content }
+        // let mapUploadRequestToOutput (request : UploadRequest) =
+        //     { Single = mapUploadToOutput request.Single
+        //       Multiple = request.Multiple |> List.map mapUploadToOutput
+        //       NullableMultiple = request.NullableMultiple |> Option.map (List.map mapUploadToOutput)
+        //       NullableMultipleNullable = request.NullableMultipleNullable |> Option.map (List.map (Option.map mapUploadToOutput)) }
+        // Define.Object<Root>(
+        //     name = "Mutation",
+        //     fields =
+        //         [ Define.Field(
+        //             name = "singleUpload",
+        //             typedef = UploadedFileType,
+        //             description = "Uploads a single file to the server and get it back.",
+        //             args = [ Define.Input("file", Upload, description = "The file to be uploaded.") ],
+        //             resolve = fun ctx _ -> mapUploadToOutput (ctx.Arg("file")))
+        //           Define.Field(
+        //             name = "nullableSingleUpload",
+        //             typedef = StructNullable UploadedFileType,
+        //             description = "Uploads (maybe) a single file to the server and get it back (maybe).",
+        //             args = [ Define.Input("file", Nullable Upload, description = "The file to be uploaded.") ],
+        //             resolve = fun ctx _ -> ctx.TryArg("file") |> ValueOption.flatten |> ValueOption.map mapUploadToOutput)
+        //           Define.Field(
+        //             name = "multipleUpload",
+        //             typedef = ListOf UploadedFileType,
+        //             description = "Uploads a list of files to the server and get them back.",
+        //             args = [ Define.Input("files", ListOf Upload, description = "The files to upload.") ],
+        //             resolve = fun ctx _ -> ctx.Arg("files") |> Seq.map mapUploadToOutput)
+        //           Define.Field(
+        //             name = "nullableMultipleUpload",
+        //             typedef = StructNullable (ListOf UploadedFileType),
+        //             description = "Uploads (maybe) a list of files to the server and get them back (maybe).",
+        //             args = [ Define.Input("files", Nullable (ListOf Upload), description = "The files to upload.") ],
+        //             resolve = fun ctx _ -> ctx.TryArg("files") |> ValueOption.flatten |> ValueOption.map (Seq.map mapUploadToOutput))
+        //           Define.Field(
+        //             name = "nullableMultipleNullableUpload",
+        //             typedef = StructNullable (ListOf (Nullable UploadedFileType)),
+        //             description = "Uploads (maybe) a list of files (maybe) to the server and get them back (maybe).",
+        //             args = [ Define.Input("files", Nullable (ListOf (Nullable Upload)), description = "The files to upload.") ],
+        //             resolve = fun ctx _ -> ctx.TryArg("files") |> ValueOption.flatten |> ValueOption.map (Seq.map (Option.map mapUploadToOutput)))
+        //           Define.Field(
+        //             name = "uploadRequest",
+        //             typedef = UploadResponseType,
+        //             description = "Upload several files in different forms.",
+        //             args = [ Define.Input("request", UploadRequestType, description = "The request for uploading several files in different forms.") ],
+        //             resolve = fun ctx _ -> mapUploadRequestToOutput (ctx.Arg("request"))) ])
     let MutationType =
         let getFileContent (ctx : ResolveFieldContext) argName =
             let stream = ctx.Arg<System.IO.Stream> argName

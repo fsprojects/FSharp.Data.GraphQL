@@ -18,13 +18,17 @@ let QueryType =
             [ Define.Field ("dummy", StringType, fun _ _ -> "dummy")]
     )
 
-type Input = { File : Stream }
+type Input = {
+    File : Stream
+    File2 : Stream option
+}
 
 let InputObject = Define.InputObject<Input>(
     name = "Input",
     fields =
         [
             Define.Input("file", FileType)
+            Define.Input("file2", Nullable FileType)
         ])
 
 let MutationType =
@@ -40,8 +44,14 @@ let MutationType =
                 Define.Field ("uploadFileComplex", StringType, "", [ Define.Input ("input", InputObject) ],
                 (fun ctx () ->
                     let input = ctx.Arg<Input> "input"
-                    use reader = new StreamReader(input.File, Encoding.UTF8, true)
-                    reader.ReadToEnd()
+                    let reader = new StreamReader(input.File, Encoding.UTF8, true)
+                    let fileContent = reader.ReadToEnd()
+                    let file2Content = match input.File2 with
+                                        | Some file2 ->
+                                            let reader2 = new StreamReader(file2, Encoding.UTF8, true)
+                                            reader2.ReadToEnd()
+                                        | None -> ""
+                    fileContent + file2Content
                 ))
             ]
     )
@@ -62,6 +72,10 @@ let mutationWithConstant = """mutation uploadFile () {
 
 let mutationComplexObject = """mutation uploadFile () {
     uploadFileComplex (input : {file : "fileKey"})
+}"""
+
+let mutationComplexObjectWithTwoFiles = """mutation uploadFile () {
+    uploadFileComplex (input : {file : "fileKey", file2: "fileKey2" })
 }"""
 
 [<Fact>]
@@ -85,9 +99,21 @@ let ``File type: Must return file text when as using variable`` () =
     ()
 
 [<Fact>]
-let ``File type: Must return file text for complex object`` () =
+let ``File type: Must upload a file as input object field using inline string a file name`` () =
     let expected = NameValueLookup.ofList [ "uploadFileComplex", MockInputContext.mockFileText ]
     let result = execute mutationComplexObject
+    ensureDirect result <| fun data errors ->
+            empty errors
+            data |> equals (upcast expected)
+    ()
+
+[<Fact>]
+let ``File type: Must upload two files as input object field using inline string a file name`` () =
+    let expectedContent = MockInputContext.mockFileText + MockInputContext.mockFileText2
+    let expected = NameValueLookup.ofList [
+        "uploadFileComplex", expectedContent
+    ]
+    let result = execute mutationComplexObjectWithTwoFiles
     ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)

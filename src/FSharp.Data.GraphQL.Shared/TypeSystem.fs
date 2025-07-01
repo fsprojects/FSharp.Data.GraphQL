@@ -1135,46 +1135,6 @@ and FileDef =
         inherit InputDef
     end
 
-and [<CustomEquality; NoComparison>] FileDefinition = {
-    /// Name of the file type.
-    Name : string
-    /// Optional type description.
-    Description : string option
-    /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
-    Coerce : IInputExecutionContext -> InputParameterValue -> Result<System.IO.Stream, string>
-} with
-
-    interface TypeDef with
-        member _.Type = typeof<System.IO.Stream>
-
-        member x.MakeNullable () =
-            let nullable : NullableDefinition<System.IO.Stream> = { OfType = x }
-            upcast nullable
-
-        member x.MakeList () =
-            let list : ListOfDefinition<_, _> = { OfType = x }
-            upcast list
-
-    interface TypeDef<System.IO.Stream>
-    interface InputDef
-
-    interface FileDef with
-        member x.Name = x.Name
-        member x.Description = x.Description
-        member x.Coerce context value  =
-            x.Coerce context value |> Result.map box
-
-    interface NamedDef with
-        member x.Name = x.Name
-
-    override x.Equals y =
-        match y with
-        | :? FileDefinition as s -> x.Name = s.Name
-        | _ -> false
-
-    override x.GetHashCode () = x.Name.GetHashCode ()
-    override x.ToString () = x.Name + "!"
-
 /// A GraphQL representation for a single value of the enum type.
 /// Enum value return value is always represented as string.
 and EnumVal =
@@ -1189,7 +1149,7 @@ and EnumVal =
         abstract DeprecationReason : string option
     end
 
-/// A GraphQL representation of single case of the enum type.
+/// A GraphQL representation of a single case of the enum type.
 /// Enum value return value is always represented as string.
 and EnumValue<'Val> = {
     /// Identifier of the enum value.

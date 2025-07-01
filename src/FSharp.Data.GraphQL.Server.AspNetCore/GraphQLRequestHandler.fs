@@ -15,13 +15,13 @@ open FsToolkit.ErrorHandling
 open FSharp.Data.GraphQL.Server
 open FSharp.Data.GraphQL.Shared
 
+type DefaultGraphQLRequestHandler<'Root>
 /// <summary>
 /// Handles GraphQL requests using a provided root schema.
 /// </summary>
 /// <param name="httpContextAccessor">The accessor to the current HTTP context.</param>
 /// <param name="options">The options monitor for GraphQL options.</param>
 /// <param name="logger">The logger to log messages.</param>
-type DefaultGraphQLRequestHandler<'Root>
     (
         httpContextAccessor : IHttpContextAccessor,
         options : IOptionsMonitor<GraphQLOptions<'Root>>,
@@ -29,13 +29,13 @@ type DefaultGraphQLRequestHandler<'Root>
     ) =
     inherit GraphQLRequestHandler<'Root> (httpContextAccessor, options, logger)
 
+and [<AbstractClass>] GraphQLRequestHandler<'Root>
 /// <summary>
 /// Provides logic to parse and execute GraphQL requests.
 /// </summary>
 /// <param name="httpContextAccessor">The accessor to the current HTTP context.</param>
 /// <param name="options">The options monitor for GraphQL options.</param>
 /// <param name="logger">The logger to log messages.</param>
-and [<AbstractClass>] GraphQLRequestHandler<'Root>
     (
         httpContextAccessor : IHttpContextAccessor,
         options : IOptionsMonitor<GraphQLOptions<'Root>>,
@@ -43,7 +43,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
     ) =
 
     let ctx = httpContextAccessor.HttpContext
-    let getInputContext = fun () -> (HttpContextRequestExecutionContext ctx) :> IInputExecutionContext
+    let getInputContext() = (HttpContextRequestExecutionContext ctx) :> IInputExecutionContext
 
     let toResponse { DocumentId = documentId; Content = content; Metadata = metadata } =
 
