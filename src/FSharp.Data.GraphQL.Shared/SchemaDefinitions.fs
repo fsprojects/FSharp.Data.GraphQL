@@ -8,7 +8,6 @@ open System.Collections.Generic
 open System.Text.Json
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
-open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Validation
 open FSharp.Quotations
@@ -191,6 +190,12 @@ module SchemaDefinitions =
         | Option o -> Some(o.ToString())
         | _ -> Some(x.ToString())
 
+    /// Tries to convert any value to string.
+    let coerceFileValue (context : IInputExecutionContext) (value : obj) : Result<System.IO.Stream, string>  =
+        match coerceStringValue value with
+        | Some fileName -> context.GetFile fileName
+        | None -> Error "Only string value can be used as file name"
+
     /// Tries to convert any value to generic type parameter.
     let coerceIdValue (x : obj) : string option =
         match x with
@@ -371,7 +376,7 @@ module SchemaDefinitions =
     /// to take collection of provided value.
     let ListOf(innerDef : #TypeDef<'Val>) : ListOfDef<'Val, 'Seq> = upcast { ListOfDefinition.OfType = innerDef }
 
-    let internal variableOrElse other value (variables : IReadOnlyDictionary<string, obj>) =
+    let internal variableOrElse other (_ : InputExecutionContextProvider) value (variables : IReadOnlyDictionary<string, obj>)  =
         match value with
         // TODO: Use FSharp.Collection.Immutable
         | VariableName variableName ->
@@ -473,9 +478,37 @@ module SchemaDefinitions =
         { Name = "Guid"
           Description =
               Some
-                  "The `Guid` scalar type represents a Globaly Unique Identifier value. It's a 128-bit long byte key, that can be serialized to string."
+                  "The `Guid` scalar type represents a Globally Unique Identifier value. It's a 128-bit long byte key, that can be serialized to string."
           CoerceInput = coerceGuidInput
           CoerceOutput = coerceGuidValue }
+
+        /// Defines an object list filter for use as an argument for filter list of object fields.
+    let FileType : InputCustomDefinition<System.IO.Stream> = {
+        Name = "FileType"
+        Description =
+            Some
+                "The `File` type represents a file on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query."
+        CoerceInput =
+            (fun inputContext input variables ->
+                let getFileStream fileKey =
+                    let inputExecutionContext = inputContext()
+                    let streamResult = inputExecutionContext.GetFile fileKey
+                    match streamResult with
+                    | Ok stream -> Ok stream
+                    | Error errorMessage -> IGQLError.createResultErrorList errorMessage
+
+                match input with
+                | InlineConstant c ->
+                    match c with
+                    | StringValue strValue -> getFileStream strValue
+                    | VariableName varName ->
+                        Ok (variables[varName] :?> System.IO.Stream)
+                    | _ -> IGQLError.createResultErrorList "Only a string value or a variable with a string value can be used as a file name."
+                | Variable json ->
+                    match (json |> InputValue.OfJsonElement) with
+                    | StringValue str -> getFileStream str
+                    | _ -> IGQLError.createResultErrorList "Only a variable with a string value can be used as a file name.")
+    }
 
     /// GraphQL @include directive.
     let IncludeDirective : DirectiveDef =

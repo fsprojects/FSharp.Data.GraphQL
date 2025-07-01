@@ -169,7 +169,7 @@ let ``Execute handles creation of inline input records with all fields`` () =
         }
       )
     }"""
-    let result = sync <| (schema AllInclude).AsyncExecute(parse query)
+    let result = sync <| (schema AllInclude).AsyncExecute(parse query, getMockInputContext)
     ensureDirect result <| fun data errors -> empty errors
 
 [<Fact>]
@@ -182,7 +182,7 @@ let ``Execute handles creation of inline input records with optional null fields
         recordNested: { a: { a: "a", b: "b", c: "c" }, b: null, c: null, s: null, l: [] }
       )
     }"""
-    let result = sync <| (schema Nothing).AsyncExecute(parse query)
+    let result = sync <| (schema Nothing).AsyncExecute(parse query, getMockInputContext)
     ensureDirect result <| fun data errors -> empty errors
 
 [<Fact>]
@@ -194,7 +194,7 @@ let ``Execute handles creation of inline input records with mandatory only field
         recordNested: { a: { a: "a", b: "b", c: "c" }, l: [{ a: "a", b: "b", c: "c" }] }
       )
     }"""
-    let result = sync <| (schema Nothing).AsyncExecute(parse query)
+    let result = sync <| (schema Nothing).AsyncExecute(parse query, getMockInputContext)
     ensureDirect result <| fun data errors -> empty errors
 
 let variablesWithAllInputs (record, optRecord, skippable) =
@@ -225,7 +225,7 @@ let ``Execute handles creation of input records from variables with all fields``
     let testInputObject = """{"a":"a","b":"b","c":"c"}"""
     let params' =
         variablesWithAllInputs(testInputObject, testInputObject, testInputObject) |> paramsWithValues
-    let result = sync <| (schema AllInclude).AsyncExecute(parse query, variables = params')
+    let result = sync <| (schema AllInclude).AsyncExecute(parse query, getMockInputContext, variables = params')
     //let expected = NameValueLookup.ofList [ "recordInputs", upcast testInputObject ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -244,7 +244,7 @@ let ``Execute handles creation of input records from variables with optional nul
     let testInputObject = """{"a":"a","b":"b","c":"c"}"""
     let testInputSkippable = """{ "a": null, "b": null, "c": null }"""
     let params' = variablesWithAllInputs(testInputObject, "null", testInputSkippable) |> paramsWithValues
-    let result = sync <| (schema SkipAndIncludeNull).AsyncExecute(parse query, variables = params')
+    let result = sync <| (schema SkipAndIncludeNull).AsyncExecute(parse query, getMockInputContext, variables = params')
     ensureDirect result <| fun data errors -> empty errors
 
 [<Fact>]
@@ -258,5 +258,5 @@ let ``Execute handles creation of input records from variables with mandatory on
     }"""
     let testInputObject = """{"a":"a","b":"b","c":"c"}"""
     let params' = variablesWithAllInputs(testInputObject, "null", "{}") |> paramsWithValues
-    let result = sync <| (schema AllSkip).AsyncExecute(parse query, variables = params')
+    let result = sync <| (schema AllSkip).AsyncExecute(parse query, getMockInputContext, variables = params')
     ensureDirect result <| fun data errors -> empty errors

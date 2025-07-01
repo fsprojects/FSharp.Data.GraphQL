@@ -2,7 +2,7 @@
 
 open Helpers
 open Xunit
-open FSharp.Data.GraphQL.Shared
+open FSharp.Data.GraphQL
 
 [<Fact>]
 let ``Lookups containing different lists as inner items should not be equal`` () =

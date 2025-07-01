@@ -50,7 +50,7 @@ let ``Input field must be marked as nullable when defaultValue is provided`` () 
         ], fun _ _ -> "Only value")
     ])
     let schema = Schema(root)
-    let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery)
+    let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery, getMockInputContext)
     let expected = NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
             "fields", upcast [
@@ -90,7 +90,7 @@ let ``Input field must be marked as non-nullable when defaultValue is not provid
         ], fun _ _ -> "Only value")
     ])
     let schema = Schema(root)
-    let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery)
+    let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery, getMockInputContext)
     let expected = NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
             "fields", upcast [
@@ -122,7 +122,7 @@ let ``Input field must be marked as nullable when its type is nullable`` () =
         ], fun _ _ -> "Only value")
     ])
     let schema = Schema(root)
-    let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery)
+    let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery, getMockInputContext)
     let expected = NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
             "fields", upcast [
@@ -154,7 +154,7 @@ let ``Input field must be marked as nullable when its type is nullable and have 
         ], fun _ _ -> "Only value")
     ])
     let schema = Schema(root)
-    let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery)
+    let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery, getMockInputContext)
     let expected = NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
             "fields", upcast [
@@ -282,7 +282,7 @@ let ``Introspection schema must be serializable back and forth using json`` () =
         }
       }
     }"""
-    let result = Executor(schema).AsyncExecute(query) |> sync
+    let result = Executor(schema).AsyncExecute(query, getMockInputContext) |> sync
     ensureDirect result <| fun data errors ->
         empty errors
         let additionalConverters = Seq.empty //seq { NameValueLookupConverter() :> JsonConverter }
@@ -317,7 +317,7 @@ let ``Core type definitions are considered nullable`` () =
         }
       }
     } }"""
-    let result = sync <| Executor(schema).AsyncExecute(query)
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext)
     let expected =
       NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
@@ -347,7 +347,7 @@ let ``Introspection works with query and mutation sharing same generic param`` (
         Define.Object<User list>("Mutation",
             [ Define.Field("addUser", user, "Adds an user", [ Define.Input("input", userInput) ], fun _ u -> u |> List.head)])
     let schema = Schema(query, mutation)
-    Executor(schema).AsyncExecute(IntrospectionQuery.Definition) |> sync |> ignore
+    Executor(schema).AsyncExecute(IntrospectionQuery.Definition, getMockInputContext) |> sync |> ignore
 
 [<Fact>]
 let ``Default field type definitions are considered non-null`` () =
@@ -374,7 +374,7 @@ let ``Default field type definitions are considered non-null`` () =
         }
       }
     } }"""
-    let result = sync <| Executor(schema).AsyncExecute(query)
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext)
     let expected =
       NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
@@ -417,7 +417,7 @@ let ``Nullabe field type definitions are considered nullable`` () =
         }
       }
     } }"""
-    let result = sync <| Executor(schema).AsyncExecute(query)
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext)
     let expected =
       NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
@@ -457,7 +457,7 @@ let ``StructNullabe field type definitions are considered nullable`` () =
         }
       }
     } }"""
-    let result = sync <| Executor(schema).AsyncExecute(query)
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext)
     let expected =
       NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
@@ -499,7 +499,7 @@ let ``Default field args type definitions are considered non-null`` () =
         }
       }
     } }"""
-    let result = sync <| Executor(schema).AsyncExecute(query)
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext)
     let expected =
       NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
@@ -546,7 +546,7 @@ let ``Nullable field args type definitions are considered nullable`` () =
         }
       }
     } }"""
-    let result = sync <| Executor(schema).AsyncExecute(query)
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext)
     let expected =
       NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
@@ -590,7 +590,7 @@ let ``StructNullable field args type definitions are considered nullable`` () =
         }
       }
     } }"""
-    let result = sync <| Executor(schema).AsyncExecute(query)
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext)
     let expected =
       NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
@@ -612,7 +612,7 @@ let ``Introspection executes an introspection query`` () =
     let root = Define.Object("QueryRoot", [ Define.Field("onlyField", StringType) ])
     let schema = Schema(root)
     let (Patterns.Object raw) = root
-    let result = sync <| Executor(schema).AsyncExecute(parse IntrospectionQuery.Definition, raw)
+    let result = sync <| Executor(schema).AsyncExecute(parse IntrospectionQuery.Definition, getMockInputContext, raw)
     let expected =
       NameValueLookup.ofList [
         "__schema", upcast NameValueLookup.ofList [

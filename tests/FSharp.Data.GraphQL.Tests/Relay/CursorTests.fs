@@ -95,7 +95,7 @@ let ``Relay cursor works for types with nested fileds`` () =
             }
         }"""
 
-    let result = sync <| schemaProcessor.AsyncExecute (parse query)
+    let result = sync <| schemaProcessor.AsyncExecute (parse query, getMockInputContext)
 
     match result with
     | Direct (_, errors) -> empty errors

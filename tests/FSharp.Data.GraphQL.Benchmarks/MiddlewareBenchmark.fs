@@ -5,6 +5,8 @@ module FSharp.Data.GraphQL.MiddlewaresBenchmark
 #nowarn "40"
 
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.ExecutionBenchmark
+open FSharp.Data.GraphQL.Shared
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open BenchmarkDotNet.Attributes
@@ -25,6 +27,7 @@ type SimpleExecutionWithMiddlewaresBenchmark() =
     let mutable nestedExecutionPlan : ExecutionPlan = Unchecked.defaultof<ExecutionPlan>
     let mutable filteredExecutionPlan : ExecutionPlan = Unchecked.defaultof<ExecutionPlan>
     let mutable filteredAst : Ast.Document = Unchecked.defaultof<Ast.Document>
+    let getInputContext = fun () -> MockInputExecutionContext() :> IInputExecutionContext
 
     [<GlobalSetup>]
     member _.Setup() =
@@ -41,37 +44,37 @@ type SimpleExecutionWithMiddlewaresBenchmark() =
         filteredExecutionPlan <- schemaProcessor.CreateExecutionPlanOrFail(filteredAst)
 
     [<Benchmark>]
-    member _.BenchmarkSimpleQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.simple) |> Async.RunSynchronously
+    member _.BenchmarkSimpleQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.simple, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkSimpleQueryParsed() = schemaProcessor.AsyncExecute(simpleAst) |> Async.RunSynchronously
+    member _.BenchmarkSimpleQueryParsed() = schemaProcessor.AsyncExecute(simpleAst, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkSimpleQueryPlanned() = schemaProcessor.AsyncExecute(simpleExecutionPlan) |> Async.RunSynchronously
+    member _.BenchmarkSimpleQueryPlanned() = schemaProcessor.AsyncExecute(simpleExecutionPlan, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFlatQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.flat) |> Async.RunSynchronously
+    member _.BenchmarkFlatQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.flat, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFlatQueryParsed() = schemaProcessor.AsyncExecute(flatAst) |> Async.RunSynchronously
+    member _.BenchmarkFlatQueryParsed() = schemaProcessor.AsyncExecute(flatAst, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFlatQueryPlanned() = schemaProcessor.AsyncExecute(flatExecutionPlan) |> Async.RunSynchronously
+    member _.BenchmarkFlatQueryPlanned() = schemaProcessor.AsyncExecute(flatExecutionPlan, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkNestedQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.nested) |> Async.RunSynchronously
+    member _.BenchmarkNestedQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.nested, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkNestedQueryParsed() = schemaProcessor.AsyncExecute(nestedAst) |> Async.RunSynchronously
+    member _.BenchmarkNestedQueryParsed() = schemaProcessor.AsyncExecute(nestedAst, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkNestedQueryPlanned() = schemaProcessor.AsyncExecute(nestedExecutionPlan) |> Async.RunSynchronously
+    member _.BenchmarkNestedQueryPlanned() = schemaProcessor.AsyncExecute(nestedExecutionPlan, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFilteredQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.filtered) |> Async.RunSynchronously
+    member _.BenchmarkFilteredQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.filtered, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFilteredQueryParsed() = schemaProcessor.AsyncExecute(filteredAst) |> Async.RunSynchronously
+    member _.BenchmarkFilteredQueryParsed() = schemaProcessor.AsyncExecute(filteredAst, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFilteredQueryPlanned() = schemaProcessor.AsyncExecute(filteredExecutionPlan) |> Async.RunSynchronously
+    member _.BenchmarkFilteredQueryPlanned() = schemaProcessor.AsyncExecute(filteredExecutionPlan, getInputContext) |> Async.RunSynchronously

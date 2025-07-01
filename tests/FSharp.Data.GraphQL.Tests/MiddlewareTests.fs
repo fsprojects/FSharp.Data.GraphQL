@@ -202,15 +202,15 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
 
 let executor = getExecutor (ValueNone)
 
-let execute (query : Document) = executor.AsyncExecute (query) |> sync
+let execute (query : Document) = executor.AsyncExecute (query, getMockInputContext) |> sync
 
 let executeWithVariables (query : Document, variables : ImmutableDictionary<string, JsonElement>) =
-    executor.AsyncExecute (ast = query, variables = variables)
+    executor.AsyncExecute (ast = query, getInputContext = getMockInputContext, variables = variables)
     |> sync
 
 let executeAndVerifyFilter (query : Document, variables : ImmutableDictionary<string, JsonElement>, filterToVerify : ObjectListFilter) =
     let ex = getExecutor (ValueSome filterToVerify)
-    ex.AsyncExecute (ast = query, variables = variables) |> sync
+    ex.AsyncExecute (ast = query, getInputContext = getMockInputContext, variables = variables) |> sync
 
 let expectedThresholdErrors : GQLProblemDetails list = [
     GQLProblemDetails.Create ("Query complexity exceeds maximum threshold. Please reduce query complexity and try again.")

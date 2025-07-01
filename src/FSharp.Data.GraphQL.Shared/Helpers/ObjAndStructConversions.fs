@@ -24,7 +24,8 @@ module internal ValueTuple =
     let fstv struct (a, _) = a
     let sndv struct (_, b) = b
 
-module internal Seq =
+[<AutoOpen>]
+module Seq =
 
     let vchoose mapping seq =
         seq

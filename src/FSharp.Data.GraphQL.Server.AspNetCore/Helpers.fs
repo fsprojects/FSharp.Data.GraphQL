@@ -3,7 +3,6 @@ namespace FSharp.Data.GraphQL.Server.AspNetCore
 open System
 open System.Text
 
-
 [<AutoOpen>]
 module Helpers =
 
@@ -48,4 +47,3 @@ module ReflectionHelpers =
         | PropertyGet (_, propertyInfo, _) -> propertyInfo.DeclaringType
         | FieldGet (_, fieldInfo) -> fieldInfo.DeclaringType
         | _ -> failwith "Expression is no property."
-

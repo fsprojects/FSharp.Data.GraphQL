@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Shared
+namespace FSharp.Data.GraphQL
 
 open System.Collections.Generic
 open System
@@ -140,4 +140,4 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
 
 module NameValueLookup =
     /// Create new NameValueLookup from given list of key-value tuples.
-    let ofList (l: (string * obj) list) = NameValueLookup(l)
+    let ofList (l: (string * obj) list) = NameValueLookup (l)

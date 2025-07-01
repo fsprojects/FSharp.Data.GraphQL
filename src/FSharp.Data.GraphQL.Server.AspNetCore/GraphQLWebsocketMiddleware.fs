@@ -45,7 +45,7 @@ type GraphQLWebSocketMiddleware<'Root>
             | ServerPong p -> { Id = ValueNone; Type = "pong"; Payload = p |> ValueOption.map CustomResponse }
             | Next (id, payload) -> { Id = ValueSome id; Type = "next"; Payload = ValueSome <| ExecutionResult payload }
             | Complete id -> { Id = ValueSome id; Type = "complete"; Payload = ValueNone }
-            | Error (id, errMsgs) -> { Id = ValueSome id; Type = "error"; Payload = ValueSome <| ErrorMessages errMsgs }
+            | Error (id, errMessages) -> { Id = ValueSome id; Type = "error"; Payload = ValueSome <| ErrorMessages errMessages }
         return JsonSerializer.Serialize (raw, jsonSerializerOptions)
     }
 
@@ -89,9 +89,9 @@ type GraphQLWebSocketMiddleware<'Root>
                   && ((segmentResponse = null)
                       || (not segmentResponse.EndOfMessage)) do
                 try
-                    let! r = socket.ReceiveAsync (new ArraySegment<byte> (buffer), cancellationToken)
+                    let! r = socket.ReceiveAsync (ArraySegment<byte>(buffer), cancellationToken)
                     segmentResponse <- r
-                    completeMessage.AddRange (new ArraySegment<byte> (buffer, 0, r.Count))
+                    completeMessage.AddRange (ArraySegment<byte>(buffer, 0, r.Count))
                 with :? OperationCanceledException ->
                     ()
 
@@ -117,7 +117,7 @@ type GraphQLWebSocketMiddleware<'Root>
         else
             // TODO: Allocate string only if a debugger is attached
             let! serializedMessage = message |> serializeServerMessage jsonSerializerOptions
-            let segment = new ArraySegment<byte> (System.Text.Encoding.UTF8.GetBytes (serializedMessage))
+            let segment = ArraySegment<byte>(System.Text.Encoding.UTF8.GetBytes (serializedMessage))
             if not (socket.State = WebSocketState.Open) then
                 logger.LogTrace ($"Ignoring message to be sent via socket, since its state is not '{nameof WebSocketState.Open}', but '{{state}}'", socket.State)
             else
@@ -160,7 +160,7 @@ type GraphQLWebSocketMiddleware<'Root>
         tryToGracefullyCloseSocket (WebSocketCloseStatus.NormalClosure, "Normal Closure")
 
     let handleMessages (cancellationToken : CancellationToken) (httpContext : HttpContext) (socket : WebSocket) : Task =
-        let subscriptions = new Dictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction> ()
+        let subscriptions = Dictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction>()
         // ---------->
         // Helpers -->
         // ---------->
@@ -168,6 +168,7 @@ type GraphQLWebSocketMiddleware<'Root>
 
         let sendMsg = sendMessageViaSocket serializerOptions socket
         let rcv () = socket |> rcvMsgViaSocket serializerOptions
+        let getInputContext() = (HttpContextRequestExecutionContext httpContext) :> IInputExecutionContext
 
         let sendOutput id (output : SubscriptionExecutionResult) =
             sendMsg (Next (id, output))
@@ -234,10 +235,10 @@ type GraphQLWebSocketMiddleware<'Root>
                       && socket |> isSocketOpen do
                     let! receivedMessage = rcv ()
                     match receivedMessage with
-                    | Result.Error failureMsgs ->
+                    | Result.Error failureMessages ->
                         nameof InvalidMessage
                         |> logMsgReceivedWithOptionalPayload ValueNone
-                        match failureMsgs with
+                        match failureMessages with
                         | InvalidMessage (code, explanation) -> do! socket.CloseAsync (enum code, explanation, CancellationToken.None)
                     | Ok ValueNone -> logger.LogTrace ("WebSocket received empty message! State = '{socketState}'", socket.State)
                     | Ok (ValueSome msg) ->
@@ -274,11 +275,11 @@ type GraphQLWebSocketMiddleware<'Root>
                                     let variables = query.Variables |> Skippable.toOption
                                     let! planExecutionResult =
                                         let root = options.RootFactory httpContext
-                                        options.SchemaExecutor.AsyncExecute (query.Query, root, ?variables = variables)
+                                        options.SchemaExecutor.AsyncExecute (query.Query, getInputContext, root, ?variables = variables)
                                     do! planExecutionResult |> applyPlanExecutionResult id socket
                             with ex ->
                                 logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
-                                do! sendMsg (Error (id, [new Shared.NameValueLookup ([ ("subscription", "Unexpected error during subscription" :> obj) ])]))
+                                do! sendMsg (Error (id, [NameValueLookup([ ("subscription", "Unexpected error during subscription" :> obj) ])]))
                         | ClientComplete id ->
                             "ClientComplete" |> logMsgWithIdReceived id
                             subscriptions
@@ -287,7 +288,7 @@ type GraphQLWebSocketMiddleware<'Root>
                 do! socket |> tryToGracefullyCloseSocketWithDefaultBehavior
             with ex ->
                 logger.LogError (ex, "Cannot handle a message; dropping a websocket connection")
-                // at this point, only something really weird must have happened.
+                // At this point, only something really weird must have happened.
                 // In order to avoid faulty state scenarios and unimagined damages,
                 // just close the socket without further ado.
                 do! socket |> tryToGracefullyCloseSocketWithDefaultBehavior
@@ -344,7 +345,7 @@ type GraphQLWebSocketMiddleware<'Root>
             return Result.Error <| "{nameof ConnectionInit} timeout"
     }
 
-    member __.InvokeAsync (ctx : HttpContext) = task {
+    member _.InvokeAsync (ctx : HttpContext) = task {
         if not (ctx.Request.Path = endpointUrl) then
             do! next.Invoke (ctx)
         else if ctx.WebSockets.IsWebSocketRequest then

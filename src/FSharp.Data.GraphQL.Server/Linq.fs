@@ -7,6 +7,7 @@ open System.Collections
 open System.Collections.Generic
 open System.Linq
 open System.Linq.Expressions
+open FSharp.Data.GraphQL.Shared
 open FSharp.Reflection
 open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Types
@@ -96,10 +97,10 @@ let private mkTrack name src dst = { Name = Some name; ParentType = src; ReturnT
 /// Takes function with 2 parameters and applies them in reversed order
 let inline private flip fn a b = fn b a
 
-let inline private argVal vars argDef argOpt  =
+let inline private argVal inputContext vars argDef argOpt  =
     match argOpt with
     | Some arg ->
-        Execution.argumentValue vars argDef arg
+        Execution.argumentValue inputContext vars argDef arg
         // TODO: Improve error propagation
         |> Result.defaultWith (failwithf "%A")
         |> Some
@@ -107,8 +108,8 @@ let inline private argVal vars argDef argOpt  =
 
 /// Resolves an object representing one of the supported arguments
 /// given a variables set and GraphQL input data.
-let private resolveLinqArg vars (name, argdef, arg) =
-    argVal vars argdef arg |> Option.map (fun v -> { Arg.Name = name; Value = v })
+let private resolveLinqArg inputContext vars (name, argDef, arg) =
+    argVal inputContext vars argDef arg |> Option.map (fun v -> { Arg.Name = name; Value = v })
 
 let rec private unwrapType =
     function
@@ -264,14 +265,14 @@ let private applyLast: ArgApplication = fun expression callable ->
 
 /// Tries to resolve all supported LINQ args with values
 /// from a given ExecutionInfo and variables collection
-let private linqArgs vars info =
+let private linqArgs inputContext vars info =
     let argDefs = info.Definition.Args
     if Array.isEmpty argDefs then []
     else
         let args = info.Ast.Arguments
         argDefs
         |> Array.map (fun a -> (a.Name, a, args |> List.tryFind (fun x -> x.Name = a.Name)))
-        |> Array.choose (resolveLinqArg vars)
+        |> Array.choose (resolveLinqArg inputContext vars)
         |> Array.toList
 
 let rec private track set e =
@@ -414,12 +415,12 @@ let rec private infoComposer (root: Tracker) (allTracks: Set<Tracker>) : Set<Tra
 
 /// Composes tracks collected within a single ExecutionInfo
 /// (but not across the ExecutionInfo boundaries)
-let rec private compose vars ir =
+let rec private compose inputContext vars ir =
     let (IR(info, directs, children)) = ir
     let rootTrack = { Name = None; ParentType = info.ParentDef.Type; ReturnType = info.ReturnDef.Type }
-    let root = Direct(rootTrack, linqArgs vars info)
+    let root = Direct(rootTrack, linqArgs inputContext vars info)
     let composed = infoComposer root directs
-    IR(info, composed, children |> List.map (compose vars))
+    IR(info, composed, children |> List.map (compose inputContext vars))
 
 /// Get unrelated tracks from current info and its children (if any)
 /// Returned set of trackers ALWAYS consists of Direct trackers only
@@ -605,15 +606,15 @@ let private defaultArgApplicators: Map<string, ArgApplication> =
 /// and can can cause eager overfetching.
 /// </para>
 /// </summary>
-let rec tracker (vars: ImmutableDictionary<string, obj>) (info: ExecutionInfo) : Tracker  =
+let rec tracker inputContext (vars: ImmutableDictionary<string, obj>) (info: ExecutionInfo) : Tracker  =
     let ir = getTracks Set.empty info
-    let composed = compose vars ir
+    let composed = compose inputContext vars ir
     let (IR(_, trackers, children)) = composed
     join trackers children |> Seq.head
 
-let private toLinq info (query: IQueryable<'Source>) variables (argApplicators: Map<string, ArgApplication>) : IQueryable<'Source> =
+let private toLinq info (query: IQueryable<'Source>) inputContext variables (argApplicators: Map<string, ArgApplication>) : IQueryable<'Source> =
     let parameter = Expression.Parameter (query.GetType())
-    let ir = tracker variables info
+    let ir = tracker inputContext variables info
     let expr = construct argApplicators ir parameter
     let compiled =
         match expr with
@@ -650,11 +651,12 @@ type System.Linq.IQueryable<'Source> with
     /// </para>
     /// </summary>
     /// <param name="info">Execution info data to be applied on the queryable.</param>
+    /// <param name="inputContext">Provider for getting input execution context.</param>
     /// <param name="variables">Optional map with client-provided arguments used to resolve argument values.</param>
     /// <param name="applicators">Map of applicators used to define LINQ expression mutations based on GraphQL arguments.</param>
-    member this.Apply(info: ExecutionInfo, ?variables: ImmutableDictionary<string, obj>, ?applicators: Map<string, ArgApplication>) : IQueryable<'Source> =
-        let appl =
+    member this.Apply(info: ExecutionInfo, inputContext : InputExecutionContextProvider, ?variables: ImmutableDictionary<string, obj>, ?applicators: Map<string, ArgApplication>) : IQueryable<'Source> =
+        let apply =
             match applicators with
             | None -> defaultArgApplicators
             | Some a -> a |> Map.fold (fun acc key value -> Map.add (key.ToLowerInvariant()) value acc) defaultArgApplicators
-        toLinq info this (defaultArg variables ImmutableDictionary.Empty) appl
+        toLinq info this inputContext (defaultArg variables ImmutableDictionary.Empty) apply

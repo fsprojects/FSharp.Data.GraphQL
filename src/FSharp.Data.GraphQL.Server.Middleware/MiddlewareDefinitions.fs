@@ -2,6 +2,7 @@ namespace FSharp.Data.GraphQL.Server.Middleware
 
 open System.Collections.Generic
 open System.Collections.Immutable
+open FSharp.Data.GraphQL.Shared
 open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL
@@ -11,7 +12,7 @@ open FSharp.Data.GraphQL.Types
 
 type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) =
 
-    let middleware (threshold : float) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
+    let middleware (threshold : float) (inputContext : InputExecutionContextProvider) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
         let measureThreshold (threshold : float) (fields : ExecutionInfo list) =
             let getWeight f =
                 if f.ParentDef = upcast ctx.ExecutionPlan.RootDef
@@ -72,7 +73,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
     let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
         let modifyFields (object : ObjectDef<'ObjectType>) (fields : FieldDef<'ObjectType> seq) =
             let args = [ Define.Input("filter", Nullable ObjectListFilterType) ]
-            let fields = fields |> Seq.map (fun x -> x.WithArgs(args)) |> List.ofSeq
+            let fields = fields |> Seq.map _.WithArgs(args) |> List.ofSeq
             object.WithFields(fields)
         let typesWithListFields =
             ctx.TypeMap.GetTypesWithListFields<'ObjectType, 'ListType>()
@@ -85,7 +86,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
         ctx.TypeMap.AddTypes(modifiedTypes, overwrite = true)
         next ctx
 
-    let reportMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
+    let reportMiddleware (inputContext : InputExecutionContextProvider) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
         let rec collectArgs (path: obj list) (acc : KeyValuePair<obj list, ObjectListFilter> list) (fields : ExecutionInfo list) =
             let fieldArgs currentPath field =
                 let filterResults =
@@ -93,7 +94,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                     |> Seq.map (fun x ->
                         match x.Name, x.Value with
                         | "filter", (VariableName variableName) -> Ok (ValueSome (ctx.Variables[variableName] :?> ObjectListFilter))
-                        | "filter", inlineConstant -> ObjectListFilterType.CoerceInput (InlineConstant inlineConstant) ctx.Variables |> Result.map ValueOption.ofObj
+                        | "filter", inlineConstant -> ObjectListFilterType.CoerceInput inputContext (InlineConstant inlineConstant) ctx.Variables |> Result.map ValueOption.ofObj
                         | _ -> Ok ValueNone)
                     |> Seq.toList
                 match filterResults |> splitSeqErrorsList with

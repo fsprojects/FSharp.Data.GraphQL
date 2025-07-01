@@ -52,7 +52,7 @@ let ``Execute handles list inputs and nullability and allows lists to be null`` 
 
     let testInputValue = "null"
     let params' = paramsWithValueInput testInputValue
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "list", upcast testInputValue ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -68,7 +68,7 @@ let ``Execute handles list inputs and nullability and allows lists to contain va
 
     let testInputList = "[\"A\"]"
     let params' = paramsWithValueInput testInputList
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "list", upcast testInputList ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -84,7 +84,7 @@ let ``Execute handles list inputs and nullability and allows lists to contain nu
 
     let testInputList = "[\"A\",null,\"B\"]"
     let params' = paramsWithValueInput testInputList
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "list", upcast testInputList ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -100,7 +100,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
 
     let testInputList = "null"
     let params' = paramsWithValueInput testInputList
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     ensureRequestError result <| fun [ error ] ->
         let message = "Non-nullable variable '$input' expected value of type '[String]!', but got 'null'."
         error |> ensureInputCoercionError (Variable "input") message "[String]!"
@@ -115,7 +115,7 @@ let ``Execute handles list inputs and nullability and allows non-null lists to c
 
     let testInputList = "[\"A\"]"
     let params' = paramsWithValueInput testInputList
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "nnList", upcast testInputList ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -131,7 +131,7 @@ let ``Execute handles list inputs and nullability and allows non-null lists to c
 
     let testInputList = "[\"A\",null,\"B\"]"
     let params' = paramsWithValueInput testInputList
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "nnList", upcast testInputList ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -147,7 +147,7 @@ let ``Execute handles list inputs and nullability and allows lists of non-nulls 
 
     let testInputList = "null"
     let params' = paramsWithValueInput testInputList
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "listNN", upcast testInputList ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -163,7 +163,7 @@ let ``Execute handles list inputs and nullability and allows lists of non-nulls 
 
     let testInputList = "[\"A\"]"
     let params' = paramsWithValueInput testInputList
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "listNN", upcast testInputList ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -179,7 +179,7 @@ let ``Execute handles list inputs and nullability and does not allow lists of no
 
     let testInputList = "[\"A\",null,\"B\"]"
     let params' = paramsWithValueInput testInputList
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     ensureRequestError result <| fun [ error ] ->
         let message = "Non-nullable variable '$input' expected value of type '[String!]', but got 'null'."
         error |> ensureInputCoercionError (Variable "input") message "[String!]"
@@ -194,7 +194,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
 
     let testInputList = "null"
     let params' = paramsWithValueInput testInputList
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     ensureRequestError result <| fun [ error ] ->
         let message = "Non-nullable variable '$input' expected value of type '[String!]!', but got 'null'."
         error |> ensureInputCoercionError (Variable "input") message "[String!]!"
@@ -209,7 +209,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
 
     let testInputList = "[\"A\"]"
     let params' = paramsWithValueInput testInputList
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     let expected = NameValueLookup.ofList [ "nnListNN", upcast testInputList ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -225,7 +225,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
 
     let testInputList = "[\"A\",null,\"B\"]"
     let params' = paramsWithValueInput testInputList
-    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, getMockInputContext, variables = params')
     ensureRequestError result <| fun [ error ] ->
         let message = "Non-nullable variable '$input' expected value of type '[String!]!', but got 'null'."
         error |> ensureInputCoercionError (Variable "input") message "[String!]!"

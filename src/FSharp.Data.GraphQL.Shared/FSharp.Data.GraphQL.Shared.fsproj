@@ -42,6 +42,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="InputContext.fs" />
     <Compile Include="Output.fs" />
     <Compile Include="Helpers\Diagnostics.fs" />
     <Compile Include="Helpers\ObjAndStructConversions.fs" />

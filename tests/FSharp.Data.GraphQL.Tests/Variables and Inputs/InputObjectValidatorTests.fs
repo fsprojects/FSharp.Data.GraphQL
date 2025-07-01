@@ -126,7 +126,7 @@ let ``Execute handles validation of valid inline input records with all fields``
         recordNested: { homeAddress: { country: "US", zipCode: "12345", city: "Miami" }, workAddress: { country: "US", zipCode: "67890", city: "Miami" } }
       )
     }"""
-    let result = sync <| schema.AsyncExecute(parse query)
+    let result = sync <| schema.AsyncExecute(parse query, getMockInputContext)
     ensureDirect result <| fun data errors -> empty errors
 
 [<Fact>]
@@ -138,7 +138,7 @@ let ``Execute handles validation of invalid inline input records with all fields
         recordNested: { homeAddress: { country: "US", zipCode: "12345", city: "Miami" }, workAddress: { country: "US", zipCode: "67890", city: "Miami" }, mailingAddress: { country: "US", zipCode: "12345", city: "Miami" } }
       )
     }"""
-    let result = sync <| schema.AsyncExecute(parse query)
+    let result = sync <| schema.AsyncExecute(parse query, getMockInputContext)
     match result with
     | RequestError [ zipCodeError ; addressError ] ->
         zipCodeError |> ensureInputObjectValidationError (Argument "record") "ZipCode must be 5 characters for US" [] "InputRecord!"
@@ -175,7 +175,7 @@ let ``Execute handles validation of valid input records from variables with all 
             """{ "country": "US", "zipCode": "67890", "city": "Miami" }""",
             """null"""
         ) |> paramsWithValues
-    let result = sync <| schema.AsyncExecute(parse query, variables = params')
+    let result = sync <| schema.AsyncExecute(parse query, getMockInputContext, variables = params')
     //let expected = NameValueLookup.ofList [ "recordInputs", upcast testInputObject ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -197,7 +197,7 @@ let ``Execute handles validation of invalid input records from variables with al
             """{ "country": "US", "zipCode": "67890", "city": "Miami" }""",
             """{ "country": "US", "zipCode": "12345", "city": "Miami" }"""
         ) |> paramsWithValues
-    let result = sync <| schema.AsyncExecute(parse query, variables = params')
+    let result = sync <| schema.AsyncExecute(parse query, getMockInputContext, variables = params')
     //let expected = NameValueLookup.ofList [ "recordInputs", upcast testInputObject ]
     ensureRequestError result <| fun [ zipCodeError ; addressError ] ->
         zipCodeError |> ensureInputObjectValidationError (Variable "record") "ZipCode must be 5 characters for US" [ box "mailingAddress" ] "InputRecord"
@@ -227,7 +227,7 @@ let ``Execute handles validation of valid input records from variables with all 
             """{ "country": "US", "zipCode": "67890", "city": "Miami" }""",
             """null"""
         ) |> paramsWithValues
-    let result = sync <| schema.AsyncExecute(parse query, variables = params')
+    let result = sync <| schema.AsyncExecute(parse query, getMockInputContext, variables = params')
     //let expected = NameValueLookup.ofList [ "recordInputs", upcast testInputObject ]
     ensureDirect result <| fun data errors ->
         empty errors
@@ -248,10 +248,10 @@ let ``Execute handles validation of invalid input records from variables with al
             """{ "country": "US", "zipCode": "12345", "city": "Miami" }""",
             """{ "country": "US", "zipCode": "67890", "city": "Miami" }"""
         ) |> paramsWithValues
-    let result = sync <| schema.AsyncExecute(parse query, variables = params')
+    let result = sync <| schema.AsyncExecute(parse query, getMockInputContext, variables = params')
     //let expected = NameValueLookup.ofList [ "recordInputs", upcast testInputObject ]
     ensureRequestError result <| fun [ error ] ->
         error |> ensureInputObjectValidationError (Variable "record1") "ZipCode must be 5 characters for US" [ box "mailingAddress" ] "InputRecord"
-        // Because all variables are coerced together validation of the inline object that contains variables do not happen
+        // Because all variables are coerced together, validation of the inline object that contains variables do not happen
         // as total variables coercion failed
         //hasError "Object 'Query': field 'recordInputs': argument 'recordNested': HomeAddress and MailingAddress must be different" errors

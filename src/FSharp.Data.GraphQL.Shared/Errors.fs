@@ -57,6 +57,11 @@ type ErrorKind =
     /// GraphQL field execution
     | Execution
 
+module IGQLError =
+    let create message = { new IGQLError with member _.Message = message }
+    let createList message = [create message]
+    let createResultErrorList message = Result.Error (createList message)
+
 #nowarn "0386"
 /// <summary>
 /// A machine-readable format for specifying errors in GraphQL API responses based on <see href="http://spec.graphql.org/October2021/#sec-Errors"/>.

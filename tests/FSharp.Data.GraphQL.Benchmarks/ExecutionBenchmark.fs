@@ -10,6 +10,10 @@ open FSharp.Data.GraphQL.Parser
 open BenchmarkDotNet.Attributes
 open FSharp.Data.GraphQL.Benchmarks
 
+type MockInputExecutionContext() =
+    interface IInputExecutionContext with
+        member this.GetFile _ = failwith "todo"
+
 [<Config(typeof<GraphQLBenchConfig>)>]
 [<SimpleJob>]
 type SimpleExecutionBenchmark() =
@@ -23,6 +27,7 @@ type SimpleExecutionBenchmark() =
     let mutable simpleExecutionPlan : ExecutionPlan = Unchecked.defaultof<ExecutionPlan>
     let mutable flatExecutionPlan : ExecutionPlan = Unchecked.defaultof<ExecutionPlan>
     let mutable nestedExecutionPlan : ExecutionPlan = Unchecked.defaultof<ExecutionPlan>
+    let getInputContext = fun () -> MockInputExecutionContext() :> IInputExecutionContext
 
     [<GlobalSetup>]
     member _.Setup() =
@@ -38,31 +43,31 @@ type SimpleExecutionBenchmark() =
         nestedExecutionPlan <- schemaProcessor.CreateExecutionPlanOrFail(nestedAst)
 
     [<Benchmark>]
-    member _.BenchmarkSimpleQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.simple) |> Async.RunSynchronously
+    member _.BenchmarkSimpleQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.simple, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkSimpleQueryParsed() = schemaProcessor.AsyncExecute(simpleAst) |> Async.RunSynchronously
+    member _.BenchmarkSimpleQueryParsed() = schemaProcessor.AsyncExecute(simpleAst, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkSimpleQueryPlanned() = schemaProcessor.AsyncExecute(simpleExecutionPlan) |> Async.RunSynchronously
+    member _.BenchmarkSimpleQueryPlanned() = schemaProcessor.AsyncExecute(simpleExecutionPlan, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFlatQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.flat) |> Async.RunSynchronously
+    member _.BenchmarkFlatQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.flat, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFlatQueryParsed() = schemaProcessor.AsyncExecute(flatAst) |> Async.RunSynchronously
+    member _.BenchmarkFlatQueryParsed() = schemaProcessor.AsyncExecute(flatAst, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkFlatQueryPlanned() = schemaProcessor.AsyncExecute(flatExecutionPlan) |> Async.RunSynchronously
+    member _.BenchmarkFlatQueryPlanned() = schemaProcessor.AsyncExecute(flatExecutionPlan, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkNestedQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.nested) |> Async.RunSynchronously
+    member _.BenchmarkNestedQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.nested, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkNestedQueryParsed() = schemaProcessor.AsyncExecute(nestedAst) |> Async.RunSynchronously
+    member _.BenchmarkNestedQueryParsed() = schemaProcessor.AsyncExecute(nestedAst, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkNestedQueryPlanned() = schemaProcessor.AsyncExecute(nestedExecutionPlan) |> Async.RunSynchronously
+    member _.BenchmarkNestedQueryPlanned() = schemaProcessor.AsyncExecute(nestedExecutionPlan, getInputContext) |> Async.RunSynchronously
 
     [<Benchmark>]
-    member _.BenchmarkParallelQueryPlanned() = parallelSchemaProcessor.AsyncExecute({ nestedExecutionPlan with Strategy = Parallel }) |> Async.RunSynchronously
+    member _.BenchmarkParallelQueryPlanned() = parallelSchemaProcessor.AsyncExecute({ nestedExecutionPlan with Strategy = Parallel }, getInputContext) |> Async.RunSynchronously

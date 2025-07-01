@@ -69,7 +69,7 @@ let ``Schema config must be able to override default error handling`` () =
         }
     }
     """
-    let result = sync <| Executor(schema).AsyncExecute query
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext)
     let expected =
         NameValueLookup.ofList [ "test", box <| NameValueLookup.ofList [ "failing1", null; "passing", box "ok"; "failing2", null ] ]
     let expectedErrors = [

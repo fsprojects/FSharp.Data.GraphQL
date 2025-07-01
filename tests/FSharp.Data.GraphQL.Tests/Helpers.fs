@@ -5,12 +5,13 @@ module internal Helpers
 
 open System
 open System.Collections.Generic
+open System.IO
 open System.Linq
+open System.Text
 open System.Text.Json.Serialization
 open System.Threading
-open System.Threading.Tasks
-open Xunit
 open FSharp.Data.GraphQL
+open Xunit
 
 let serializerOptions = Shared.Json.getWSSerializerOptions Seq.empty
 
@@ -180,3 +181,38 @@ type ExecutorExtensions =
         match executor.CreateExecutionPlan(queryOrMutation, ?operationName = operationName, ?meta = meta) with
         | Ok executionPlan -> executionPlan
         | Error _ -> fail "invalid query"; Unchecked.defaultof<_>
+
+
+module MockInputContext =
+
+    let mockFileKey = "fileKey"
+    let mockFileKey2 = "fileKey2"
+    let mockFileText = "fileText"
+    let mockFileText2 = "fileText2"
+
+    type MockInputExecutionContext () =
+
+        member _.FileKey = mockFileKey
+        member _.FileKey2 = mockFileKey2
+        member _.FileText = mockFileText
+        member _.FileText2 = mockFileText2
+        member context.Stream =
+            let bytes = Encoding.UTF8.GetBytes context.FileText
+            new MemoryStream (bytes) :> Stream
+
+        member context.Stream2 =
+            let bytes = Encoding.UTF8.GetBytes context.FileText2
+            new MemoryStream (bytes) :> Stream
+
+        interface IInputExecutionContext with
+            member context.GetFile key =
+                if (key = context.FileKey) then
+                    Ok context.Stream
+                else if (key = context.FileKey2) then
+                    Ok context.Stream2
+                else
+                    failwith $"only file {context.FileKey} and file {context.FileKey2} exist"
+
+    let mockInputContextInstance = MockInputExecutionContext()
+
+let getMockInputContext = fun () -> MockInputContext.mockInputContextInstance :> IInputExecutionContext

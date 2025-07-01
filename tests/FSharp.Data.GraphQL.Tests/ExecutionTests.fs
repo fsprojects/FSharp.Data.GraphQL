@@ -143,7 +143,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
     let schema = Schema(DataType)
     let schemaProcessor = Executor(schema)
     let params' = JsonDocument.Parse("""{"size":100}""").RootElement.Deserialize<ImmutableDictionary<string, JsonElement>>(serializerOptions)
-    let result = sync <| schemaProcessor.AsyncExecute(ast, data, variables = params', operationName = "Example")
+    let result = sync <| schemaProcessor.AsyncExecute(ast, getMockInputContext, data, variables = params', operationName = "Example")
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
@@ -191,7 +191,7 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
             ]
             "c", upcast "Cherry"
         ]
-    let result = sync <| schemaProcessor.AsyncExecute(ast, obj())
+    let result = sync <| schemaProcessor.AsyncExecute(ast, getMockInputContext, obj())
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
@@ -201,8 +201,8 @@ let ``Execution handles basic tasks: threads root value context correctly`` () =
     let query = "query Example { a }"
     let data = { Thing = "" }
     let Thing = Define.Object<TestThing>("Type", [  Define.Field("a", StringType, fun _ value -> value.Thing <- "thing"; value.Thing) ])
-    let result = sync <| Executor(Schema(Thing)).AsyncExecute(parse query, data)
-    ensureDirect result <| fun data errors -> empty errors
+    let result = sync <| Executor(Schema(Thing)).AsyncExecute(parse query, getMockInputContext, data)
+    ensureDirect result <| fun _ errors -> empty errors
     equals "thing" data.Thing
 
 type TestTarget =
@@ -223,8 +223,8 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
                      value.Str <- ctx.TryArg("stringArg")
                      value.Str) ])
 
-    let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
-    ensureDirect result <| fun data errors -> empty errors
+    let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, getMockInputContext,data)
+    ensureDirect result <| fun _ errors -> empty errors
     equals (ValueSome 123) data.Num
     equals (ValueSome "foo") data.Str
 
@@ -242,8 +242,8 @@ let ``Execution handles basic tasks: correctly handles null arguments`` () =
                      value.Str <- ctx.TryArg("stringArg")
                      value.Str) ])
 
-    let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
-    ensureDirect result <| fun data errors -> empty errors
+    let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, getMockInputContext, data)
+    ensureDirect result <| fun _ errors -> empty errors
     equals ValueNone data.Num
     equals ValueNone data.Str
 
@@ -272,8 +272,8 @@ let ``Execution handles basic tasks: correctly handles discriminated union argum
                      value.Num <- ValueSome 123
                      value.Str
                  | _ -> ValueNone) ])
-    let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
-    ensureDirect result <| fun data errors -> empty errors
+    let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, getMockInputContext, data)
+    ensureDirect result <| fun _ errors -> empty errors
     equals (ValueSome 123) data.Num
     equals (ValueSome "foo") data.Str
 
@@ -300,8 +300,8 @@ let ``Execution handles basic tasks: correctly handles Enum arguments`` () =
                       value.Num <- ValueSome 123
                       value.Str
                   | _ -> ValueNone) ])
-    let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
-    ensureDirect result <| fun data errors -> empty errors
+    let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, getMockInputContext, data)
+    ensureDirect result <| fun _ errors -> empty errors
     equals (ValueSome 123) data.Num
     equals (ValueSome "foo") data.Str
 
@@ -313,7 +313,7 @@ let ``Execution handles basic tasks: uses the inline operation if no operation n
                 "Type", [
                     Define.Field("a", StringType, fun _ x -> x.A)
                 ]))
-    let result = sync <| Executor(schema).AsyncExecute(parse "{ a }", { A = "b" })
+    let result = sync <| Executor(schema).AsyncExecute(parse "{ a }", getMockInputContext, { A = "b" })
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
@@ -325,7 +325,7 @@ let ``Execution handles basic tasks: uses the only operation if no operation nam
                 "Type", [
                     Define.Field("a", StringType, fun _ x -> x.A)
                 ]))
-    let result = sync <| Executor(schema).AsyncExecute(parse "query Example { a }", { A = "b" })
+    let result = sync <| Executor(schema).AsyncExecute(parse "query Example { a }", getMockInputContext, { A = "b" })
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
@@ -338,7 +338,7 @@ let ``Execution handles basic tasks: uses the named operation if operation name 
                     Define.Field("a", StringType, fun _ x -> x.A)
                 ]))
     let query = "query Example { first: a } query OtherExample { second: a }"
-    let result = sync <| Executor(schema).AsyncExecute(parse query, { A = "b" }, operationName = "OtherExample")
+    let result = sync <| Executor(schema).AsyncExecute(parse query, getMockInputContext, { A = "b" }, operationName = "OtherExample")
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
@@ -350,7 +350,7 @@ let ``Execution handles basic tasks: list of scalars`` () =
                 "Type", [
                     Define.Field("strings", ListOf StringType, fun _ _ -> ["foo"; "bar"; "baz"])
                 ]))
-    let result = sync <| Executor(schema).AsyncExecute("query Example { strings }")
+    let result = sync <| Executor(schema).AsyncExecute("query Example { strings }", getMockInputContext)
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast NameValueLookup.ofList ["strings", box [ box "foo"; upcast "bar"; upcast "baz" ]])
@@ -366,7 +366,7 @@ let ``Execution when querying the same field twice will return it`` () =
                     Define.Field("b", IntType, fun _ x -> x.B)
                 ]))
     let query = "query Example { a, b, a }"
-    let result = sync <| Executor(schema).AsyncExecute(query, { A = "aa"; B = 2 });
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, { A = "aa"; B = 2 });
     let expected =
       NameValueLookup.ofList [
         "a", upcast "aa"
@@ -383,8 +383,8 @@ let ``Execution when querying returns unique document id with response`` () =
                     Define.Field("a", StringType, fun _ x -> x.A)
                     Define.Field("b", IntType, fun _ x -> x.B)
                 ]))
-    let result1 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
-    let result2 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
+    let result1 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", getMockInputContext, { A = "aa"; B = 2 })
+    let result2 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", getMockInputContext, { A = "aa"; B = 2 })
     result1.DocumentId |> notEquals Unchecked.defaultof<int>
     result1.DocumentId |> equals result2.DocumentId
     match result1,result2 with
@@ -434,7 +434,7 @@ let ``Execution handles errors: properly propagates errors`` () =
     ]
     let result =
         let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
-        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } partialSuccess { kaboom } }", variables)
+        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } partialSuccess { kaboom } }", getMockInputContext, variables)
     ensureDirect result <| fun data errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         data |> equals (upcast expectedData)
@@ -448,7 +448,7 @@ let ``Execution handles errors: exceptions`` () =
                 Define.Field("a", StringType, fun _ _ -> failwith "Resolver Error!")
             ]))
     let expectedError = GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "a" ])
-    let result = sync <| Executor(schema).AsyncExecute("query Test { a }", ())
+    let result = sync <| Executor(schema).AsyncExecute("query Test { a }", getMockInputContext, ())
     ensureRequestError result <| fun [ error ] -> error |> equals expectedError
 
 [<Fact>]
@@ -472,7 +472,7 @@ let ``Execution handles errors: nullable list fields`` () =
             GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "list"; 0; "error" ])
             GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "list"; 1; "error" ])
         ]
-    let result = sync <| Executor(schema).AsyncExecute("query Test { list { error } }", ())
+    let result = sync <| Executor(schema).AsyncExecute("query Test { list { error } }", getMockInputContext, ())
     ensureDirect result <| fun data errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         data |> equals (upcast expectedData)
@@ -480,12 +480,12 @@ let ``Execution handles errors: nullable list fields`` () =
 
 
 [<Fact>]
-let ``Execution handles errors: additional error added when exception is rised in a nullable field resolver`` () =
+let ``Execution handles errors: additional error added when exception is raised in a nullable field resolver`` () =
     let InnerNullableExceptionObjType =
         // executeResolvers/resolveWith, case 1
         let resolveWithException (ctx : ResolveFieldContext) (_ : InnerNullableTest) : string option =
             ctx.AddError { new IGQLError with member _.Message = "Non-critical error" }
-            raise (System.Exception "Unexpected error")
+            raise (Exception "Unexpected error")
         Define.Object<InnerNullableTest>(
             "InnerNullableException", [
                 Define.Field("kaboom", Nullable StringType, resolve = resolveWithException)
@@ -508,7 +508,7 @@ let ``Execution handles errors: additional error added when exception is rised i
         ]
     let result =
         let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
-        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", variables)
+        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", getMockInputContext, variables)
     ensureDirect result <| fun data errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         data |> equals (upcast expectedData)
@@ -542,7 +542,7 @@ let ``Execution handles errors: additional error added when None returned from a
         ]
     let result =
         let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
-        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", variables)
+        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", getMockInputContext, variables)
     ensureDirect result <| fun data errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         data |> equals (upcast expectedData)
@@ -554,7 +554,7 @@ let ``Execution handles errors: additional error added when exception is rised i
         // executeResolvers/resolveWith, case 3
         let resolveWithException (ctx : ResolveFieldContext) (_ : InnerNullableTest) : string =
             ctx.AddError { new IGQLError with member _.Message = "Non-critical error" }
-            raise (System.Exception "Fatal error")
+            raise (Exception "Fatal error")
         Define.Object<InnerNullableTest>(
             "InnerNonNullableException", [
                 Define.Field("kaboom", StringType, resolve = resolveWithException)
@@ -571,7 +571,7 @@ let ``Execution handles errors: additional error added when exception is rised i
         ]
     let result =
         let variables = { Inner = { Kaboom = "Yes, Rico, Kaboom" }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
-        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", variables)
+        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", getMockInputContext, variables)
     ensureRequestError result <| fun  errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         errors |> equals expectedErrors
@@ -599,7 +599,7 @@ let ``Execution handles errors: additional error added and when null returned fr
         ]
     let result =
         let variables = { Inner = { Kaboom = "Yes, Rico, Kaboom" }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
-        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", variables)
+        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", getMockInputContext, variables)
     ensureRequestError result <| fun errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         errors |> equals expectedErrors
