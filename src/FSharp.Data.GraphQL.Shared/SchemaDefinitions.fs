@@ -503,11 +503,11 @@ module SchemaDefinitions =
                     | StringValue strValue -> getFileStream strValue
                     | VariableName varName ->
                         Ok (variables[varName] :?> System.IO.Stream)
-                    | _ -> IGQLError.createResultErrorList "File type should get only string value."
+                    | _ -> IGQLError.createResultErrorList "Only a string value or a variable with a string value can be used as a file name."
                 | Variable json ->
                     match (json |> InputValue.OfJsonElement) with
                     | StringValue str -> getFileStream str
-                    | _ -> IGQLError.createResultErrorList "File type variable should get only string value.")
+                    | _ -> IGQLError.createResultErrorList "Only a variable with a string value can be used as a file name.")
     }
 
     /// GraphQL @include directive.

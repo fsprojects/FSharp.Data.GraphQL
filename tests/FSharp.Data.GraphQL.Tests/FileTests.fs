@@ -71,7 +71,7 @@ let mutationWithConstant = """mutation uploadFile () {
 }"""
 
 let mutationComplexObject = """mutation uploadFile () {
-    uploadFileComplex (input : {file : "fileKey"})
+    uploadFileComplex (input : { file : "fileKey" })
 }"""
 
 let mutationComplexObjectWithTwoFiles = """mutation uploadFile () {
@@ -79,7 +79,7 @@ let mutationComplexObjectWithTwoFiles = """mutation uploadFile () {
 }"""
 
 [<Fact>]
-let ``File type: Must return file text`` () =
+let ``File type: Must upload file as input scalar using inline string as a file name`` () =
     let expected = NameValueLookup.ofList [ "uploadFile", MockInputContext.mockFileText ]
     let result = execute mutationWithConstant
     ensureDirect result <| fun data errors ->
@@ -88,7 +88,7 @@ let ``File type: Must return file text`` () =
     ()
 
 [<Fact>]
-let ``File type: Must return file text when as using variable`` () =
+let ``File type: Must upload a file as input scalar using a variable`` () =
     let expected = NameValueLookup.ofList [ "uploadFile", MockInputContext.mockFileText ]
     let jsonVariable = "\"fileKey\"" |> JsonDocument.Parse |> _.RootElement
     let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("file", jsonVariable)
