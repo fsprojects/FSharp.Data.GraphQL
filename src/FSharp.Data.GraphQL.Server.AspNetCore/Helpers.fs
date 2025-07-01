@@ -49,15 +49,3 @@ module ReflectionHelpers =
         | PropertyGet (_, propertyInfo, _) -> propertyInfo.DeclaringType
         | FieldGet (_, fieldInfo) -> fieldInfo.DeclaringType
         | _ -> failwith "Expression is no property."
-
-type HttpContextRequestExecutionContext (httpContext : HttpContext) =
-
-    interface IInputExecutionContext with
-        member this.GetFile(key) =
-            if not httpContext.Request.HasFormContentType then
-                Error "Request does not have form content type"
-            else
-                let form = httpContext.Request.Form
-                match (form.Files |> Seq.vtryFind (fun f -> f.Name = key)) with
-                | ValueSome file -> Ok (file.OpenReadStream())
-                | ValueNone -> Error $"File with key '{key}' not found"

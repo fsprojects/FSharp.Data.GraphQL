@@ -140,4 +140,4 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
 
 module NameValueLookup =
     /// Create new NameValueLookup from given list of key-value tuples.
-    let ofList (l: (string * obj) list) = NameValueLookup(l)
+    let ofList (l: (string * obj) list) = NameValueLookup (l)

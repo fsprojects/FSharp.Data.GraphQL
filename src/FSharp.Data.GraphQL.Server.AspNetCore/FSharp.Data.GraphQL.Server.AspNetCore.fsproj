@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <Compile Include="Helpers.fs" />
+    <Compile Include="RequestExecutionContext.fs" />
     <Compile Include="GraphQLOptions.fs" />
     <Compile Include="GraphQLSubscriptionsManagement.fs" />
     <Compile Include="GraphQLWebsocketMiddleware.fs" />

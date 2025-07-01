@@ -16,12 +16,12 @@ open FSharp.Data.GraphQL.Server
 open FSharp.Data.GraphQL.Shared
 
 type DefaultGraphQLRequestHandler<'Root>
-/// <summary>
-/// Handles GraphQL requests using a provided root schema.
-/// </summary>
-/// <param name="httpContextAccessor">The accessor to the current HTTP context.</param>
-/// <param name="options">The options monitor for GraphQL options.</param>
-/// <param name="logger">The logger to log messages.</param>
+    /// <summary>
+    /// Handles GraphQL requests using a provided root schema.
+    /// </summary>
+    /// <param name="httpContextAccessor">The accessor to the current HTTP context.</param>
+    /// <param name="options">The options monitor for GraphQL options.</param>
+    /// <param name="logger">The logger to log messages.</param>
     (
         httpContextAccessor : IHttpContextAccessor,
         options : IOptionsMonitor<GraphQLOptions<'Root>>,
@@ -30,12 +30,12 @@ type DefaultGraphQLRequestHandler<'Root>
     inherit GraphQLRequestHandler<'Root> (httpContextAccessor, options, logger)
 
 and [<AbstractClass>] GraphQLRequestHandler<'Root>
-/// <summary>
-/// Provides logic to parse and execute GraphQL requests.
-/// </summary>
-/// <param name="httpContextAccessor">The accessor to the current HTTP context.</param>
-/// <param name="options">The options monitor for GraphQL options.</param>
-/// <param name="logger">The logger to log messages.</param>
+    /// <summary>
+    /// Provides logic to parse and execute GraphQL requests.
+    /// </summary>
+    /// <param name="httpContextAccessor">The accessor to the current HTTP context.</param>
+    /// <param name="options">The options monitor for GraphQL options.</param>
+    /// <param name="logger">The logger to log messages.</param>
     (
         httpContextAccessor : IHttpContextAccessor,
         options : IOptionsMonitor<GraphQLOptions<'Root>>,
