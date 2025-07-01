@@ -2,8 +2,6 @@ namespace FSharp.Data.GraphQL.Server.AspNetCore
 
 open System
 open System.Text
-open FSharp.Data.GraphQL
-open Microsoft.AspNetCore.Http
 
 [<AutoOpen>]
 module Helpers =
