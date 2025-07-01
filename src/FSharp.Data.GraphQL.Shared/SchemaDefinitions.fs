@@ -492,7 +492,7 @@ module SchemaDefinitions =
             (fun inputContext input variables ->
                 let getFileStream fileKey =
                     let inputExecutionContext = inputContext()
-                    let streamResult = inputExecutionContext.GetFile(fileKey)
+                    let streamResult = inputExecutionContext.GetFile fileKey
                     match streamResult with
                     | Ok stream -> Ok stream
                     | Error errorMessage -> IGQLError.createResultErrorList errorMessage
