@@ -193,7 +193,7 @@ module SchemaDefinitions =
     /// Tries to convert any value to string.
     let coerceFileValue (context : IInputExecutionContext) (value : obj) : Result<System.IO.Stream, string>  =
         match coerceStringValue value with
-        | Some str -> context.GetFile str
+        | Some fileName -> context.GetFile fileName
         | None -> Error "Cannot coerce the value"
 
     /// Tries to convert any value to generic type parameter.
