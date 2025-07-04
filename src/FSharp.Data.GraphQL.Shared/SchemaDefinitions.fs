@@ -191,7 +191,7 @@ module SchemaDefinitions =
         | _ -> Some(x.ToString())
 
     /// Tries to convert any value to string.
-    let coerceFileValue (context : IInputExecutionContext) (value : obj) : Result<System.IO.Stream, string>  =
+    let coerceFileValue (context : IInputExecutionContext) (value : obj) : Result<FileData, string>  =
         match coerceStringValue value with
         | Some fileName -> context.GetFile fileName
         | None -> Error "Only string value can be used as file name"
@@ -482,31 +482,31 @@ module SchemaDefinitions =
           CoerceInput = coerceGuidInput
           CoerceOutput = coerceGuidValue }
 
-        /// Defines an object list filter for use as an argument for filter list of object fields.
-    let FileType : InputCustomDefinition<System.IO.Stream> = {
+    /// Defines an object list filter for use as an argument for filter list of object fields.
+    let FileType : InputCustomDefinition<FileData> = {
         Name = "FileType"
         Description =
             Some
                 "The `File` type represents a file on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query."
         CoerceInput =
             (fun inputContext input variables ->
-                let getFileStream fileKey =
+                let getFileData fileKey =
                     let inputExecutionContext = inputContext()
-                    let streamResult = inputExecutionContext.GetFile fileKey
-                    match streamResult with
-                    | Ok stream -> Ok stream
+                    let fileData = inputExecutionContext.GetFile fileKey
+                    match fileData with
+                    | Ok data -> Ok data
                     | Error errorMessage -> IGQLError.createResultErrorList errorMessage
 
                 match input with
                 | InlineConstant c ->
                     match c with
-                    | StringValue strValue -> getFileStream strValue
+                    | StringValue strValue -> getFileData strValue
                     | VariableName varName ->
-                        Ok (variables[varName] :?> System.IO.Stream)
+                        Ok (variables[varName] :?> FileData)
                     | _ -> IGQLError.createResultErrorList "Only a string value or a variable with a string value can be used as a file name."
                 | Variable json ->
                     match (json |> InputValue.OfJsonElement) with
-                    | StringValue str -> getFileStream str
+                    | StringValue str -> getFileData str
                     | _ -> IGQLError.createResultErrorList "Only a variable with a string value can be used as a file name.")
     }
 

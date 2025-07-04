@@ -19,9 +19,14 @@ let QueryType =
     )
 
 type Input = {
-    File : Stream
-    File2 : Stream option
+    File : FileData
+    File2 : FileData option
 }
+
+let private getFullInfo fileData =
+    use reader = new StreamReader(fileData.Stream, Encoding.UTF8, true)
+    let fileContent = reader.ReadToEnd()
+    fileContent + fileData.ContentType
 
 let InputObject = Define.InputObject<Input>(
     name = "Input",
@@ -37,21 +42,18 @@ let MutationType =
         fields =
             [ Define.Field ("uploadFile", StringType, "", [ Define.Input ("input", FileType) ],
                 (fun ctx () ->
-                    let stream = ctx.Arg<Stream> "input"
-                    use reader = new StreamReader(stream, Encoding.UTF8, true)
-                    reader.ReadToEnd()
+                    let fileData = ctx.Arg<FileData> "input"
+                    getFullInfo fileData
                 ));
                 Define.Field ("uploadFileComplex", StringType, "", [ Define.Input ("input", InputObject) ],
                 (fun ctx () ->
                     let input = ctx.Arg<Input> "input"
-                    let reader = new StreamReader(input.File, Encoding.UTF8, true)
-                    let fileContent = reader.ReadToEnd()
-                    let file2Content = match input.File2 with
+                    let fileString = getFullInfo input.File
+                    let file2String = match input.File2 with
                                         | Some file2 ->
-                                            let reader2 = new StreamReader(file2, Encoding.UTF8, true)
-                                            reader2.ReadToEnd()
+                                            getFullInfo file2
                                         | None -> ""
-                    fileContent + file2Content
+                    fileString + file2String
                 ))
             ]
     )
@@ -80,7 +82,7 @@ let mutationComplexObjectWithTwoFiles = """mutation uploadFile () {
 
 [<Fact>]
 let ``File type: Must upload file as input scalar using inline string as a file name`` () =
-    let expected = NameValueLookup.ofList [ "uploadFile", MockInputContext.mockFileText ]
+    let expected = NameValueLookup.ofList [ "uploadFile", MockInputContext.mockFileTextAndContentType ]
     let result = execute mutationWithConstant
     ensureDirect result <| fun data errors ->
             empty errors
@@ -89,7 +91,7 @@ let ``File type: Must upload file as input scalar using inline string as a file 
 
 [<Fact>]
 let ``File type: Must upload a file as input scalar using a variable`` () =
-    let expected = NameValueLookup.ofList [ "uploadFile", MockInputContext.mockFileText ]
+    let expected = NameValueLookup.ofList [ "uploadFile", MockInputContext.mockFileTextAndContentType ]
     let jsonVariable = "\"fileKey\"" |> JsonDocument.Parse |> _.RootElement
     let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("file", jsonVariable)
     let result = executeWithVariables (mutationWithVariable, variables)
@@ -100,7 +102,7 @@ let ``File type: Must upload a file as input scalar using a variable`` () =
 
 [<Fact>]
 let ``File type: Must upload a file as input object field using inline string a file name`` () =
-    let expected = NameValueLookup.ofList [ "uploadFileComplex", MockInputContext.mockFileText ]
+    let expected = NameValueLookup.ofList [ "uploadFileComplex", MockInputContext.mockFileTextAndContentType ]
     let result = execute mutationComplexObject
     ensureDirect result <| fun data errors ->
             empty errors
@@ -109,7 +111,7 @@ let ``File type: Must upload a file as input object field using inline string a 
 
 [<Fact>]
 let ``File type: Must upload two files as input object field using inline string a file name`` () =
-    let expectedContent = MockInputContext.mockFileText + MockInputContext.mockFileText2
+    let expectedContent = MockInputContext.mockFileTextAndContentType + MockInputContext.mockFileText2AndContentType
     let expected = NameValueLookup.ofList [
         "uploadFileComplex", expectedContent
     ]
