@@ -24,7 +24,7 @@ type Input = {
 }
 
 let private getFullInfo fileData =
-    let reader = new StreamReader(fileData.Stream, Encoding.UTF8, true)
+    use reader = new StreamReader(fileData.Stream, Encoding.UTF8, true)
     let fileContent = reader.ReadToEnd()
     fileContent + fileData.ContentType
 

@@ -185,7 +185,7 @@ type ExecutorExtensions =
 
 module MockInputContext =
 
-    let mockContentType = "text/plain"
+    let mockContentType = System.Net.Mime.MediaTypeNames.Text.Plain
     let mockFileKey = "fileKey"
     let mockFileKey2 = "fileKey2"
     let mockFileText = "fileText"
@@ -211,9 +211,9 @@ module MockInputContext =
         interface IInputExecutionContext with
             member context.GetFile key =
                 if (key = context.FileKey) then
-                    Ok { Stream = context.Stream; ContentType = "text/plain" }
+                    Ok { Stream = context.Stream; ContentType = mockContentType }
                 else if (key = context.FileKey2) then
-                    Ok { Stream = context.Stream2; ContentType = "text/plain" }
+                    Ok { Stream = context.Stream2; ContentType = mockContentType }
                 else
                     failwith $"only file {context.FileKey} and file {context.FileKey2} exist"
 
