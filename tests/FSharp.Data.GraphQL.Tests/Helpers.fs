@@ -185,10 +185,14 @@ type ExecutorExtensions =
 
 module MockInputContext =
 
+    let mockContentType = "text/plain"
     let mockFileKey = "fileKey"
     let mockFileKey2 = "fileKey2"
     let mockFileText = "fileText"
     let mockFileText2 = "fileText2"
+
+    let mockFileTextAndContentType = mockFileText + mockContentType
+    let mockFileText2AndContentType = mockFileText2 + mockContentType
 
     type MockInputExecutionContext () =
 
@@ -207,9 +211,9 @@ module MockInputContext =
         interface IInputExecutionContext with
             member context.GetFile key =
                 if (key = context.FileKey) then
-                    Ok context.Stream
+                    Ok { Stream = context.Stream; ContentType = "text/plain" }
                 else if (key = context.FileKey2) then
-                    Ok context.Stream2
+                    Ok { Stream = context.Stream2; ContentType = "text/plain" }
                 else
                     failwith $"only file {context.FileKey} and file {context.FileKey2} exist"
 

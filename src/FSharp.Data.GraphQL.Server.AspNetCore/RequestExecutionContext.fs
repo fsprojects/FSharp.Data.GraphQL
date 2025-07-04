@@ -13,6 +13,8 @@ type HttpContextRequestExecutionContext (httpContext : HttpContext) =
             else
                 let form = httpContext.Request.Form
                 match (form.Files |> Seq.vtryFind (fun f -> f.Name = key)) with
-                | ValueSome file -> Ok (file.OpenReadStream())
+                | ValueSome file ->
+                    let fileData = { Stream = file.OpenReadStream(); ContentType = file.ContentType }
+                    Ok (fileData)
                 | ValueNone -> Error $"File with key '{key}' not found"
 
