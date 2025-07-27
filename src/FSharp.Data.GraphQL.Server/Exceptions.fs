@@ -16,7 +16,7 @@ type GraphQLException =
     new (msg) = { inherit Exception (msg) }
 
 [<AbstractClass>]
-type GQLMessageExceptionBase (errorKind, msg, [<Optional>] extensions) =
+type GQLMessageExceptionBase (errorKind, msg, [<Optional>] extensions : _ | null) =
     inherit GraphQLException (msg)
     interface IGQLError with
         member _.Message = msg
