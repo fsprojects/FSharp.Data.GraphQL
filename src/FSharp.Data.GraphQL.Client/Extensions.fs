@@ -23,7 +23,7 @@ module internal Extensions =
         member this.MD5Hash() =
             Encoding.UTF8.GetBytes(this)
             |> MD5.Create().ComputeHash
-            |> Array.map (fun x -> x.ToString("x2"))
+            |> Array.map _.ToString("x2")
             |> Array.reduce (+)
 
 /// Basic operations on lists.

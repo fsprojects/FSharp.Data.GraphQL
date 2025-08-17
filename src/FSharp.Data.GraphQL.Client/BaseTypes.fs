@@ -104,7 +104,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
 
     let properties =
         if not (isNull properties)
-        then properties |> Seq.sortBy (fun x -> x.Name) |> List.ofSeq
+        then properties |> Seq.sortBy _.Name |> List.ofSeq
         else []
 
     /// Gets the name of this provided record type.

@@ -26,8 +26,8 @@ type GraphQLTypeProvider (config) as this =
         if args.Name.Contains("FSharp.Data.GraphQL") then
             printfn "ResolveAssembly: %s" args.Name
             config.ReferencedAssemblies
-            |> Array.filter(fun x -> x.Contains("FSharp.Data"))
-            |> Array.iter (fun x ->  printfn "%s" x)
+            |> Array.filter _.Contains("FSharp.Data")
+            |> Array.iter (fun x -> printfn "%s" x)
         base.ResolveAssembly args
 
 [<assembly:TypeProviderAssembly>]

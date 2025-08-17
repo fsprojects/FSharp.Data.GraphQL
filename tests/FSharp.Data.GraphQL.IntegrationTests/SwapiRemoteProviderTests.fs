@@ -174,7 +174,7 @@ module FileOperation =
              Operation.Types.HeroFields.FriendsFields.EdgesFields.NodeFields.Human(name = "Leia Organa", homePlanet = "Alderaan")
              Operation.Types.HeroFields.FriendsFields.EdgesFields.NodeFields.Droid(name = "C-3PO", primaryFunction = "Protocol")
              Operation.Types.HeroFields.FriendsFields.EdgesFields.NodeFields.Droid(name = "R2-D2", primaryFunction = "Astromech") |]
-        let friends = result.Data.Value.Hero.Value.Friends.Edges |> Array.map (fun x -> x.Node)
+        let friends = result.Data.Value.Hero.Value.Friends.Edges |> Array.map _.Node
         friends |> equals expectedFriends
         result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
         let actual = normalize <| sprintf "%A" result.Data

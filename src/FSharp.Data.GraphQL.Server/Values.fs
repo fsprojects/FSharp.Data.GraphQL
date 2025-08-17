@@ -105,7 +105,7 @@ let rec internal compileByType
     | InputCustom customDef -> fun inputContext value variables -> customDef.CoerceInput inputContext (InlineConstant value) variables
     | InputObject objDef ->
         let objType = objDef.Type
-        let ctor = ReflectionHelper.matchConstructor objType (objDef.Fields |> Array.map (fun x -> x.Name))
+        let ctor = ReflectionHelper.matchConstructor objType (objDef.Fields |> Array.map _.Name)
 
         let parametersMap =
             let typeMismatchParameters = HashSet ()
