@@ -170,7 +170,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                       Metadata = meta
                       Operation = operation
                       DocumentId = documentId }
-                return runMiddlewares (fun x -> x.PlanOperation) planningCtx planOperation
+                return runMiddlewares _.PlanOperation planningCtx planOperation
             | None -> return! Error <| [ GQLProblemDetails.CreateWithKind (
                 "No operation with specified name has been found for provided document",
                 ErrorKind.Validation

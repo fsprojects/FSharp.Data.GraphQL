@@ -336,7 +336,7 @@ and private live (inputContext : InputExecutionContextProvider) (ctx : ResolveFi
         |> Observable.mergeInner
 
     let provider = ctx.Schema.LiveFieldSubscriptionProvider
-    let filter = provider.TryFind typeName name |> Option.map (fun x -> x.Filter)
+    let filter = provider.TryFind typeName name |> Option.map _.Filter
     let updates =
         match filter with
         | Some filterFn -> provider.Add (filterFn parent) typeName name |> Observable.bind resolveUpdate

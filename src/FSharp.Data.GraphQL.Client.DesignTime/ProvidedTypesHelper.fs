@@ -184,7 +184,7 @@ module internal ProvidedRecord =
                     |> List.partition (fun (_, t) -> isOption t)
                 if explicitOptionalParameters then
                     let constructorProperties = requiredProperties @ optionalProperties
-                    let propertyNames = constructorProperties |> List.map (fst >> (fun x -> x.FirstCharUpper()))
+                    let propertyNames = constructorProperties |> List.map (fst >> _.FirstCharUpper())
                     let constructorPropertyTypes = constructorProperties |> List.map snd
                     let invoker (args : Expr list) =
                         let properties =
@@ -208,7 +208,7 @@ module internal ProvidedRecord =
                     List.combinations optionalProperties
                     |> List.map (fun (optionalProperties, nullValuedProperties) ->
                         let constructorProperties = requiredProperties @ optionalProperties
-                        let propertyNames = (constructorProperties @ nullValuedProperties) |> List.map (fst >> (fun x -> x.FirstCharUpper()))
+                        let propertyNames = (constructorProperties @ nullValuedProperties) |> List.map (fst >> _.FirstCharUpper())
                         let constructorPropertyTypes = constructorProperties |> List.map snd
                         let nullValuedPropertyTypes = nullValuedProperties |> List.map snd
                         let invoker (args : Expr list) =
@@ -554,7 +554,7 @@ module internal Provider =
                             | TypeField _ -> Some x
                             | FragmentField f when f.TypeCondition = tref.Name.Value -> Some x
                             | _ -> None)
-                        |> List.distinctBy (fun x -> x.AliasOrName)
+                        |> List.distinctBy _.AliasOrName
                         |> List.map (getPropertyMetadata tref.Name.Value)
                     let baseType =
                         let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }

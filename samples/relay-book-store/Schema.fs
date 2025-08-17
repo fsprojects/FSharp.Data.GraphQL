@@ -159,14 +159,14 @@ let booksField =
             let startCursor = async {
                 let! edges = edges
 
-                return edges |> Seq.tryHead |> Option.map (fun x -> x.Cursor)
+                return edges |> Seq.tryHead |> Option.map _.Cursor
             }
 
             // The cursor of the last edge
             let endCursor = async {
                 let! edges = edges
 
-                return edges |> Seq.tryLast |> Option.map (fun x -> x.Cursor)
+                return edges |> Seq.tryLast |> Option.map _.Cursor
             }
 
             {

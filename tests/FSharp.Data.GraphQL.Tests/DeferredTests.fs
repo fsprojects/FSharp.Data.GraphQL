@@ -247,7 +247,7 @@ let sub =
     { FieldName = "live"
       TypeName = "Data"
       Filter = (fun (x : TestSubject) (y : TestSubject) -> x.id = y.id)
-      Project = (fun x -> x.live) }
+      Project = _.live }
 
 schemaConfig.LiveFieldSubscriptionProvider.Register sub
 
