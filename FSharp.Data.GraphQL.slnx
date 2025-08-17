@@ -1,0 +1,130 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/docs/" />
+  <Folder Name="/docs/content/">
+    <File Path="docs/content/execution-pipeline.md" />
+    <File Path="docs/content/index.md" />
+    <File Path="docs/content/linq.md" />
+    <File Path="docs/content/type-system.md" />
+  </Folder>
+  <Folder Name="/docs/files/">
+    <File Path="docs/files/introspection_query.graphql" />
+  </Folder>
+  <Folder Name="/docs/files/img/">
+    <File Path="docs/files/img/logo-template.pdn" />
+    <File Path="docs/files/img/logo.png" />
+  </Folder>
+  <Folder Name="/docs/tools/">
+    <File Path="docs/tools/generate.fsx" />
+    <File Path="docs/tools/templates/template.cshtml" />
+  </Folder>
+  <Folder Name="/GitHub/">
+    <File Path=".github/workflows/publish_ci.yml" />
+    <File Path=".github/workflows/publish_release.yml" />
+    <File Path=".github/workflows/pull_request.yml" />
+  </Folder>
+  <Folder Name="/project/">
+    <File Path="README.md" />
+    <File Path="RELEASE_NOTES.md" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/chat-app/server/chat-app.fsproj" />
+    <Project Path="samples/relay-book-store/relay-book-store.fsproj" />
+    <Project Path="samples/star-wars-api/star-wars-api.fsproj" />
+  </Folder>
+  <Folder Name="/samples/client-provider/">
+    <File Path="samples/client-provider/field_aliases.fsx" />
+    <File Path="samples/client-provider/github_access.fsx" />
+    <File Path="samples/client-provider/github_authorization_headers.headerfile" />
+    <File Path="samples/client-provider/github_schema.json" />
+    <File Path="samples/client-provider/graphql_client.fsx" />
+    <File Path="samples/client-provider/http_headers1.headerfile" />
+    <File Path="samples/client-provider/http_headers2.headerfile" />
+    <File Path="samples/client-provider/http_headers_introspection.fsx" />
+    <File Path="samples/client-provider/mutations.fsx" />
+    <File Path="samples/client-provider/operation.graphql" />
+    <File Path="samples/client-provider/parameters.fsx" />
+    <File Path="samples/client-provider/short_hand_query.fsx" />
+    <File Path="samples/client-provider/standard_features.fsx" />
+    <File Path="samples/client-provider/swapi_schema.json" />
+    <File Path="samples/client-provider/using_query_file.fsx" />
+  </Folder>
+  <Folder Name="/samples/client-provider/file-upload/">
+    <File Path="samples/client-provider/file-upload/multiple_files_upload.fsx" />
+    <File Path="samples/client-provider/file-upload/png_file.png" />
+    <File Path="samples/client-provider/file-upload/README.md" />
+    <File Path="samples/client-provider/file-upload/single_file_upload.fsx" />
+    <File Path="samples/client-provider/file-upload/txt_file.txt" />
+    <File Path="samples/client-provider/file-upload/uploaded_files.fsx" />
+  </Folder>
+  <Folder Name="/samples/client-provider/file-upload/server/">
+    <File Path="samples/client-provider/file-upload/server/.env" />
+    <File Path="samples/client-provider/file-upload/server/.gitignore" />
+    <File Path="samples/client-provider/file-upload/server/package-lock.json" />
+    <File Path="samples/client-provider/file-upload/server/package.json" />
+    <File Path="samples/client-provider/file-upload/server/resolvers.mjs" />
+    <File Path="samples/client-provider/file-upload/server/server.mjs" />
+    <File Path="samples/client-provider/file-upload/server/types.mjs" />
+  </Folder>
+  <Folder Name="/samples/graphiql-client/">
+    <File Path="samples/graphiql-client/.babelrc" />
+    <File Path="samples/graphiql-client/index.html" />
+    <File Path="samples/graphiql-client/index.jsx" />
+    <File Path="samples/graphiql-client/package-lock.json" />
+    <File Path="samples/graphiql-client/package.json" />
+    <File Path="samples/graphiql-client/webpack.config.js" />
+  </Folder>
+  <Folder Name="/samples/relay-modern-starter-kit/">
+    <File Path="samples/relay-modern-starter-kit/.babelrc" />
+    <File Path="samples/relay-modern-starter-kit/index.html" />
+    <File Path="samples/relay-modern-starter-kit/package.json" />
+    <File Path="samples/relay-modern-starter-kit/server.fsx" />
+    <File Path="samples/relay-modern-starter-kit/webpack.config.js" />
+    <File Path="samples/relay-modern-starter-kit/yarn.lock" />
+  </Folder>
+  <Folder Name="/samples/relay-modern-starter-kit/data/">
+    <File Path="samples/relay-modern-starter-kit/data/schema.json" />
+  </Folder>
+  <Folder Name="/samples/relay-modern-starter-kit/scripts/">
+    <File Path="samples/relay-modern-starter-kit/scripts/jsonToGraphql.js" />
+  </Folder>
+  <Folder Name="/samples/relay-modern-starter-kit/src/">
+    <File Path="samples/relay-modern-starter-kit/src/app.jsx" />
+    <File Path="samples/relay-modern-starter-kit/src/relayEnvironment.js" />
+  </Folder>
+  <Folder Name="/samples/relay-modern-starter-kit/src/components/">
+    <File Path="samples/relay-modern-starter-kit/src/components/user.jsx" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Build.targets" />
+    <File Path="global.json" />
+    <File Path="LICENSE.txt" />
+    <File Path="Packages.props" />
+    <File Path="Prepare template project for packing.ps1" />
+    <File Path="README.md" />
+    <File Path="RELEASE_NOTES.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/FSharp.Data.GraphQL.Client.DesignTime/FSharp.Data.GraphQL.Client.DesignTime.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj">
+      <BuildDependency Project="src/FSharp.Data.GraphQL.Client.DesignTime/FSharp.Data.GraphQL.Client.DesignTime.fsproj" />
+    </Project>
+    <Project Path="src/FSharp.Data.GraphQL.Server.AspNetCore/FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Server.Giraffe/FSharp.Data.GraphQL.Server.Giraffe.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Server.Middleware/FSharp.Data.GraphQL.Server.Middleware.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Server.Oxpecker/FSharp.Data.GraphQL.Server.Oxpecker.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Server.Relay/FSharp.Data.GraphQL.Server.Relay.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FSharp.Data.GraphQL.Benchmarks/FSharp.Data.GraphQL.Benchmarks.fsproj" />
+    <Project Path="tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" />
+  </Folder>
+</Solution>
