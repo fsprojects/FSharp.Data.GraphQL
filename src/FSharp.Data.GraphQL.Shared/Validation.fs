@@ -90,13 +90,13 @@ module Ast =
     type MetaTypeFieldInfo = { Name : string; ArgumentNames : string[] }
 
     let private metaTypeFields =
-        [|
+        seq {
             { Name = "__type"; ArgumentNames = [| "name" |] }
             { Name = "__schema"; ArgumentNames = [||] }
             { Name = "__typename"; ArgumentNames = [||] }
-        |]
-        |> Array.map (fun x -> x.Name, x)
-        |> Map.ofArray
+        }
+        |> Seq.map (fun x -> x.Name, x)
+        |> Map.ofSeq
 
     let rec private tryGetSchemaTypeByRef (schemaTypes : Map<string, IntrospectionType>) (tref : IntrospectionTypeRef) =
         match tref.Kind with
@@ -436,8 +436,8 @@ module Ast =
                 AstError.AsResult $"Operation '%s{name}' has %i{count} definitions. Each operation name must be unique.")
 
     let internal validateLoneAnonymousOperation (ctx : ValidationContext) =
-        let operations = ctx.OperationDefinitions |> List.map (fun x -> x.Definition)
-        let unamed = operations |> List.filter (fun x -> x.Name.IsNone)
+        let operations = ctx.OperationDefinitions |> List.map _.Definition
+        let unamed = operations |> List.filter _.Name.IsNone
         if unamed.Length = 0 then
             Success
         elif unamed.Length = 1 && operations.Length = 1 then
@@ -529,7 +529,7 @@ module Ast =
             )
 
     let rec private fieldsInSetCanMerge (set : SelectionInfo list) =
-        let fieldsForName = set |> List.groupBy (fun x -> x.AliasOrName)
+        let fieldsForName = set |> List.groupBy _.AliasOrName
         fieldsForName
         |> ValidationResult.collect (fun (aliasOrName, selectionSet) ->
             if selectionSet.Length < 2 then
@@ -596,8 +596,9 @@ module Ast =
             |> ValidationResult.collect (fun arg ->
                 let schemaArgumentNames =
                     metaTypeFields.TryFind (selection.Field.Name)
-                    |> Option.map (fun x -> x.ArgumentNames)
-                    |> Option.defaultValue (selection.InputValues |> Array.map (fun x -> x.Name))
+                    |> ValueOption.ofOption
+                    |> ValueOption.map _.ArgumentNames
+                    |> ValueOption.defaultWith (fun () -> selection.InputValues |> Array.map _.Name)
                 match schemaArgumentNames |> Array.tryFind (fun x -> x = arg.Name) with
                 | Some _ -> Success
                 | None ->
@@ -633,7 +634,7 @@ module Ast =
     let rec private validateArgumentUniquenessInSelection (selection : SelectionInfo) =
         let validateArgs (fieldOrDirective : string) (path : FieldPath) (args : Argument list) =
             args
-            |> List.countBy (fun x -> x.Name)
+            |> List.countBy _.Name
             |> ValidationResult.collect (fun (name, length) ->
                 if length > 1 then
                     AstError.AsResult (
@@ -1019,7 +1020,7 @@ module Ast =
         match selection with
         | Field field ->
             let path = box field.AliasOrName :: path
-            let fieldDirectives = [ path, field.Directives |> List.map (fun x -> x.Name) |> Set.ofList ]
+            let fieldDirectives = [ path, field.Directives |> Seq.map _.Name |> Set.ofSeq ]
             let selectionSetDirectives =
                 field.SelectionSet
                 |> List.collect (getDistinctDirectiveNamesInSelection path)
@@ -1028,12 +1029,12 @@ module Ast =
         | FragmentSpread spread -> [
             path,
             spread.Directives
-            |> List.map (fun x -> x.Name)
-            |> Set.ofList
+            |> Seq.map _.Name
+            |> Set.ofSeq
           ]
 
     and private getDistinctDirectiveNamesInDefinition (path : FieldPath) (frag : Definition) : (FieldPath * Set<string>) list =
-        let fragDirectives = [ path, frag.Directives |> List.map (fun x -> x.Name) |> Set.ofList ]
+        let fragDirectives = [ path, frag.Directives |> Seq.map _.Name |> Set.ofSeq ]
         let selectionSetDirectives =
             frag.SelectionSet
             |> List.collect (getDistinctDirectiveNamesInSelection path)
@@ -1172,7 +1173,7 @@ module Ast =
         directivesValid @@ directivesValidInSelectionSet
 
     let internal validateDirectivesAreInValidLocations (ctx : ValidationContext) =
-        let fragmentDefinitions = ctx.FragmentDefinitions |> List.map (fun x -> x.Definition)
+        let fragmentDefinitions = ctx.FragmentDefinitions |> List.map _.Definition
         ctx.Document.Definitions
         |> ValidationResult.collect (fun def ->
             let path = def.Name |> ValueOption.map box |> ValueOption.toList
@@ -1194,16 +1195,16 @@ module Ast =
         match selection with
         | Field field ->
             let path = box field.AliasOrName :: path
-            let fieldDirectives = [ path, field.Directives |> List.map (fun x -> x.Name) ]
+            let fieldDirectives = [ path, field.Directives |> List.map _.Name ]
             let selectionSetDirectives =
                 field.SelectionSet
                 |> List.collect (getDirectiveNamesInSelection path)
             fieldDirectives |> List.append selectionSetDirectives
         | InlineFragment frag -> getDirectiveNamesInDefinition path (FragmentDefinition frag)
-        | FragmentSpread spread -> [ path, spread.Directives |> List.map (fun x -> x.Name) ]
+        | FragmentSpread spread -> [ path, spread.Directives |> List.map _.Name ]
 
     and private getDirectiveNamesInDefinition (path : FieldPath) (frag : Definition) : (FieldPath * string list) list =
-        let fragDirectives = [ path, frag.Directives |> List.map (fun x -> x.Name) ]
+        let fragDirectives = [ path, frag.Directives |> List.map _.Name ]
         let selectionSetDirectives =
             frag.SelectionSet
             |> List.collect (getDirectiveNamesInSelection path)
@@ -1216,14 +1217,14 @@ module Ast =
                 match def.Name with
                 | ValueSome name -> [ box name ]
                 | ValueNone -> []
-            let defDirectives = path, def.Directives |> List.map (fun x -> x.Name)
+            let defDirectives = path, def.Directives |> List.map _.Name
             let selectionSetDirectives =
                 def.Definition.SelectionSet
                 |> List.collect (getDirectiveNamesInSelection path)
             defDirectives :: selectionSetDirectives)
         |> ValidationResult.collect (fun (path, directives) ->
             directives
-            |> List.countBy id
+            |> Seq.countBy id
             |> ValidationResult.collect (fun (name, count) ->
                 if count <= 1 then
                     Success
@@ -1324,8 +1325,8 @@ module Ast =
                 let path = def.Name |> ValueOption.map box |> ValueOption.toList
                 let varNames =
                     def.VariableDefinitions
-                    |> List.map (fun x -> x.VariableName)
-                    |> Set.ofList
+                    |> Seq.map _.VariableName
+                    |> Set.ofSeq
                 def.SelectionSet
                 |> ValidationResult.collect (checkVariablesDefinedInSelection fragmentDefinitions varNames path)
             | _ -> Success)
@@ -1338,7 +1339,7 @@ module Ast =
                 | ObjectValue obj -> go (Map.toList obj |> List.map snd)
                 | ListValue xs -> go xs
                 | _ -> false)
-        go (args |> List.map (fun x -> x.Value))
+        go (args |> List.map _.Value)
 
     let rec private variableIsUsedInFragmentSpread
         (name : string)

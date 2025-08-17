@@ -545,7 +545,7 @@ module internal Provider =
                         |> List.choose (function FragmentField f when f.TypeCondition <> tref.Name.Value -> Some f | _ -> None)
                         |> List.groupBy (fun field -> field.TypeCondition)
                         |> List.map (fun (typeCondition, fields) ->
-                            let conditionFields = fields |> List.distinctBy (fun x -> x.AliasOrName) |> List.map FragmentField
+                            let conditionFields = fields |> Seq.distinctBy _.AliasOrName |> Seq.map FragmentField |> Seq.toList
                             typeCondition, List.map (getPropertyMetadata typeCondition) conditionFields)
                     let baseProperties =
                         astFields
