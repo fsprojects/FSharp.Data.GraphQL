@@ -1,4 +1,4 @@
-﻿module internal FSharp.Data.GraphQL.Client.MimeTypes
+module internal FSharp.Data.GraphQL.Client.MimeTypes
 
 open System.Collections.Generic
 open System.Collections.ObjectModel
@@ -440,6 +440,8 @@ let private dictBuilder() : IReadOnlyDictionary<string, string> =
             ".sldx", "application/vnd.openxmlformats-officedocument.presentationml.slide"
             ".slk", "application/vnd.ms-excel"
             ".sln", "text/plain"
+            ".slnf", "application/json"
+            ".slnx", "application/xml"
             ".slupkg-ms", "application/x-ms-license"
             ".smi", "application/octet-stream"
             ".smx", "audio/x-smd"

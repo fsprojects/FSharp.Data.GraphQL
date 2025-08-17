@@ -1,0 +1,47 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/docs/" />
+  <Folder Name="/docs/content/">
+    <File Path="docs/content/execution-pipeline.md" />
+    <File Path="docs/content/index.md" />
+    <File Path="docs/content/linq.md" />
+    <File Path="docs/content/type-system.md" />
+  </Folder>
+  <Folder Name="/docs/files/">
+    <File Path="docs/files/introspection_query.graphql" />
+  </Folder>
+  <Folder Name="/docs/files/img/">
+    <File Path="docs/files/img/logo-template.pdn" />
+    <File Path="docs/files/img/logo.png" />
+  </Folder>
+  <Folder Name="/docs/tools/">
+    <File Path="docs/tools/generate.fsx" />
+    <File Path="docs/tools/templates/template.cshtml" />
+  </Folder>
+  <Folder Name="/GitHub/">
+    <File Path=".github/workflows/publish_ci.yml" />
+    <File Path=".github/workflows/publish_release.yml" />
+    <File Path=".github/workflows/pull_request.yml" />
+  </Folder>
+  <Folder Name="/project/">
+    <File Path="build.cmd" />
+    <File Path="build.sh" />
+    <File Path="README.md" />
+    <File Path="RELEASE_NOTES.md" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.targets" />
+    <File Path="global.json" />
+    <File Path="LICENSE.txt" />
+    <File Path="Packages.props" />
+    <File Path="Prepare template project for packing.ps1" />
+    <File Path="README.md" />
+    <File Path="RELEASE_NOTES.md" />
+  </Folder>
+  <Project Path="build/Build.fsproj" />
+</Solution>

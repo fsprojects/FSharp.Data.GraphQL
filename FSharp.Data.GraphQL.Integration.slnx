@@ -1,0 +1,23 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Build.targets" />
+    <File Path="Packages.props" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/FSharp.Data.GraphQL.Server.AspNetCore/FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Server.Giraffe/FSharp.Data.GraphQL.Server.Giraffe.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Server.Oxpecker/FSharp.Data.GraphQL.Server.Oxpecker.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FSharp.Data.GraphQL.IntegrationTests.Server/FSharp.Data.GraphQL.IntegrationTests.Server.fsproj" />
+    <Project Path="tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj" />
+  </Folder>
+</Solution>

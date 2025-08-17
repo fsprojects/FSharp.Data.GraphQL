@@ -74,7 +74,7 @@ Target.create RestoreTarget <| fun _ ->
 
 let [<Literal>] BuildTarget = "Build"
 Target.create BuildTarget <| fun _ ->
-    "FSharp.Data.GraphQL.sln"
+    "FSharp.Data.GraphQL.slnx"
     |> DotNet.build (fun options -> {
         options with
             Configuration = configuration

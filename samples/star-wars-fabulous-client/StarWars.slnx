@@ -1,0 +1,36 @@
+<Solution>
+  <Configurations>
+    <BuildType Name="Ad-Hoc" />
+    <BuildType Name="AppStore" />
+    <BuildType Name="Debug" />
+    <BuildType Name="Release" />
+    <Platform Name="Any CPU" />
+    <Platform Name="ARM" />
+    <Platform Name="iPhone" />
+    <Platform Name="iPhoneSimulator" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="StarWars.Android/StarWars.Android.fsproj">
+    <BuildType Solution="Ad-Hoc|*" Project="Release" />
+    <BuildType Solution="AppStore|*" Project="Release" />
+    <Deploy Solution="Debug|Any CPU" />
+    <Deploy Solution="Release|Any CPU" />
+  </Project>
+  <Project Path="StarWars.iOS/StarWars.iOS.fsproj">
+    <Platform Solution="*|Any CPU" Project="iPhone" />
+    <Platform Solution="*|ARM" Project="iPhone" />
+    <Platform Solution="*|iPhone" Project="iPhone" />
+    <Platform Solution="*|iPhoneSimulator" Project="iPhoneSimulator" />
+    <Platform Solution="*|x64" Project="iPhone" />
+    <Platform Solution="*|x86" Project="iPhone" />
+    <Build Solution="*|Any CPU" Project="false" />
+    <Build Solution="*|ARM" Project="false" />
+    <Build Solution="*|x64" Project="false" />
+    <Build Solution="*|x86" Project="false" />
+  </Project>
+  <Project Path="StarWars/StarWars.fsproj">
+    <BuildType Solution="Ad-Hoc|*" Project="Debug" />
+    <BuildType Solution="AppStore|*" Project="Debug" />
+  </Project>
+</Solution>
