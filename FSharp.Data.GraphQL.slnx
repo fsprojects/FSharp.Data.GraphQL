@@ -23,9 +23,10 @@
     <File Path="docs/tools/templates/template.cshtml" />
   </Folder>
   <Folder Name="/GitHub/">
-    <File Path=".github/workflows/publish_ci.yml" />
-    <File Path=".github/workflows/publish_release.yml" />
-    <File Path=".github/workflows/pull_request.yml" />
+    <File Path=".github/workflows/copilot-setup-steps.yml" />
+    <File Path=".github/workflows/publish-ci.yml" />
+    <File Path=".github/workflows/publish-release.yml" />
+    <File Path=".github/workflows/pull-request.yml" />
   </Folder>
   <Folder Name="/project/">
     <File Path="README.md" />
