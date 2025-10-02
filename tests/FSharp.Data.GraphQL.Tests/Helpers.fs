@@ -211,9 +211,9 @@ module MockInputContext =
         interface IInputExecutionContext with
             member context.GetFile key =
                 if (key = context.FileKey) then
-                    Ok { Stream = context.Stream; ContentType = mockContentType }
+                    Ok { FileName = key; Stream = context.Stream; ContentType = mockContentType }
                 else if (key = context.FileKey2) then
-                    Ok { Stream = context.Stream2; ContentType = mockContentType }
+                    Ok { FileName = key; Stream = context.Stream2; ContentType = mockContentType }
                 else
                     failwith $"only file {context.FileKey} and file {context.FileKey2} exist"
 

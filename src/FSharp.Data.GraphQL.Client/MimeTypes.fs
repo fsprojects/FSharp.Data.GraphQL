@@ -5,8 +5,8 @@ open System.Collections.ObjectModel
 open System
 
 let private dictBuilder() : IReadOnlyDictionary<string, string> =
-    let types =
-         [| ".323", "text/h323"
+    let types = [|
+            ".323", "text/h323"
             ".3g2", "video/3gpp2"
             ".3gp", "video/3gpp"
             ".3gp2", "video/3gpp2"

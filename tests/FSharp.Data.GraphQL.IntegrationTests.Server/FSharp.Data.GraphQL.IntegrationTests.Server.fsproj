@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>$(DotNetVersion)</TargetFramework>
+    <UserSecretsId>2cdd2058-1c78-4088-b2a9-3848706cf422</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,7 +15,6 @@
 
   <ItemGroup>
     <None Include="ApplicationInsights.config" />
-    <Compile Include="CustomSchemaTypes.fs" />
     <Compile Include="Schema.fs" />
     <None Include="..\..\samples\star-wars-api\MultipartRequest.fs" Link="MultipartRequest.fs" />
     <Compile Include="Startup.fs" />

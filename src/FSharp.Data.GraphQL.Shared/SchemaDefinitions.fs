@@ -482,9 +482,9 @@ module SchemaDefinitions =
           CoerceInput = coerceGuidInput
           CoerceOutput = coerceGuidValue }
 
-    /// Defines an object list filter for use as an argument for filter list of object fields.
+    /// Defines a file that is uploaded with a request
     let FileType : InputCustomDefinition<FileData> = {
-        Name = "FileType"
+        Name = "File"
         Description =
             Some
                 "The `File` type represents a file on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query."
@@ -502,7 +502,12 @@ module SchemaDefinitions =
                     match c with
                     | StringValue strValue -> getFileData strValue
                     | VariableName varName ->
-                        Ok (variables[varName] :?> FileData)
+                        let fileData : FileData | null =
+                            match variables.TryGetValue varName with
+                            | true, null -> null
+                            | true, value -> value :?> FileData
+                            | false, _ -> null
+                        Ok fileData
                     | _ -> IGQLError.createResultErrorList "Only a string value or a variable with a string value can be used as a file name."
                 | Variable json ->
                     match (json |> InputValue.OfJsonElement) with

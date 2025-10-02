@@ -33,6 +33,7 @@
 
   <ItemGroup>
     <PackageReference Include="FSharp.Control.Reactive" />
+    <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="System.Reactive" />
   </ItemGroup>
 

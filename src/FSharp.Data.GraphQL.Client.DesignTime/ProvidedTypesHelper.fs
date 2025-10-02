@@ -137,8 +137,8 @@ type internal ProvidedRecordTypeDefinition(className, baseType) =
 
 [<AutoOpen>]
 module internal Failures =
-    let uploadTypeIsNotScalar uploadTypeName =
-        failwith $"""Upload type "%s{uploadTypeName}" was found on the schema, but it is not a Scalar type. Upload types can only be used if they are defined as scalar types."""
+    let uploadTypeIsNotScalarOrInputObject uploadTypeName =
+        failwith $"""Upload type "%s{uploadTypeName}" was found on the schema, but it is not a Scalar or InputObject type. Upload types can only be used if they are defined as scalar or input Object types."""
 
 module internal ProvidedRecord =
     let ctor = typeof<RecordBase>.GetConstructors().[0]
@@ -307,21 +307,21 @@ module internal ProvidedOperation =
                     | NamedType typeName ->
                         match uploadInputTypeName with
                         | Some uploadInputTypeName when typeName = uploadInputTypeName ->
-                            variableName, TypeMapping.makeOption typeof<Upload>
+                            struct (variableName, typeName, TypeMapping.makeOption typeof<Upload>)
                         | _ ->
                             match TypeMapping.scalar.TryFind(typeName) with
-                            | Some t -> variableName, TypeMapping.makeOption t
-                            | None when isScalar typeName -> variableName, typeof<string option>
+                            | Some t -> struct (variableName,typeName, TypeMapping.makeOption t)
+                            | None when isScalar typeName -> struct (variableName, typeName, typeof<string option>)
                             | None ->
                                 match schemaProvidedTypes.TryFind(typeName) with
-                                | Some t -> variableName, TypeMapping.makeOption t
+                                | Some t -> struct (variableName, typeName, TypeMapping.makeOption t)
                                 | None -> failwith $"""Unable to find variable type "%s{typeName}" in the schema definition."""
                     | ListType itype ->
-                        let name, t = mapVariable variableName itype
-                        name, t |> TypeMapping.makeArray |> TypeMapping.makeOption
+                        let struct (varName, typeName, t) = mapVariable variableName itype
+                        struct (varName, typeName, t |> TypeMapping.makeArray |> TypeMapping.makeOption)
                     | NonNullType itype ->
-                        let name, t = mapVariable variableName itype
-                        name, TypeMapping.unwrapOption t
+                        let struct (varName, typeName, t) = mapVariable variableName itype
+                        struct (varName, typeName, TypeMapping.unwrapOption t)
                 operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
             let buildVariablesExprFromArgs (varNames : string list) (args : Expr list) =
                 let mapVariableExpr (name : string) (value : Expr) =
@@ -355,34 +355,43 @@ module internal ProvidedOperation =
             let methodOverloadDefinitions =
                 let overloadsWithoutContext =
                     let optionalVariables, requiredVariables =
-                        variables |> List.partition (fun (_, t) -> isOption t)
+                        variables |> List.partition (fun struct (_, _, t) -> isOption t)
                     if explicitOptionalParameters then
                         [requiredVariables @ optionalVariables]
                     else
                         List.combinations optionalVariables
                         |> List.map (fun (optionalVariables, _) ->
-                            let optionalVariables = optionalVariables |> List.map (fun (name, t) -> name, (TypeMapping.unwrapOption t))
+                            let optionalVariables = optionalVariables |> List.map (fun struct (varName, typeName, t) -> struct (varName, typeName, (TypeMapping.unwrapOption t)))
                             requiredVariables @ optionalVariables)
                 let overloadsWithContext =
                     overloadsWithoutContext
-                    |> List.map (fun var -> ("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: var)
+                    |> List.map (fun var -> struct ("runtimeContext", "GraphQLProviderRuntimeContext", typeof<GraphQLProviderRuntimeContext>) :: var)
                 match contextInfo with
                 | Some _ -> overloadsWithoutContext @ overloadsWithContext
                 | None -> overloadsWithContext
             // Multipart requests should only be used when the user specifies a upload type name AND the type
             // is present in the query as an input value. If not, we fallback to classic requests.
             let shouldUseMultipartRequest =
-                let rec existsUploadType (foundTypes : ProvidedTypeDefinition list) (t : Type) =
+                let rec existsUploadType (t : Type) =
                     match t with
-                    | :? ProvidedTypeDefinition as tdef when not (List.contains tdef foundTypes) -> tdef.DeclaredProperties |> Seq.exists ((fun p -> p.PropertyType) >> existsUploadType (tdef :: foundTypes))
-                    | Option t -> existsUploadType foundTypes t
-                    | Array t -> existsUploadType foundTypes t
+                    | Option t -> existsUploadType t
+                    | Array t -> existsUploadType t
                     | _ -> t = typeof<Upload>
-                variables |> Seq.exists (snd >> existsUploadType [])
+                let rec existsUploadTypeDefinition (tdef : ProvidedTypeDefinition) =
+                    tdef.DeclaredProperties |> Seq.exists ((fun p -> p.PropertyType) >> existsUploadType)
+                variables |> Seq.exists (fun struct (_, _, t) -> existsUploadType t)
+                || variables
+                    |> Seq.where (fun struct (_, typeName, _) -> TypeMapping.scalar.TryGetValue typeName |> fst |> not)
+                    |> Seq.choose (fun struct (_, typeName, _) -> schemaProvidedTypes |> Map.tryFind typeName)
+                    |> Seq.exists existsUploadTypeDefinition
             let runMethodOverloads : MemberInfo list =
                 let operationName = ValueOption.toObj operationDefinition.Name
                 methodOverloadDefinitions |> List.map (fun overloadParameters ->
-                    let variableNames = overloadParameters |> List.map fst |> List.filter (fun name -> name <> "runtimeContext")
+                    let variableNames =
+                        overloadParameters
+                        |> Seq.map (fun struct (name, _, _) -> name)
+                        |> Seq.filter (fun name -> name <> "runtimeContext")
+                        |> Seq.toList
                     let invoker (args : Expr list) =
                         // First arg is the operation instance, second should be the context, if the overload asks for one.
                         // We determine it by seeing if the variable names have one less item than the arguments without the instance.
@@ -417,14 +426,18 @@ module internal ProvidedOperation =
                             // If the user does not provide a context, we should dispose the default one after running the query
                             if isDefaultContext then (context :> IDisposable).Dispose()
                             OperationResultBase(response, responseJson, %%operationFieldsExpr, operationTypeName) @@>
-                    let methodParameters = overloadParameters |> List.map (fun (name, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
+                    let methodParameters = overloadParameters |> List.map (fun struct (name, _, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
                     let methodDef = ProvidedMethod("Run", methodParameters, operationResultDef, invoker)
                     methodDef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                     upcast methodDef)
             let asyncRunMethodOverloads : MemberInfo list =
                 let operationName = ValueOption.toObj operationDefinition.Name
                 methodOverloadDefinitions |> List.map (fun overloadParameters ->
-                    let variableNames = overloadParameters |> List.map fst |> List.filter (fun name -> name <> "runtimeContext")
+                    let variableNames =
+                        overloadParameters
+                        |> Seq.map (fun struct (name, _, _) -> name)
+                        |> Seq.filter (fun name -> name <> "runtimeContext")
+                        |> Seq.toList
                     let invoker (args : Expr list) =
                         // First arg is the operation instance, second should be the context, if the overload asks for one.
                         // We determine it by seeing if the variable names have one less item than the arguments without the instance.
@@ -462,7 +475,7 @@ module internal ProvidedOperation =
                                 if isDefaultContext then (context :> IDisposable).Dispose()
                                 return OperationResultBase(response, responseJson, %%operationFieldsExpr, operationTypeName)
                             } @@>
-                    let methodParameters = overloadParameters |> List.map (fun (name, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
+                    let methodParameters = overloadParameters |> List.map (fun struct (name, _, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
                     let methodDef = ProvidedMethod("AsyncRun", methodParameters, TypeMapping.makeAsync operationResultDef, invoker)
                     methodDef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
                     upcast methodDef)
@@ -516,14 +529,14 @@ module internal Provider =
         let rec getProvidedType (providedTypes : Dictionary<FieldStringPath * TypeName, ProvidedTypeDefinition>) (schemaTypes : Map<TypeName, IntrospectionType>) (path : FieldStringPath) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
             match tref.Kind with
             | TypeKind.SCALAR when tref.Name.IsSome -> TypeMapping.mapScalarType uploadInputTypeName tref.Name.Value |> TypeMapping.makeOption
-            | _ when uploadInputTypeName.IsSome && tref.Name.IsSome && uploadInputTypeName.Value = tref.Name.Value -> uploadTypeIsNotScalar uploadInputTypeName.Value
+            | _ when uploadInputTypeName.IsSome && tref.Name.IsSome && uploadInputTypeName.Value = tref.Name.Value -> uploadTypeIsNotScalarOrInputObject uploadInputTypeName.Value
             | TypeKind.NON_NULL when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> TypeMapping.unwrapOption
             | TypeKind.LIST when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> TypeMapping.makeArray |> TypeMapping.makeOption
             | TypeKind.ENUM when tref.Name.IsSome ->
                 match enumProvidedTypes.TryFind(tref.Name.Value) with
                 | Some providedEnum -> TypeMapping.makeOption providedEnum
                 | None -> failwith $"""Could not find a enum type based on a type reference. The reference is an "%s{tref.Name.Value}" enum, but that enum was not found in the introspection schema."""
-            | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION) when tref.Name.IsSome ->
+            | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ) when tref.Name.IsSome ->
                 if providedTypes.ContainsKey(path, tref.Name.Value)
                 then TypeMapping.makeOption providedTypes.[path, tref.Name.Value]
                 else
@@ -533,6 +546,7 @@ module internal Provider =
                         | false, _ -> failwith $"""Could not find a schema type based on a type reference. The reference is to a "%s{typeName}" type, but that type was not found in the schema types."""
                     let getPropertyMetadata typeName (info : AstFieldInfo) : RecordPropertyMetadata =
                         let ifield =
+                            // TODO: Optimize this lookup using cache
                             match getIntrospectionFields typeName |> Array.tryFind(fun f -> f.Name = info.Name) with
                             | Some ifield -> ifield
                             | None -> failwith $"""Could not find field "%s{info.Name}" of type "%s{tref.Name.Value}". The schema type does not have a field with the specified name."""
@@ -542,20 +556,21 @@ module internal Provider =
                         { Name = info.Name; Alias = info.Alias; Description = ifield.Description; DeprecationReason = ifield.DeprecationReason; Type = ftype }
                     let fragmentProperties =
                         astFields
-                        |> List.choose (function FragmentField f when f.TypeCondition <> tref.Name.Value -> Some f | _ -> None)
-                        |> List.groupBy (fun field -> field.TypeCondition)
-                        |> List.map (fun (typeCondition, fields) ->
+                        |> Seq.vchoose (function FragmentField f when f.TypeCondition <> tref.Name.Value -> ValueSome f | _ -> ValueNone)
+                        |> Seq.groupBy (fun field -> field.TypeCondition)
+                        |> Seq.map (fun (typeCondition, fields) ->
                             let conditionFields = fields |> Seq.distinctBy _.AliasOrName |> Seq.map FragmentField |> Seq.toList
                             typeCondition, List.map (getPropertyMetadata typeCondition) conditionFields)
                     let baseProperties =
                         astFields
-                        |> List.choose (fun x ->
+                        |> Seq.vchoose (fun x ->
                             match x with
-                            | TypeField _ -> Some x
-                            | FragmentField f when f.TypeCondition = tref.Name.Value -> Some x
-                            | _ -> None)
-                        |> List.distinctBy _.AliasOrName
-                        |> List.map (getPropertyMetadata tref.Name.Value)
+                            | TypeField _ -> ValueSome x
+                            | FragmentField f when f.TypeCondition = tref.Name.Value -> ValueSome x
+                            | _ -> ValueNone)
+                        |> Seq.distinctBy _.AliasOrName
+                        |> Seq.map (getPropertyMetadata tref.Name.Value)
+                        |> Seq.toList
                     let baseType =
                         let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
                         let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
@@ -572,7 +587,7 @@ module internal Provider =
                         providedTypes.Add((path, typeName), tdef)
                         includeType path tdef
                         ProvidedRecord.makeProvidedType(tdef, properties, explicitOptionalParameters) |> ignore
-                    fragmentProperties |> List.iter createFragmentType
+                    fragmentProperties |> Seq.iter createFragmentType
                     TypeMapping.makeOption baseType
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
         let operationType = getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef
@@ -606,7 +621,8 @@ module internal Provider =
                   DeprecationReason = field.DeprecationReason
                   Type = providedType }
                 |> makeOption
-            | _ when uploadInputTypeName.IsSome && field.Type.Name.IsSome && uploadInputTypeName.Value = field.Type.Name.Value -> uploadTypeIsNotScalar uploadInputTypeName.Value
+            | _ when uploadInputTypeName.IsSome && field.Type.Name.IsSome && uploadInputTypeName.Value = field.Type.Name.Value && field.Type.Kind <> TypeKind.INPUT_OBJECT ->
+                uploadTypeIsNotScalarOrInputObject uploadInputTypeName.Value
             | TypeKind.NON_NULL when field.Type.Name.IsNone && field.Type.OfType.IsSome -> ofFieldType field |> resolveFieldMetadata |> unwrapOption
             | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofFieldType field |> resolveFieldMetadata |> makeArrayOption
             | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.INPUT_OBJECT | TypeKind.UNION | TypeKind.ENUM) when field.Type.Name.IsSome ->
@@ -629,12 +645,17 @@ module internal Provider =
                   DeprecationReason = None
                   Type = providedType }
                 |> makeOption
-            | _ when uploadInputTypeName.IsSome && field.Type.Name.IsSome && uploadInputTypeName.Value = field.Type.Name.Value -> uploadTypeIsNotScalar uploadInputTypeName.Value
+            | _ when uploadInputTypeName.IsSome && field.Type.Name.IsSome && uploadInputTypeName.Value = field.Type.Name.Value && field.Type.Kind <> TypeKind.INPUT_OBJECT ->
+                uploadTypeIsNotScalarOrInputObject uploadInputTypeName.Value
             | TypeKind.NON_NULL when field.Type.Name.IsNone && field.Type.OfType.IsSome -> ofInputFieldType field |> resolveInputFieldMetadata |> unwrapOption
             | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofInputFieldType field |> resolveInputFieldMetadata |> makeArrayOption
-            | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.INPUT_OBJECT | TypeKind.UNION | TypeKind.ENUM) when field.Type.Name.IsSome ->
+            | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.INPUT_OBJECT | TypeKind.UNION | TypeKind.ENUM) as kind when field.Type.Name.IsSome ->
                 let itype = getSchemaType field.Type
-                let providedType = resolveProvidedType itype
+                let providedType =
+                    if kind = TypeKind.INPUT_OBJECT && uploadInputTypeName |> Option.exists ((=) itype.Name) then
+                        typeof<Upload>
+                    else
+                        resolveProvidedType itype
                 { Name = field.Name
                   Alias = ValueNone
                   Description = field.Description
@@ -654,8 +675,8 @@ module internal Provider =
                     let properties =
                         itype.Fields
                         |> Option.defaultValue [||]
-                        |> Array.map resolveFieldMetadata
-                        |> List.ofArray
+                        |> Seq.map resolveFieldMetadata
+                        |> Seq.toList
                     upcast ProvidedRecord.makeProvidedType(tdef, properties, explicitOptionalParameters)
                 | TypeKind.INPUT_OBJECT ->
                     let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
@@ -663,8 +684,8 @@ module internal Provider =
                     let properties =
                         itype.InputFields
                         |> Option.defaultValue [||]
-                        |> Array.map resolveInputFieldMetadata
-                        |> List.ofArray
+                        |> Seq.map resolveInputFieldMetadata
+                        |> Seq.toList
                     upcast ProvidedRecord.makeProvidedType(tdef, properties, explicitOptionalParameters)
                 | TypeKind.INTERFACE | TypeKind.UNION ->
                     let bdef = ProvidedInterface.makeProvidedType(metadata)

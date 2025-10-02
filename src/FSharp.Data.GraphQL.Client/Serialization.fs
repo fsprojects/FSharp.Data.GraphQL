@@ -4,10 +4,11 @@
 namespace FSharp.Data.GraphQL.Client
 
 open System
-open Microsoft.FSharp.Reflection
-open System.Reflection
 open System.Collections.Generic
+open System.Diagnostics
 open System.Globalization
+open System.Reflection
+open Microsoft.FSharp.Reflection
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 
@@ -172,7 +173,7 @@ module Serialization =
                 | :? DateTimeOffset as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
                 | :? bool as x -> JsonValue.Boolean x
                 | :? Uri as x -> JsonValue.String (x.ToString())
-                | :? Upload -> JsonValue.Null
+                | :? Upload as u -> JsonValue.String u.Name
                 | :? IDictionary<string, obj> as items ->
                     items
                     |> Seq.map (fun (KeyValue (k, v)) -> k.FirstCharLower(), toJsonValue v)

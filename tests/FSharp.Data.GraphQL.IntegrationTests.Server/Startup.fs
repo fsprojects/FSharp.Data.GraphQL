@@ -44,7 +44,7 @@ type Startup private () =
         app
             .UseGiraffeErrorHandler(errorHandler)
             .UseGiraffe (
-                (setHttpHeader "Request-Type" "Classic")
+                HttpHandlers.setRequestType
                 >=> HttpHandlers.graphQL<Root>)
 
     member val Configuration : IConfiguration = null with get, set
