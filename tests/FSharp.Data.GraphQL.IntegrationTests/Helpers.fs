@@ -7,8 +7,8 @@ open System.Runtime.InteropServices
 open FSharp.Data.GraphQL
 
 let normalize (x : string) =
-    x.Replace("\r\n", "\n").Split ([| '\n' |])
-    |> Array.map (fun x -> x.Trim ())
+    x.Replace("\r\n", "\n").Split ('\n')
+    |> Array.map _.Trim()
     |> Array.reduce (fun x y -> x + "\n" + y)
 
 let equals (expected : 'T) (actual : 'T) = Assert.Equal<'T> (expected, actual)

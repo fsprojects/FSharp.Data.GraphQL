@@ -199,7 +199,7 @@ module Schema =
                         args = [ Define.Input("request", UploadRequestType, description = "The request for uploading several files in different forms.") ],
                         resolve = fun ctx _ -> mapUploadRequestToOutput (ctx.Arg("request")))
                     Define.Field (
-                        name = "uploadFileComplex",
+                        name = "uploadComplex",
                         typedef = StringType,
                         description = "",
                         args = [ Define.Input ("input", InputFileObject) ],
