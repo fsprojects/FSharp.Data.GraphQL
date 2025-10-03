@@ -38,7 +38,7 @@ type Upload
             | _ -> MediaTypeNames.Application.Octet
         | ct -> ct
 
-    /// Gets the name used to uniquily identify upload throuout multiple uploads
+    /// Gets the name used to uniquely identify upload throughout multiple uploads
     /// and within a request.
     member val Name =
         name

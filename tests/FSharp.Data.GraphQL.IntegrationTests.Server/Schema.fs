@@ -198,8 +198,12 @@ module Schema =
                         description = "Upload several files in different forms.",
                         args = [ Define.Input("request", UploadRequestType, description = "The request for uploading several files in different forms.") ],
                         resolve = fun ctx _ -> mapUploadRequestToOutput (ctx.Arg("request")))
-                    Define.Field ("uploadFileComplex", StringType, "", [ Define.Input ("input", InputFileObject) ],
-                    (fun ctx _ -> getFileContent ctx "input"))
+                    Define.Field (
+                        name = "uploadFileComplex",
+                        typedef = StringType,
+                        description = "",
+                        args = [ Define.Input ("input", InputFileObject) ],
+                        resolve = fun ctx _ -> getFileContent ctx "input")
                 ])
 
     let schema : ISchema<Root> = upcast Schema(QueryType, MutationType)

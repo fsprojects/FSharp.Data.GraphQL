@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>$(DotNetVersion)</TargetFramework>
-    <UserSecretsId>2cdd2058-1c78-4088-b2a9-3848706cf422</UserSecretsId>
+    <UserSecretsId>FSharp.Data.GraphQL.IntegrationTests.Server</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

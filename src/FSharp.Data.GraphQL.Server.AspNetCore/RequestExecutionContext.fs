@@ -18,7 +18,7 @@ type HttpContextRequestExecutionContext (httpContext : HttpContext) =
                     let memoryStream = new MemoryStream ()
                     use fileStream = file.OpenReadStream ()
                     fileStream.CopyTo (memoryStream)
-                    memoryStream.Position <- 0L
+                    memoryStream.Seek (0L, SeekOrigin.Begin) |> ignore
                     Ok {
                         FileName = file.FileName
                         Stream = memoryStream

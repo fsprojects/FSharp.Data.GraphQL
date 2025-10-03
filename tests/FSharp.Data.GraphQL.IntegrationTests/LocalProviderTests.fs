@@ -221,7 +221,6 @@ module SingleRequiredUploadOperation =
 [<Fact>]
 let ``Should be able to execute a single required upload``() =
     let file  = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
-    //let upload : Upload =
     SingleRequiredUploadOperation.operation.Run(file.MakeUpload())
     |> SingleRequiredUploadOperation.validateResult file
 
@@ -255,12 +254,6 @@ module SingleOptionalUploadOperation =
 
 
 [<Fact>]
-let ``Should be able to execute a upload by passing a file with new approach``() =
-    let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
-    SingleOptionalUploadOperation.operation.Run(file.MakeUpload())
-    |> SingleOptionalUploadOperation.validateResult (Some file)
-
-[<Fact>]
 let ``Should be able to execute a single optional upload by passing a file``() =
     let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
     SingleOptionalUploadOperation.operation.Run(file.MakeUpload())
@@ -278,7 +271,7 @@ let ``Should be able to execute a single optional upload by not passing a file``
     SingleOptionalUploadOperation.operation.Run()
     |> SingleOptionalUploadOperation.validateResult None
 
-//[<Fact>]
+[<Fact>]
 let ``Should be able to execute a single optional upload by not passing a file asynchronously``() : Task = task {
     let! result = SingleOptionalUploadOperation.operation.AsyncRun()
     result |> SingleOptionalUploadOperation.validateResult None
@@ -487,7 +480,7 @@ let ``Should be able to upload files inside another input type``() : Task = task
             Some [| Some { Name = "multiple4.txt"; ContentType = "text/plain"; Content = "Multiple files fourth file content" }; None |] }
     let input =
         let makeUpload (x : File) = x.MakeUpload()
-        UploadRequestOperation.Request(makeUpload request.Single,
+        UploadRequestOperation.Request(single = makeUpload request.Single,
                                        multiple = Array.map makeUpload request.Multiple,
                                        nullableMultiple = Array.map makeUpload request.NullableMultiple.Value,
                                        nullableMultipleNullable = Array.map (Option.map makeUpload) request.NullableMultipleNullable.Value)

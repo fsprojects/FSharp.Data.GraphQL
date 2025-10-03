@@ -226,7 +226,7 @@ let ``Should be able to execute a single required upload``() =
 [<Fact>]
 let ``Should be able to execute a single required upload asynchronously``() : Task = task {
     let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
-    let! result = SingleRequiredUploadOperation.operation.AsyncRun(file.MakeUpload("test"))
+    let! result = SingleRequiredUploadOperation.operation.AsyncRun(file.MakeUpload())
     result |> SingleRequiredUploadOperation.validateResult file
 }
 
@@ -335,8 +335,8 @@ module OptionalMultipleUploadOperation =
 [<Fact>]
 let ``Should be able to execute a multiple upload``() =
     let files =
-        [|  { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
-            { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
+        [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
     OptionalMultipleUploadOperation.operation.Run(files |> Array.map (fun f -> f.MakeUpload()) |> Some)
     |> OptionalMultipleUploadOperation.validateResult (Some files)
 
