@@ -8,7 +8,7 @@ open Helpers
 let [<Literal>] ServerUrl = "http://localhost:8085"
 let [<Literal>] EmptyGuidAsString = "00000000-0000-0000-0000-000000000000"
 
-type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName = "Upload", explicitOptionalParameters = false>
+type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName = "File", explicitOptionalParameters = false>
 // type FileProvider = GraphQLProvider<ServerUrl, uploadInputTypeName = "FileType", explicitOptionalParameters = true>
 
 let context = Provider.GetContext(ServerUrl)
@@ -201,7 +201,7 @@ let ``Should be able to execute a query using context, sending an input field wi
 
 module SingleRequiredUploadOperation =
     let operation =
-        Provider.Operation<"""mutation SingleUpload($file: Upload!) {
+        Provider.Operation<"""mutation SingleUpload($file: File!) {
             singleUpload(file: $file) {
               name
               contentType
@@ -218,13 +218,13 @@ module SingleRequiredUploadOperation =
         result.Data.Value.SingleUpload.ContentAsText |> equals file.Content
         result.Data.Value.SingleUpload.ContentType |> equals file.ContentType
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a single required upload``() =
-    let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
+    let file  = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
     SingleRequiredUploadOperation.operation.Run(file.MakeUpload())
     |> SingleRequiredUploadOperation.validateResult file
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a single required upload asynchronously``() : Task = task {
     let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
     let! result = SingleRequiredUploadOperation.operation.AsyncRun(file.MakeUpload())
@@ -233,7 +233,7 @@ let ``Should be able to execute a single required upload asynchronously``() : Ta
 
 module SingleOptionalUploadOperation =
     let operation =
-        Provider.Operation<"""mutation NullableSingleUpload($file: Upload) {
+        Provider.Operation<"""mutation NullableSingleUpload($file: File) {
             nullableSingleUpload(file: $file) {
               name
               contentType
@@ -253,31 +253,25 @@ module SingleOptionalUploadOperation =
         result.Data.Value.NullableSingleUpload.Value.ContentType |> equals file.ContentType)
 
 
-// [<Fact>]
-// let ``Should be able to execute a upload by passing a file with new approach``() =
-//     let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
-//     let result = SingleOptionalUploadOperation.fileOperation.Run(file.MakeUpload())
-//     |> SingleOptionalUploadOperation.validateResult (Some file)
-
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a single optional upload by passing a file``() =
     let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
     SingleOptionalUploadOperation.operation.Run(file.MakeUpload())
     |> SingleOptionalUploadOperation.validateResult (Some file)
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact()>]
 let ``Should be able to execute a single optional upload by passing a file, asynchronously``() : Task = task {
     let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
     let! result = SingleOptionalUploadOperation.operation.AsyncRun(file.MakeUpload())
     result |> SingleOptionalUploadOperation.validateResult (Some file)
 }
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact()>]
 let ``Should be able to execute a single optional upload by not passing a file``() =
     SingleOptionalUploadOperation.operation.Run()
     |> SingleOptionalUploadOperation.validateResult None
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a single optional upload by not passing a file asynchronously``() : Task = task {
     let! result = SingleOptionalUploadOperation.operation.AsyncRun()
     result |> SingleOptionalUploadOperation.validateResult None
@@ -285,7 +279,7 @@ let ``Should be able to execute a single optional upload by not passing a file a
 
 module RequiredMultipleUploadOperation =
     let operation =
-        Provider.Operation<"""mutation MultipleUpload($files: [Upload!]!) {
+        Provider.Operation<"""mutation MultipleUpload($files: [File!]!) {
             multipleUpload(files: $files) {
               name
               contentType
@@ -303,7 +297,7 @@ module RequiredMultipleUploadOperation =
             |> Array.map (fun file -> { Name = file.Name; ContentType = file.ContentType; Content = file.ContentAsText })
         receivedFiles |> equals files
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a multiple required upload``() =
     let files =
         [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
@@ -311,7 +305,7 @@ let ``Should be able to execute a multiple required upload``() =
     RequiredMultipleUploadOperation.operation.Run(files |> Array.map (fun f -> f.MakeUpload()))
     |> RequiredMultipleUploadOperation.validateResult files
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a multiple required upload asynchronously``() : Task = task {
     let files =
         [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
@@ -322,7 +316,7 @@ let ``Should be able to execute a multiple required upload asynchronously``() : 
 
 module OptionalMultipleUploadOperation =
     let operation =
-        Provider.Operation<"""mutation NullableMultipleUpload($files: [Upload!]) {
+        Provider.Operation<"""mutation NullableMultipleUpload($files: [File!]) {
             nullableMultipleUpload(files: $files) {
               name
               contentType
@@ -340,7 +334,7 @@ module OptionalMultipleUploadOperation =
             |> Option.map (Array.map (fun file -> { Name = file.Name; ContentType = file.ContentType; Content = file.ContentAsText }))
         receivedFiles |> equals files
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a multiple upload``() =
     let files =
         [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
@@ -348,7 +342,7 @@ let ``Should be able to execute a multiple upload``() =
     OptionalMultipleUploadOperation.operation.Run(files |> Array.map (fun f -> f.MakeUpload()))
     |> OptionalMultipleUploadOperation.validateResult (Some files)
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a multiple upload asynchronously``() : Task = task {
     let files =
         [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
@@ -357,12 +351,12 @@ let ``Should be able to execute a multiple upload asynchronously``() : Task = ta
     result |> OptionalMultipleUploadOperation.validateResult (Some files)
 }
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a multiple upload by sending no uploads``() =
     OptionalMultipleUploadOperation.operation.Run()
     |> OptionalMultipleUploadOperation.validateResult None
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a multiple upload asynchronously by sending no uploads``() : Task = task {
     let! result = OptionalMultipleUploadOperation.operation.AsyncRun()
     result |> OptionalMultipleUploadOperation.validateResult None
@@ -370,7 +364,7 @@ let ``Should be able to execute a multiple upload asynchronously by sending no u
 
 module OptionalMultipleOptionalUploadOperation =
     let operation =
-        Provider.Operation<"""mutation NullableMultipleNullableUpload($files: [Upload]) {
+        Provider.Operation<"""mutation NullableMultipleNullableUpload($files: [File]) {
             nullableMultipleNullableUpload(files: $files) {
               name
               contentType
@@ -388,7 +382,7 @@ module OptionalMultipleOptionalUploadOperation =
             |> Option.map (Array.map (Option.map (fun file -> { Name = file.Name; ContentType = file.ContentType; Content = file.ContentAsText })))
         receivedFiles |> equals files
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a multiple optional upload``() =
     let files =
         [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
@@ -396,7 +390,7 @@ let ``Should be able to execute a multiple optional upload``() =
     OptionalMultipleOptionalUploadOperation.operation.Run(files |> Array.map (Option.map (fun f -> f.MakeUpload())))
     |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a multiple optional upload asynchronously``() : Task = task {
     let files =
         [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
@@ -405,18 +399,18 @@ let ``Should be able to execute a multiple optional upload asynchronously``() : 
     result |> (OptionalMultipleOptionalUploadOperation.validateResult (Some files))
 }
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a multiple optional upload by sending no uploads``() =
     OptionalMultipleOptionalUploadOperation.operation.Run()
     |> OptionalMultipleOptionalUploadOperation.validateResult None
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a multiple optional upload asynchronously by sending no uploads``() : Task = task {
     let! result = OptionalMultipleOptionalUploadOperation.operation.AsyncRun()
     result |> OptionalMultipleOptionalUploadOperation.validateResult None
 }
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a multiple optional upload by sending some uploads``() =
     let files =
         [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
@@ -426,7 +420,7 @@ let ``Should be able to execute a multiple optional upload by sending some uploa
     OptionalMultipleOptionalUploadOperation.operation.Run(files |> Array.map (Option.map (fun f -> f.MakeUpload())))
     |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to execute a multiple optional upload asynchronously by sending some uploads``() : Task = task {
     let files =
         [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
@@ -474,7 +468,7 @@ module UploadRequestOperation =
         result.Data.Value.UploadRequest.NullableMultiple |> Option.map (Array.map ((fun x -> x.ToDictionary()) >> File.FromDictionary)) |> equals request.NullableMultiple
         result.Data.Value.UploadRequest.NullableMultipleNullable |> Option.map (Array.map (Option.map ((fun x -> x.ToDictionary()) >> File.FromDictionary))) |> equals request.NullableMultipleNullable
 
-[<Fact(Skip = "Temporary broken")>]
+[<Fact>]
 let ``Should be able to upload files inside another input type``() : Task = task {
     let request =
         { Single = { Name = "single.txt"; ContentType = "text/plain"; Content = "Single file content" }

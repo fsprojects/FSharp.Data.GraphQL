@@ -84,6 +84,7 @@ module ServiceCollectionExtensions =
                     }
                 )
                 .AddHttpContextAccessor()
+                .AddScoped<IInputExecutionContext, HttpContextRequestExecutionContext>()
                 .AddScoped<GraphQLRequestHandler<'Root>, 'Handler>()
 
         /// <summary>

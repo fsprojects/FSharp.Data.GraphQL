@@ -1,6 +1,7 @@
-﻿namespace FSharp.Data.GraphQL
+namespace FSharp.Data.GraphQL
 
 type FileData = {
+    FileName : string
     Stream : System.IO.Stream
     ContentType : string
 }

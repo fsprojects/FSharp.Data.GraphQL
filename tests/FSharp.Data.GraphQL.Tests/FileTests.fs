@@ -1,4 +1,4 @@
-﻿module FSharp.Data.GraphQL.Tests.FileTests
+module FSharp.Data.GraphQL.Tests.FileTests
 
 open System.Collections.Immutable
 open System.IO
@@ -63,7 +63,7 @@ let execute (query : string) = executor.AsyncExecute (query, getMockInputContext
 let executeWithVariables ( query : string, variables : ImmutableDictionary<string, JsonElement>) =
     executor.AsyncExecute (ast = parse query, getInputContext = getMockInputContext, variables = variables) |> sync
 
-let mutationWithVariable = """mutation uploadFile ($file : FileType!) {
+let mutationWithVariable = """mutation uploadFile ($file : File!) {
     uploadFile (input : $file)
 }
 """

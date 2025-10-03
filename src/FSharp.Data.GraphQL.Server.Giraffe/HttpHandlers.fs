@@ -1,6 +1,7 @@
 namespace FSharp.Data.GraphQL.Server.AspNetCore.Giraffe
 
 open System.Threading.Tasks
+open System.Net.Mime
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 
@@ -21,14 +22,22 @@ module HttpHandlers =
         return Some ctx
     }
 
-    let ofTaskIResult2 ctx (taskRes: Task<Result<IResult, IResult>>) : HttpFuncResult =
-        taskRes
-        |> TaskResult.defaultWith id
-        |> ofTaskIResult ctx
+    let ofTaskIResult2 ctx (taskRes : Task<Result<IResult, IResult>>) : HttpFuncResult = taskRes |> TaskResult.defaultWith id |> ofTaskIResult ctx
 
     let private handleGraphQL<'Root> (next : HttpFunc) (ctx : HttpContext) =
 
-        let request = ctx.RequestServices.GetRequiredService<GraphQLRequestHandler<'Root>>()
+        let request = ctx.RequestServices.GetRequiredService<GraphQLRequestHandler<'Root>> ()
         request.HandleAsync () |> ofTaskIResult2 ctx
 
     let graphQL<'Root> : HttpHandler = choose [ POST; GET ] >=> handleGraphQL<'Root>
+
+    let private isMultipartRequest (req : HttpRequest) =
+        not (System.String.IsNullOrEmpty (req.ContentType))
+        && req.ContentType.Contains (MediaTypeNames.Multipart.FormData)
+
+    let setRequestType : HttpHandler =
+        fun (next) (ctx) ->
+            if isMultipartRequest ctx.Request then
+                setHttpHeader "Request-Type" "Multipart" next ctx
+            else
+                setHttpHeader "Request-Type" "Classic" next ctx
