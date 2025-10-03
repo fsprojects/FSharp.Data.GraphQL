@@ -34,7 +34,7 @@ jobs:
 
     - name: Add version to global.json
       run: |
-        $version = "9.0.200"
+        $version = "9.0.304"
         $globalJsonPath = "global.json"
         $globalJson = Get-Content -Raw -Path $globalJsonPath | ConvertFrom-Json
         if ($null -eq $globalJson.sdk.version) {
@@ -48,7 +48,7 @@ jobs:
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 9.0.200
+        dotnet-version: 9.0.304
 
     - name: Install local tools
       run: dotnet tool restore
