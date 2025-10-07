@@ -6,6 +6,7 @@ open System.Text.Json
 open System.Text.Json.Serialization
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
+open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Options
 
@@ -43,7 +44,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
     ) =
 
     let ctx = httpContextAccessor.HttpContext
-    let getInputContext() = (HttpContextRequestExecutionContext ctx) :> IInputExecutionContext
+    let getInputContext() = ctx.RequestServices.GetRequiredService<IInputExecutionContext>()
 
     let toResponse { DocumentId = documentId; Content = content; Metadata = metadata } =
 

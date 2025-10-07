@@ -11,6 +11,7 @@ open System.Text.Json.Serialization
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
+open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Options
@@ -168,7 +169,6 @@ type GraphQLWebSocketMiddleware<'Root>
 
         let sendMsg = sendMessageViaSocket serializerOptions socket
         let rcv () = socket |> rcvMsgViaSocket serializerOptions
-        let getInputContext() = (HttpContextRequestExecutionContext httpContext) :> IInputExecutionContext
 
         let sendOutput id (output : SubscriptionExecutionResult) =
             sendMsg (Next (id, output))
@@ -273,6 +273,7 @@ type GraphQLWebSocketMiddleware<'Root>
                                         )
                                 else
                                     let variables = query.Variables |> Skippable.toOption
+                                    let getInputContext() = httpContext.RequestServices.GetRequiredService<IInputExecutionContext>()
                                     let! planExecutionResult =
                                         let root = options.RootFactory httpContext
                                         options.SchemaExecutor.AsyncExecute (query.Query, getInputContext, root, ?variables = variables)
