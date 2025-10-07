@@ -4,15 +4,17 @@ open System.IO
 open FSharp.Data.GraphQL
 open Microsoft.AspNetCore.Http
 
-type HttpContextRequestExecutionContext (httpContext : HttpContext) =
+type HttpContextRequestExecutionContext (httpContext : IHttpContextAccessor) =
 
     interface IInputExecutionContext with
 
         member this.GetFile (key) =
-            if not httpContext.Request.HasFormContentType then
+            let context = httpContext.HttpContext
+            if not context.Request.HasFormContentType then
+
                 Error "Request does not have form content type"
             else
-                let form = httpContext.Request.Form
+                let form = context.Request.Form
                 match (form.Files |> Seq.vtryFind (fun f -> f.Name = key)) with
                 | ValueSome file ->
                     let memoryStream = new MemoryStream ()
