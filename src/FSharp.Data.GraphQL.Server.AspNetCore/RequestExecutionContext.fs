@@ -11,6 +11,7 @@ type HttpContextRequestExecutionContext (httpContext : IHttpContextAccessor) =
         member this.GetFile (key) =
             let context = httpContext.HttpContext
             if not context.Request.HasFormContentType then
+
                 Error "Request does not have form content type"
             else
                 let form = context.Request.Form
