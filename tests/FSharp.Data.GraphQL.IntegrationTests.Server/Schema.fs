@@ -149,7 +149,7 @@ module Schema =
             use reader = new System.IO.StreamReader(stream, Encoding.UTF8)
             reader.ReadToEnd()
         let getFileContent (ctx : ResolveFieldContext) argName =
-            let inputFile =  ctx.Arg<InputFile> argName
+            let inputFile = ctx.Arg<InputFile> argName
             let stream = inputFile.File.Stream
             use reader = new System.IO.StreamReader(stream, Encoding.UTF8, true)
             reader.ReadToEnd()
