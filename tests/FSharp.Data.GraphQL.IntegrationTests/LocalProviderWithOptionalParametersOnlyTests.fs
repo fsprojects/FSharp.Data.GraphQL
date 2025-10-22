@@ -484,3 +484,47 @@ let ``Should be able to upload files inside another input type``() =
                                        nullableMultipleNullable = Some (Array.map (Option.map makeUpload) request.NullableMultipleNullable.Value))
     UploadRequestOperation.operation.Run(input)
     |> UploadRequestOperation.validateResult request
+
+module UploadComplexOperation =
+    let operation =
+        Provider.Operation<"""mutation UploadComplex($input: InputFile!) {
+            uploadComplex(input: $input)
+          }""">()
+
+    type Operation = Provider.Operations.UploadComplex
+    type InputFile = Provider.Types.InputFile
+
+    let validateResult (file : File) (result : Operation.OperationResult) =
+        result |> checkRequestTypeHeader "Multipart"
+        result.Data.IsSome |> equals true
+        result.Data.Value.UploadComplex |> equals file.Content
+
+[<Fact>]
+let ``Should be able to upload file using complex input object`` () =
+    let file = { Name = "complex.txt"; ContentType = "text/plain"; Content = "Complex input object file content" }
+    let input = UploadComplexOperation.InputFile(file = file.MakeUpload())
+    UploadComplexOperation.operation.Run(input)
+    |> UploadComplexOperation.validateResult file
+
+[<Fact>]
+let ``Should be able to upload file using complex input object with context`` () =
+    let file = { Name = "complex_context.txt"; ContentType = "text/plain"; Content = "Complex input with context file content" }
+    let input = UploadComplexOperation.InputFile(file = file.MakeUpload())
+    UploadComplexOperation.operation.Run(context, input)
+    |> UploadComplexOperation.validateResult file
+
+[<Fact>]
+let ``Should be able to upload file using complex input object asynchronously`` () : Task = task {
+    let file = { Name = "complex_async.txt"; ContentType = "text/plain"; Content = "Complex input object async file content" }
+    let input = UploadComplexOperation.InputFile(file = file.MakeUpload())
+    let! result = UploadComplexOperation.operation.AsyncRun(input)
+    result |> UploadComplexOperation.validateResult file
+}
+
+[<Fact>]
+let ``Should be able to upload file using complex input object with context asynchronously`` () : Task = task {
+    let file = { Name = "complex_context_async.txt"; ContentType = "text/plain"; Content = "Complex input with context async file content" }
+    let input = UploadComplexOperation.InputFile(file = file.MakeUpload())
+    let! result = UploadComplexOperation.operation.AsyncRun(context, input)
+    result |> UploadComplexOperation.validateResult file
+}

@@ -27,6 +27,9 @@ type Input =
     { Single : InputField option
       List : InputField list option }
 
+type InputFile =
+    { File : FileData }
+
 type UploadedFile =
     { Name : string
       ContentType : string
@@ -134,7 +137,7 @@ module Schema =
                     args = [ Define.Input("input", Nullable InputType, description = "The input to be echoed as an output.") ],
                     resolve = fun ctx _ -> ctx.TryArg("input")) ])
 
-    let InputFileObject = Define.InputObject<Input>(
+    let InputFileObject = Define.InputObject<InputFile>(
         name = "InputFile",
         fields =
             [
@@ -146,7 +149,8 @@ module Schema =
             use reader = new System.IO.StreamReader(stream, Encoding.UTF8)
             reader.ReadToEnd()
         let getFileContent (ctx : ResolveFieldContext) argName =
-            let stream = ctx.Arg<System.IO.Stream> argName
+            let inputFile = ctx.Arg<InputFile> argName
+            let stream = inputFile.File.Stream
             use reader = new System.IO.StreamReader(stream, Encoding.UTF8, true)
             reader.ReadToEnd()
         let mapUploadToOutput (file : FileData) =
