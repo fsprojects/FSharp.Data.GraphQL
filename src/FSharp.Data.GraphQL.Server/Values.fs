@@ -141,8 +141,10 @@ let rec internal compileByType
                                 if ReflectionHelper.isAssignableWithUnwrap inputType paramType then
                                     allParameters.Add (struct (ValueSome field, param))
                                 else
-                                    // TODO: Consider improving by specifying type mismatches
-                                    typeMismatchParameters.Add param.Name |> ignore
+                                    let expectedType = inputDef.Type.ToString ()
+                                    let actualType = paramType.ToString ()
+                                    typeMismatchParameters.Add (param.Name, expectedType, actualType)
+                                    |> ignore
                         | None ->
                             if
                                 ReflectionHelper.isParameterSkippable param
@@ -172,10 +174,20 @@ let rec internal compileByType
                         $"Input object %s{objDef.Name} refers to type '%O{objType}', but skippable '%s{``params``}' GraphQL fields and constructor parameters do not match"
                     InvalidInputTypeException (message, skippableMismatchParameters.ToImmutableHashSet ())
                 if typeMismatchParameters.Any () then
+
+                    let typeMismatchParameterNames = HashSet ()
+
+                    let details = 
+                        typeMismatchParameters 
+                        |> Seq.map (fun (name, expected, actual) ->
+                            typeMismatchParameterNames.Add name |> ignore
+                            sprintf "Parameter '%s': expected %s, got %s" name expected actual)
+                        |> String.concat "; "
+
                     let message =
                         let ``params`` = String.Join ("', '", typeMismatchParameters)
-                        $"Input object %s{objDef.Name} refers to type '%O{objType}', but GraphQL fields '%s{``params``}' have different types than constructor parameters"
-                    InvalidInputTypeException (message, typeMismatchParameters.ToImmutableHashSet ())
+                        $"Input object %s{objDef.Name} refers to type '%O{objType}', but GraphQL fields '%s{``params``}' have different types than constructor parameters: {details}"
+                    InvalidInputTypeException (message, typeMismatchParameterNames.ToImmutableHashSet ())
             ]
             match exceptions with
             | [] -> ()
