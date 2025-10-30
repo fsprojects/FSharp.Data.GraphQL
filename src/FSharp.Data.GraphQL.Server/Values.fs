@@ -143,7 +143,7 @@ let rec internal compileByType
                                 else
                                     let expectedType = inputDef.Type.ToString ()
                                     let actualType = paramType.ToString ()
-                                    typeMismatchParameters.Add (param.Name, expectedType, actualType)
+                                    typeMismatchParameters.Add (struct (param.Name, expectedType, actualType))
                                     |> ignore
                         | None ->
                             if
