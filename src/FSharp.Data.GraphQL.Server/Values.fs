@@ -179,9 +179,9 @@ let rec internal compileByType
 
                     let details = 
                         typeMismatchParameters 
-                        |> Seq.map (fun (name, expected, actual) ->
+                        |> Seq.map (fun struct (name, expected, actual) ->
                             typeMismatchParameterNames.Add name |> ignore
-                            sprintf "Parameter '%s': expected %s, got %s" name expected actual)
+                            $"Parameter '%s{name}': expected '%s{expected}', got %s{actual}")
                         |> String.concat "; "
 
                     let message =
