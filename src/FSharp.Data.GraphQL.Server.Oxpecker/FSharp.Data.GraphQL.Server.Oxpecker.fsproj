@@ -1,8 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!--<TargetFrameworks>$(PackageTargetFrameworks)</TargetFrameworks>-->
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>$(DotNetVersion)</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Deterministic>true</Deterministic>
     <Description>FSharp implementation of Facebook GraphQL query language (Oxpecker integration)</Description>
