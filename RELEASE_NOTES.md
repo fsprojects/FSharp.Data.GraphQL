@@ -16,12 +16,12 @@
 ### 0.0.4-beta - May 31 2018
 * Introduced support for middlewares in the execution pipeline.
 * Introduced new package, named FSharp.Data.GraphQL.Server.Middleware, with generic, built-in middlewares.
-* Introduced QueryWeightMiddleware, a generic execution middleware to measure query complexity and optionally block qurey execution with a threshold.
+* Introduced QueryWeightMiddleware, a generic execution middleware to measure query complexity and optionally block query execution with a threshold.
 * Introduced ObjectListFilterMiddleware, a generic schema compile middleware to add filter options to list fields of specific objects.
 * Changed GQLResponse object to be a Record, which supports a Metadata bag object, that can be used to hold custom information per query request.
 * Changed FieldDef interface to be able to support a Metadata bag object, that can be used to hold custom information per field.
 * ISchema TypeMap is now a mutable object, to ease schema customization through schema compile middlewares.
-* Fixing many minor errors when deferring or streaming results with Union and Enum types (specially when queried using fragments).
+* Fixing many minor errors when deferring or streaming results with Union and Enum types (especially when queried using fragments).
 * Deferred and streamed error results now are handled.
 * Added support for nested deferred and streamed results (currently does have a maximum degree of two nested operations).
 
@@ -44,10 +44,10 @@
 * Add Long Scalar definition
 
 ### 0.0.8-beta - October 27 2018
-* Add subscription field to intospection schema
+* Add subscription field to introspection schema
 
 ### 0.0.8-beta01 - October 28 2018
-* Add subscription field to intospection schema
+* Add subscription field to introspection schema
 
 ### 0.0.9 - November 2 2018
 * Fixed a bug where output def of a subscription field was not reachable for introspection.
@@ -74,25 +74,25 @@
 * Fix dispose of deferred/stream responses.
 
 ### 1.0.0-beta - April 27 2019
-* **Breaking Change** New type provider api! see samples/client-provider for details.
+* **Breaking Change** New type provider API! see samples/client-provider for details.
 * Fixes for #216 enum as a variable.
 * Upgraded paket and dependencies.
 
 ### 1.0.0-beta2 - April 27 2019
-* **Breaking Change** GraphQLProvider now makes Nullable graphql inputs optional method arguments instead of options
+* **Breaking Change** GraphQLProvider now makes Nullable GraphQL inputs optional method arguments instead of options
 * **Breaking Change** GraphQLProvider uses the operation name as the generated operation type's names. if no operation name is specified it uses "Operation" + the query string's hash
 * Make the type provider cross-targeting
 * **Breaking Change** Add postcompile phase to middleware interface
 
 ### 1.0.0-beta3 - May 10 2019
-* **Breaking Change** GraphQLProvider record types constructors now receives option arguments as optional arguments
+* **Breaking Change** GraphQLProvider record types constructors now receive option arguments as optional arguments
 * Revision on scalar types parsing - fixed some wrong behaviors such as parsing ints as floats
 
 ### 1.0.0-beta4 - May 13 2019
-* Fixing an bug when converting variable types to variables json in a query
+* Fixing a bug when converting variable types to variables json in a query
 
 ### 1.0.0-beta5 - May 13 2019
-* Fixing an bug when parsing json objects with no fields in serialization
+* Fixing a bug when parsing json objects with no fields in serialization
 
 ### 1.0.0-beta6 - May 17 2019
 * Changing constructors of provided types to have overloads instead of optional parameters (needed because of a limitation of the Type Provider SDK)
@@ -116,7 +116,7 @@
 * Minor bug fixes
 
 ### 1.0.0 - July 4 2019
-* Changing the internal client of the Type provider (`System.Http.HttpClient`)
+* Changing the internal client of the Type provider (`System.Net.Http.HttpClient`)
 * Fixing several minor bugs of the file upload system in the client provider
 * Limiting the upload type of the client provider to be a scalar type (provider fails if it is not)
 * If an upload type is specified and it is not used in a query, client provider defaults to standard HTTP protocol instead of the multipart request
@@ -124,7 +124,7 @@
 * Making validation mandatory on the server component
 * Implemented a cache system for query validation on both server and client components
 * Client component can optionally disable query validation
-* Updating parser to support unamed operations alongside short handed queries
+* Updating parser to support unnamed operations alongside shorthand queries
 * Adding null value support for the AST Input Values (it was previously parsed as an Enum Value)
 * **Breaking Change** Renaming `FSharp.Data.GraphQL.Server.Middlewares` package to `FSharp.Data.GraphQL.Server.Middleware`
 
@@ -138,7 +138,7 @@
 * Correct printing of queries without names
 * Correct printing of ListValue and ObjectValue
 * Traverse list values in argument lists
-* Added test cases for object inputs for graphql functions
+* Added test cases for object inputs for GraphQL functions
 
 
 ### 1.0.4 - March 22 2020
@@ -162,7 +162,7 @@
 * Upgrade build scripts
 * Migrate from netcoreapp2.0 to net5.0 for tests and samples
 * Target netstandard2.0 exclusively for Type Providers
-* Make FSharp.Data.GraphQL.Shared a Nuget package
+* Make FSharp.Data.GraphQL.Shared a NuGet package
 * Fix parser bug. Thanks to @njlr
 
 ### 2.0.0 - March 24 2024
@@ -176,8 +176,8 @@
 * Added ability to deprecate fields defined with any combination of parameters (more overloads to `Define` static class)
 * Fixed nullable enum input handling
 * Fixed coercing enum type variables as F# # discriminated unions
-* Assed support of `Option` variable values for nullable input types
-* Iplemented mapping of input query/AST lists to .NET array type in addition to F# list
+* Added support of `Option` variable values for nullable input types
+* Added mapping of input query/AST lists to .NET array type in addition to F# list
 * Implemented input object validation with detailed error messages
 * Added `Define.WrappedScalar` for value object scalar definitions
 * Implemented coercion of nested input objects
