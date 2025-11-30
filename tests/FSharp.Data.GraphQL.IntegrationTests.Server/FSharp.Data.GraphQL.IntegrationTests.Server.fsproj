@@ -16,7 +16,6 @@
   <ItemGroup>
     <None Include="ApplicationInsights.config" />
     <Compile Include="Schema.fs" />
-    <None Include="..\..\samples\star-wars-api\MultipartRequest.fs" Link="MultipartRequest.fs" />
     <Compile Include="Startup.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
