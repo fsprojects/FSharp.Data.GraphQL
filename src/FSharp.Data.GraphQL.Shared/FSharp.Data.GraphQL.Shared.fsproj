@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;$(DotNetVersion)</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;$(LibraryDotNetVersions)</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
     <Deterministic>true</Deterministic>

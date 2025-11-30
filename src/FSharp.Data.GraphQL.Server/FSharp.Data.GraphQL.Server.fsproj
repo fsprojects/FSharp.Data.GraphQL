@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>$(DotNetVersion)</TargetFrameworks>
+    <TargetFrameworks>$(LibraryDotNetVersions)</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
     <Deterministic>true</Deterministic>

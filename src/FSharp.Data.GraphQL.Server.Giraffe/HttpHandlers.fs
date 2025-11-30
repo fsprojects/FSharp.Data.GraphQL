@@ -33,7 +33,11 @@ module HttpHandlers =
 
     let private isMultipartRequest (req : HttpRequest) =
         not (System.String.IsNullOrEmpty (req.ContentType))
-        && req.ContentType.Contains (MediaTypeNames.Multipart.FormData)
+#if NET6_0
+        && req.ContentType.Contains "multipart/form-data"
+#else
+        && req.ContentType.Contains MediaTypeNames.Multipart.FormData
+#endif
 
     let setRequestType : HttpHandler =
         fun (next) (ctx) ->

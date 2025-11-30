@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <DotNetVersion>net8.0</DotNetVersion>
+    <LibraryDotNetVersions>net6.0;net8.0</LibraryDotNetVersions>
     <LangVersion>9.0</LangVersion>
     <FSharpCoreVersion>9.0.*</FSharpCoreVersion>
     <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>

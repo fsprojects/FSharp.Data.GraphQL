@@ -153,7 +153,11 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
             | ValueSome ast -> executor.AsyncExecute (ast, getInputContext)
 
         let response = result |> toResponse
+#if NET6_0
+        return Results.Ok response
+#else
         return (TypedResults.Ok response) :> IResult
+#endif
     }
 
     /// <summary>Check if the request is an introspection query
@@ -240,12 +244,20 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
             )
 
         let response = result |> toResponse
+#if NET6_0
+        return Results.Ok response
+#else
         return (TypedResults.Ok response) :> IResult
+#endif
     }
 
     member handler.HandleAsync () : Task<Result<IResult, IResult>> = taskResult {
         if ctx.RequestAborted.IsCancellationRequested then
+#if NET6_0
+            return Results.NoContent()
+#else
             return TypedResults.Empty
+#endif
         else
             let executor = options.CurrentValue.SchemaExecutor
             match! checkOperationType () with
