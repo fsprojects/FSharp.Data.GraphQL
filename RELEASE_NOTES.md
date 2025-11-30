@@ -173,16 +173,16 @@
 * **New Package** `FSharp.Data.GraphQL.Server.AspNetCore` for ASP.NET Core integration
 * Migrated from Paket and FAKE CLI to FAKE build project
 * Added `Path` to `ResolveFieldContext`
-* Added ability to deprecate fields defined with any combination of parameters (more overloads to `Define` static class)
-* Fixed nullable enum input handling
-* Fixed coercing enum type variables as F# # discriminated unions
+* Added ability to deprecate fields defined with any combination of parameters (more overloads to the `Define` static class)
 * Added support of `Option` variable values for nullable input types
 * Added mapping of input query/AST lists to .NET array type in addition to F# list
-* Implemented input object validation with detailed error messages
+* Added input object validation with detailed error messages
 * Added `Define.WrappedScalar` for value object scalar definitions
-* Implemented coercion of nested input objects
+* Added coercion of nested input objects
 * Added support for `ValueOption` in `AutoField`
 * Improved WebSocket handling to eliminate large array allocations
+* Fixed nullable enum input handling
+* Fixed coercing enum type variables as F# discriminated unions
 * Fixed various introspection and default value encoding issues
 
 ### 2.1.0 - 2024-04-13
@@ -197,14 +197,17 @@
 * Fixed `JsonSerializerOptions` read-only instance error
 
 ### 3.0.0 - 2025-11-30
-* **Breaking Change** Migrated to .NET 8 and F# 9.0 with FSharp.Core 9.0.x
+* **Breaking Change** Migrated to .NET 8 and F# 9.0 with `FSharp.Core` 9.0.x
 * **Breaking Change** Updated scalar `CoerceOutput` signature to `objnull -> 'Primitive option`
 * **Breaking Change** Moved GraphQL error extensions to standard `extensions` field according to specification
 * **Breaking Change** Renamed `ObjectListFilter` type definition to `ObjectListFilterType`
 * **Breaking Change** Removed `ObjectListFilter.NoFilter` case
 * **Breaking Change** Reworked Relay types to enable async fetching and switched to `ValueOption`
+* **Breaking Change** `Giraffe` web framework integration moved to separate package
+* **New Package** `FSharp.Data.GraphQL.Server.Giraffe` for Giraffe web framework integration
+* **New Package** `FSharp.Data.GraphQL.Server.Oxpecker` for Oxpecker web framework integration
 * Removed unused Suave NuGet package
-* Added Oxpecker web framework support
+* Added `Oxpecker` web framework support
 * Added per-field authorization sample using ASP.NET authorization policies
 * Added file upload support via GraphQL Multipart Request Spec with `FileData` type
 * Added `OfTypes` filter case for `ObjectListFilter` to filter union cases by type
