@@ -21,7 +21,6 @@
     <Compile Include="Policies.fs" />
     <Compile Include="AuthorizationMiddleware.fs" />
     <Compile Include="Schema.fs" />
-    <None Include="MultipartRequest.fs" />
     <Compile Include="Startup.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
