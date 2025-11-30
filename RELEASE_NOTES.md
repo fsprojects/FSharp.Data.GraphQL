@@ -168,16 +168,16 @@
 ### 2.0.0 - March 24 2024
 * **Breaking Change** Migrated to .NET 6/7 and F# 7
 * **Breaking Change** Implemented GraphQL error handling using `IGQLError` interface instead of exceptions
-* **Breaking Change** Parsing variables as `JsonElement`
+* **Breaking Change** Implemented parsing variables as `JsonElement`
 * **Breaking Change** Added `Type` suffix to all built-in GraphQL type definitions
 * **New Package** `FSharp.Data.GraphQL.Server.AspNetCore` for ASP.NET Core integration
-* Migrated from Paket and FAKE CLI to standard MSBuild tooling
+* Migrated from Paket and FAKE CLI to FAKE build project
 * Added `Path` to `ResolveFieldContext`
-* Added ability to deprecate fields defined with any combination of parameters
+* Added ability to deprecate fields defined with any combination of parameters (more overloads to `Define` static class)
 * Fixed nullable enum input handling
-* Support using F# discriminated unions as enum variables
-* Support `Option` variable values for nullable input
-* Input lists from query/AST can now be mapped to internal array types
+* Fixed coercing enum type variables as F# # discriminated unions
+* Assed support of `Option` variable values for nullable input types
+* Iplemented mapping of input query/AST lists to .NET array type in addition to F# list
 * Implemented input object validation with detailed error messages
 * Added `Define.WrappedScalar` for value object scalar definitions
 * Implemented coercion of nested input objects
@@ -196,31 +196,31 @@
 ### 2.2.1 - June 16 2024
 * Fixed `JsonSerializerOptions` read-only instance error
 
-### 3.0.0 - November 2025
+### 3.0.0 - November 30 2025
 * **Breaking Change** Migrated to .NET 8 and F# 9.0 with FSharp.Core 9.0.x
 * **Breaking Change** Updated scalar `CoerceOutput` signature to `objnull -> 'Primitive option`
-* **Breaking Change** Moved GraphQL error extensions to standard `extensions` field per specification
+* **Breaking Change** Moved GraphQL error extensions to standard `extensions` field according to specification
 * **Breaking Change** Renamed `ObjectListFilter` type definition to `ObjectListFilterType`
 * **Breaking Change** Removed `ObjectListFilter.NoFilter` case
-* **Breaking Change** Removed Suave support
 * **Breaking Change** Reworked Relay types to enable async fetching and switched to `ValueOption`
+* Removed unused Suave NuGet package
 * Added Oxpecker web framework support
-* Implemented per-field authorization using ASP.NET authorization policies
-* Implemented file upload support via GraphQL Multipart Request Spec with `FileData` type
-* Implemented `OfTypes` filter case for `ObjectListFilter` to filter union cases by type
-* Implemented `ObjectListFilter` parsing from variables
-* Added support for variables within inline object list filters
-* Implemented additional list filter operators (`In`, `Contains`, `StartsWith`, `EndsWith`)
-* Implemented `StructNullable` to support `ValueOption` fields in input objects
-* Implemented case-insensitive input object fields and constructor parameters matching
+* Added per-field authorization sample using ASP.NET authorization policies
+* Added file upload support via GraphQL Multipart Request Spec with `FileData` type
+* Added `OfTypes` filter case for `ObjectListFilter` to filter union cases by type
+* Added `ObjectListFilter` value parsing from variables in addition to supported inline value
+* Added `ObjectListFilter` value parsing from inline object with variables
+* Added `ObjectListFilter` additional operators (`In`, `Contains`, `StartsWith`, `EndsWith`)
+* Added `StructNullable` to support `ValueOption` fields in input objects
+* Added case-insensitive input object fields and constructor parameters matching
 * Added ability to recognize if an input field is null or not present at all
 * Added ability to add errors to resolved fields
-* Added `FieldDef<'Val, 'Res>` to support resolver-changing middlewares
+* Added `FieldDef<'Val, 'Res>` type to support resolver-changing middlewares
 * Added GraphQL extensions support via `GQLMessageException`
 * Added more overloads to `AddGraphQLOptions` including additional converters
-* Implemented support for optional properties usage in non-Enumerable LINQ queries
+* Added support for optional properties usage in non-Enumerable LINQ queries
 * Fixed `ID` type deserialization
-* Fixed `Contains` and `In` operators implementation for collections
+* Fixed `ObjectListFilter` `Contains` and `In` operators implementation for collections
 * Fixed generation of discriminator comparing expressions to be translatable to database queries
 * Fixed `IInputExecutionContext` resolution
 * Fixed `graphql-transport-ws` WebSocket implementation
