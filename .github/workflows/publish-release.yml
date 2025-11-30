@@ -34,7 +34,7 @@ jobs:
 
     - name: Add version to global.json
       run: |
-        $version = "9.0.304"
+        $version = "9.0.307"
         $globalJsonPath = "global.json"
         $globalJson = Get-Content -Raw -Path $globalJsonPath | ConvertFrom-Json
         if ($null -eq $globalJson.sdk.version) {
