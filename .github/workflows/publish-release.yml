@@ -63,10 +63,10 @@ jobs:
         dotnet pack --no-build --configuration Release /p:IsNuGet=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Shared package to NuGet
       run: |
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Shared.${{env.VERSION}}.nupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Shared.${{env.VERSION}}.nupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
         # wait for the package to be available
         sleep ${{env.SLEEP_DURATION}}
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Shared.${{env.VERSION}}.snupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Shared.${{env.VERSION}}.snupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Client project
       run: |
@@ -74,8 +74,8 @@ jobs:
         dotnet pack --configuration Release /p:IsNuGet=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Client package to NuGet
       run: |
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Client.${{env.VERSION}}.nupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Client.${{env.VERSION}}.snupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Client.${{env.VERSION}}.nupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Client.${{env.VERSION}}.snupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Server project
       run: |
@@ -83,8 +83,8 @@ jobs:
         dotnet pack --no-build --configuration Release /p:IsNuGet=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server package to NuGet
       run: |
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.${{env.VERSION}}.nupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.${{env.VERSION}}.snupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.${{env.VERSION}}.nupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.${{env.VERSION}}.snupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Server.AspNetCore project
       run: |
@@ -92,8 +92,8 @@ jobs:
         dotnet pack --no-build --configuration Release /p:IsNuget=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.AspNetCore package to NuGet
       run: |
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.AspNetCore.${{env.VERSION}}.nupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.AspNetCore.${{env.VERSION}}.snupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.AspNetCore.${{env.VERSION}}.nupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.AspNetCore.${{env.VERSION}}.snupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Server.Giraffe project
       run: |
@@ -101,8 +101,8 @@ jobs:
         dotnet pack --no-build --configuration Release /p:IsNuget=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Giraffe package to NuGet
       run: |
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Giraffe.${{env.VERSION}}.nupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Giraffe.${{env.VERSION}}.snupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Giraffe.${{env.VERSION}}.nupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Giraffe.${{env.VERSION}}.snupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Server.Oxpecker project
       run: |
@@ -110,8 +110,8 @@ jobs:
         dotnet pack --no-build --configuration Release /p:IsNuget=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Oxpecker package to NuGet
       run: |
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Oxpecker.${{env.VERSION}}.nupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Oxpecker.${{env.VERSION}}.snupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Oxpecker.${{env.VERSION}}.nupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Oxpecker.${{env.VERSION}}.snupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Server.Relay project
       run: |
@@ -119,8 +119,8 @@ jobs:
         dotnet pack --no-build --configuration Release /p:IsNuGet=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Relay package to NuGet
       run: |
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Relay.${{env.VERSION}}.nupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Relay.${{env.VERSION}}.snupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Relay.${{env.VERSION}}.nupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Relay.${{env.VERSION}}.snupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Server.Middleware project
       run: |
@@ -128,8 +128,8 @@ jobs:
         dotnet pack --no-build --configuration Release /p:IsNuGet=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Middleware package to NuGet
       run: |
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Middleware.${{env.VERSION}}.nupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
-        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Middleware.${{env.VERSION}}.snupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Middleware.${{env.VERSION}}.nupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Middleware.${{env.VERSION}}.snupkg -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
 
     - name: Prepare the sample project to be packed as a project template
       run: |
@@ -143,5 +143,5 @@ jobs:
     - name: Publish FSharp.Data.GraphQL.ProjectTemplates package to NuGet
       run: |
         $path = "nuget/FSharp.Data.GraphQL.ProjectTemplates.${{env.VERSION}}.nupkg"
-        dotnet nuget push $path -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        dotnet nuget push $path -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
       shell: pwsh
