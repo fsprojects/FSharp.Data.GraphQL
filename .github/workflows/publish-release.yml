@@ -9,6 +9,7 @@ env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
   DOTNET_NOLOGO: true
   SLEEP_DURATION: 60
+  DOTNET_SDK_VERSION: 9.0.307
 
 jobs:
   publish:
@@ -34,7 +35,7 @@ jobs:
 
     - name: Add version to global.json
       run: |
-        $version = "9.0.307"
+        $version = $Env:DOTNET_SDK_VERSION
         $globalJsonPath = "global.json"
         $globalJson = Get-Content -Raw -Path $globalJsonPath | ConvertFrom-Json
         if ($null -eq $globalJson.sdk.version) {
@@ -48,7 +49,7 @@ jobs:
     - name: Install .NET Core
       uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: 9.0.307
+        dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
     - name: Install local tools
       run: dotnet tool restore
