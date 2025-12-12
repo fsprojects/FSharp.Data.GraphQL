@@ -20,7 +20,7 @@
     <Compile Include="Parser.fs" />
     <Compile Include="HttpContext.fs" />
     <Compile Include="GraphQLRequestHandler.fs" />
-    <Compile Include="StartupExtensions.fs" />
+    <Compile Include="ServiceCollectionExtensions.fs" />
   </ItemGroup>
 
   <ItemGroup>
