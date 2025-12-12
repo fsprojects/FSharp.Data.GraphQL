@@ -186,6 +186,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
               IDType
               DateTimeOffsetType
               DateOnlyType
+              TimeOnlyType
               UriType
               __Schema
               query ]
