@@ -1,5 +1,5 @@
 {
-  "documentId": 1481480240,
+  "documentId": -128167532,
   "data": {
     "__schema": {
       "queryType": {
@@ -76,6 +76,16 @@
           "kind": "SCALAR",
           "name": "DateOnly",
           "description": "The `DateOnly` scalar type represents a Date value without Time component. The `DateOnly` type appears in a JSON response as a `String` representation of full-date value as specified by [IETF 3339](https://www.ietf.org/rfc/rfc3339.txt).",
+          "fields": null,
+          "inputFields": null,
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "SCALAR",
+          "name": "TimeOnly",
+          "description": "The `TimeOnly` scalar type represents a Time value without Date component. The `TimeOnly` type appears in a JSON response as a `String` representation of full-time value as specified by [IETF 3339](https://www.ietf.org/rfc/rfc3339.txt).",
           "fields": null,
           "inputFields": null,
           "interfaces": null,

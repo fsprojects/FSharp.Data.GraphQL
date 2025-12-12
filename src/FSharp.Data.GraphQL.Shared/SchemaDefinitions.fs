@@ -159,6 +159,18 @@ module SchemaDefinitions =
             | false, _ -> None
         | other -> None
 
+    /// Tries to convert any value to TimeOnly.
+    let coerceTimeOnlyValue (x : obj) : TimeOnly option =
+        match x with
+        | null -> None
+        | :? TimeOnly as d -> Some d
+        | :? DateTime as d -> Some (TimeOnly.FromDateTime d)
+        | :? string as s ->
+            match TimeOnly.TryParse(s) with
+            | true, time -> Some time
+            | false, _ -> None
+        | other -> None
+
     /// Tries to convert any value to Guid.
     let coerceGuidValue (x : obj) : Guid option =
         match x with
@@ -348,6 +360,22 @@ module SchemaDefinitions =
             | false, _ -> getParseRangeError(destinationType, DateOnly.MinValue, DateOnly.MaxValue) s
         | InlineConstant value -> value.GetCoerceRangeError(destinationType, DateOnly.MinValue, DateOnly.MaxValue)
 
+    /// Tries to resolve AST query input to TimeOnly.
+    let coerceTimeOnlyInput =
+        let destinationType = "time"
+        function
+        | Variable e when e.ValueKind = JsonValueKind.String ->
+            let s = e.GetString()
+            match TimeOnly.TryParse(s) with
+            | true, time -> Ok time
+            | false, _ -> e.GetDeserializeError destinationType
+        | Variable e -> e.GetDeserializeError destinationType
+        | InlineConstant (StringValue s) ->
+            match TimeOnly.TryParse(s) with
+            | true, time -> Ok time
+            | false, _ -> getParseRangeError(destinationType, TimeOnly.MinValue, TimeOnly.MaxValue) s
+        | InlineConstant value -> value.GetCoerceRangeError(destinationType, TimeOnly.MinValue, TimeOnly.MaxValue)
+
     /// Tries to resolve AST query input to Guid.
     let coerceGuidInput =
         let destinationType = "GUID"
@@ -472,6 +500,15 @@ module SchemaDefinitions =
                   "The `DateOnly` scalar type represents a Date value without Time component. The `DateOnly` type appears in a JSON response as a `String` representation of full-date value as specified by [IETF 3339](https://www.ietf.org/rfc/rfc3339.txt)."
           CoerceInput = coerceDateOnlyInput
           CoerceOutput = coerceDateOnlyValue }
+
+    /// GraphQL type for System.TimeOnly
+    let TimeOnlyType : ScalarDefinition<TimeOnly> =
+        { Name = "TimeOnly"
+          Description =
+              Some
+                  "The `TimeOnly` scalar type represents a Time value without Date component. The `TimeOnly` type appears in a JSON response as a `String` representation of full-time value as specified by [IETF 3339](https://www.ietf.org/rfc/rfc3339.txt)."
+          CoerceInput = coerceTimeOnlyInput
+          CoerceOutput = coerceTimeOnlyValue }
 
     /// GraphQL type for System.Guid
     let GuidType : ScalarDefinition<Guid> =
@@ -759,6 +796,7 @@ module SchemaDefinitions =
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="fields">List of input fields defined by the current input object. </param>
+        /// <param name="validator">Object validator.</param>
         /// <param name="description">Optional input object description. Useful for generating documentation.</param>
         static member InputObject(name : string, fields : InputFieldDef list, validator: GQLValidator<'Out>, ?description : string) : InputObjectDefinition<'Out> =
             { Name = name

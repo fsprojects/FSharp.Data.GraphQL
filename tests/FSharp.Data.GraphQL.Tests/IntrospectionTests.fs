@@ -693,6 +693,16 @@ let ``Introspection executes an introspection query`` () =
                     ]
                     box <| NameValueLookup.ofList [
                             "kind", upcast "SCALAR"
+                            "name", upcast "TimeOnly"
+                            "description", upcast "The `TimeOnly` scalar type represents a Time value without Date component. The `TimeOnly` type appears in a JSON response as a `String` representation of full-time value as specified by [IETF 3339](https://www.ietf.org/rfc/rfc3339.txt)."
+                            "fields", null
+                            "inputFields", null
+                            "interfaces", null
+                            "enumValues", null
+                            "possibleTypes", null
+                    ]
+                    box <| NameValueLookup.ofList [
+                            "kind", upcast "SCALAR"
                             "name", upcast "URI"
                             "description", upcast "The `URI` scalar type represents a string resource identifier compatible with URI standard. The `URI` type appears in a JSON response as a String."
                             "fields", null

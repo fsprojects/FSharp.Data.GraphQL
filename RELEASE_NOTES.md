@@ -231,3 +231,7 @@
 * Fixed input object CLR property type validation against GraphQL scalar definitions
 * Migrated all solutions to SLNX format
 * Various performance optimizations and bug fixes
+
+### Unreleased
+
+* Added `TimeOnly` GraphQL type
