@@ -329,5 +329,18 @@ module ApplicationBuilderExtensions =
 
     type IApplicationBuilder with
 
+        /// <summary>
+        /// Registers the GraphQL WebSocket middleware to handle WebSocket connections at the configured endpoint.
+        /// The middleware will only be applied to requests matching the endpoint path configured in <see cref="GraphQLOptions" />.
+        /// </summary>
         [<Extension; CompiledName "UseWebSocketsForGraphQL">]
-        member builder.UseWebSocketsForGraphQL<'Root> () = builder.UseMiddleware<GraphQLWebSocketMiddleware<'Root>> ()
+        member builder.UseWebSocketsForGraphQL<'Root> () =
+
+            let options = builder.ApplicationServices.GetRequiredService<IOptions<GraphQLOptions<'Root>>>()
+            let endpointPath = PathString options.Value.WebsocketOptions.EndpointUrl
+
+            builder.UseWhen(
+                (fun ctx -> ctx.Request.Path = endpointPath),
+                fun appBuilder ->
+                    appBuilder.UseMiddleware<GraphQLWebSocketMiddleware<'Root>>() |> ignore
+            )

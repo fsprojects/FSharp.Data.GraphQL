@@ -25,7 +25,7 @@ open FSharp.Data.GraphQL.Shared.WebSockets
 
 type GraphQLWebSocketMiddleware<'Root>
     (
-        next : RequestDelegate,
+        next : RequestDelegate, // must be kept for middleware signature compatibility
         applicationLifetime : IHostApplicationLifetime,
         serviceProvider : IServiceProvider,
         logger : ILogger<GraphQLWebSocketMiddleware<'Root>>,
@@ -35,7 +35,6 @@ type GraphQLWebSocketMiddleware<'Root>
     let options = options.Value
     let serializerOptions = options.SerializerOptions
     let pingHandler = options.WebsocketOptions.CustomPingHandler
-    let endpointUrl = PathString options.WebsocketOptions.EndpointUrl
     let connectionInitTimeout = options.WebsocketOptions.ConnectionInitTimeout
 
     let serializeServerMessage (jsonSerializerOptions : JsonSerializerOptions) (serverMessage : ServerMessage) = task {
@@ -346,25 +345,29 @@ type GraphQLWebSocketMiddleware<'Root>
             return Result.Error <| "{nameof ConnectionInit} timeout"
     }
 
-    member _.InvokeAsync (ctx : HttpContext) = task {
-        if not (ctx.Request.Path = endpointUrl) then
-            do! next.Invoke (ctx)
-        else if ctx.WebSockets.IsWebSocketRequest then
-            use! socket = ctx.WebSockets.AcceptWebSocketAsync ("graphql-transport-ws")
-            let! connectionInitResult = socket |> waitForConnectionInitAndRespondToClient
-            match connectionInitResult with
-            | Result.Error errMsg -> logger.LogWarning errMsg
-            | Ok _ ->
-                let longRunningCancellationToken =
-                    (CancellationTokenSource
-                        .CreateLinkedTokenSource(ctx.RequestAborted, applicationLifetime.ApplicationStopping)
-                        .Token)
-                longRunningCancellationToken.Register (fun _ -> (socket |> tryToGracefullyCloseSocketWithDefaultBehavior).Wait ())
-                |> ignore
-                try
-                    do! socket |> handleMessages longRunningCancellationToken ctx
-                with ex ->
-                    logger.LogError (ex, "Cannot handle WebSocket message.")
+    member _.InvokeAsync (ctx : HttpContext) : Task =
+        if ctx.WebSockets.IsWebSocketRequest then
+            task {
+                use! socket = ctx.WebSockets.AcceptWebSocketAsync ("graphql-transport-ws")
+                let! connectionInitResult = socket |> waitForConnectionInitAndRespondToClient
+                match connectionInitResult with
+                | Result.Error errMsg -> logger.LogWarning errMsg
+                | Ok _ ->
+                    let longRunningCancellationToken =
+                        (CancellationTokenSource
+                            .CreateLinkedTokenSource(ctx.RequestAborted, applicationLifetime.ApplicationStopping)
+                            .Token)
+                    longRunningCancellationToken.Register (fun _ -> (socket |> tryToGracefullyCloseSocketWithDefaultBehavior).Wait ())
+                    |> ignore
+                    try
+                        do! socket |> handleMessages longRunningCancellationToken ctx
+                    with ex ->
+                        logger.LogError (ex, "Cannot handle WebSocket message.")
+            }
         else
-            do! next.Invoke (ctx)
-    }
+            TypedResults.Problem (
+                title = "WebSocket connection expected.",
+                detail = $"'{options.WebsocketOptions.EndpointUrl}' endpoint only accepts WebSocket connections.",
+                statusCode = StatusCodes.Status400BadRequest
+            ) :> IResult
+            |> _.ExecuteAsync(ctx)

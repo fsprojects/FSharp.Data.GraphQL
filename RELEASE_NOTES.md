@@ -232,6 +232,7 @@
 * Migrated all solutions to SLNX format
 * Various performance optimizations and bug fixes
 
-### Unreleased
+### 3.1.0 - Unreleased
 
 * Added `TimeOnly` GraphQL type
+* Excluded `GraphQLWebSocketMiddleware` from exception stack trace if request not a Web Socket
