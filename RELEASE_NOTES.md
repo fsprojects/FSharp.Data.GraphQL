@@ -236,3 +236,4 @@
 
 * Added `TimeOnly` GraphQL type
 * Excluded `GraphQLWebSocketMiddleware` from exception stack trace if request not a Web Socket
+* Changed `GraphQLOptionsDefaults.WebSocketConnectionInitTimeoutInMs` const type to `double`

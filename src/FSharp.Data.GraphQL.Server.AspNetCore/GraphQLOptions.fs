@@ -13,7 +13,7 @@ module GraphQLOptionsDefaults =
 
     let [<Literal>] ReadBufferSize = 4096
     let [<Literal>] WebSocketEndpoint = "/ws"
-    let [<Literal>] WebSocketConnectionInitTimeoutInMs = 3000
+    let [<Literal>] WebSocketConnectionInitTimeoutInMs = 3000.0
 
 module GraphQLOptions =
 
