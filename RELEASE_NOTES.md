@@ -238,3 +238,4 @@
 * Added `map` function for Relay `Connection` and `Edge` types
 * Excluded `GraphQLWebSocketMiddleware` from exception stack trace if request not a Web Socket
 * Changed `GraphQLOptionsDefaults.WebSocketConnectionInitTimeoutInMs` const type to `double`
+* Improved Relay XML documentation comments

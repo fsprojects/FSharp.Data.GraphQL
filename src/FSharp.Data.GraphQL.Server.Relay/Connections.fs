@@ -6,74 +6,98 @@ namespace FSharp.Data.GraphQL.Server.Relay
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 
-/// Record used to represent Relay node with cursor identifier.
+/// <summary>
+/// Represents a Relay edge – an object with a cursor and a node.
+/// Edges are used to traverse connections in Relay pagination.
+/// </summary>
+/// <typeparam name="Node">The type of the node at the end of this edge.</typeparam>
 type Edge<'Node> = {
-    /// Cursor used to identify current node.
+    /// <summary>Opaque cursor string used to identify this node's position in the connection.</summary>
     Cursor : string
-    /// Object satisfying Relay Node interface definition.
+    /// <summary>The object at the end of this edge. Must satisfy the Relay Node interface.</summary>
     Node : 'Node
 }
 
-module Edge =
-
-    let map mapping (edge : Edge<'T>) : Edge<'U> =
-        { Cursor = edge.Cursor; Node = mapping edge.Node }
-
-/// Record used to represent a information about single page of
-/// results to Relay. Relay uses cursor id to identify the order
-/// between the pages.
+/// <summary>
+/// Information about pagination in a Relay connection.
+/// Follows the Relay Cursor Connections Specification.
+/// </summary>
+/// <remarks>
+/// PageInfo provides pagination metadata that allows clients to determine
+/// whether more pages are available and where to continue pagination.
+/// </remarks>
 type PageInfo = {
-    /// Should be true, if the next page is available.
-    /// False if current page is the last page of results.
+    /// <summary>
+    /// Indicates whether more items exist following the current page when paginating forward.
+    /// Returns <c>false</c> if this is the last page.
+    /// </summary>
     HasNextPage : Async<bool>
-    /// Should be true, if the previous page is available.
-    /// False if current page is the first page of results.
+    /// <summary>
+    /// Indicates whether more items exist before the current page when paginating backward.
+    /// Returns <c>false</c> if this is the first page.
+    /// </summary>
     HasPreviousPage : Async<bool>
-    /// Optional cursor used to identify begining of the results.
+    /// <summary>
+    /// The cursor corresponding to the first edge in the current page.
+    /// Returns <c>None</c> if the page is empty.
+    /// </summary>
     StartCursor : Async<string option>
-    /// Optional cursor used to identify the end of the results.
+    /// <summary>
+    /// The cursor corresponding to the last edge in the current page.
+    /// Returns <c>None</c> if the page is empty.
+    /// </summary>
     EndCursor : Async<string option>
 }
 
-/// Record representing Relay connection object. Connection describes
-/// a set of results (Relay nodes) returned from the server. Instead
-/// of statically identifying paged results, relay uses notion of the
-/// cursor, which allows to track result set windows, while the
-/// result set itself may change over time.
+/// <summary>
+/// Represents a Relay connection – a paginated set of edges with metadata.
+/// Follows the Relay Cursor Connections Specification.
+/// </summary>
+/// <typeparam name="Node">The type of nodes contained in this connection.</typeparam>
+/// <remarks>
+/// Unlike traditional offset-based pagination, Relay connections use cursors
+/// to navigate through results, allowing the result set to change between requests
+/// while maintaining consistent pagination behavior.
+/// </remarks>
 type Connection<'Node> = {
-    /// Optional value describing total number of results avaiable
-    /// at the time.
+    /// <summary>
+    /// The total count of items in the entire result set, ignoring pagination.
+    /// Returns <c>None</c> when the count is not available or would be too expensive to compute.
+    /// </summary>
     TotalCount : Async<int option>
-    /// Information about current results page.
+    /// <summary>
+    /// Metadata about the current page, including cursors and availability of adjacent pages.
+    /// </summary>
+    /// <seealso cref="PageInfo"/>
     PageInfo : PageInfo
-    /// List of edges (Relay nodes with cursors) returned as results.
+    /// <summary>
+    /// The list of edges in the current page. Each edge contains a cursor and a node.
+    /// </summary>
+    /// <seealso cref="Edge{T}"/>
     Edges : Async<Edge<'Node> seq>
 }
 //    interface seq<'Node> with
 //        member x.GetEnumerator () = (Seq.map (fun edge -> edge.Node) x.Edges).GetEnumerator()
 //        member x.GetEnumerator () : System.Collections.IEnumerator = upcast (x :> seq<'Node>).GetEnumerator()
 
-module Connection =
-
-    let map mapping (conn : Connection<'T>) : Connection<'U> =
-        {
-            TotalCount = conn.TotalCount
-            PageInfo = conn.PageInfo
-            Edges = async {
-                let! edges = conn.Edges
-                return edges |> Seq.map (Edge.map mapping)
-            }
-        }
-
-/// Slice info union describing Relay cursor progression.
+/// <summary>
+/// Describes pagination direction and parameters for slicing a Relay connection.
+/// </summary>
+/// <typeparam name="Cursor">The type used to represent cursor values.</typeparam>
+/// <remarks>
+/// SliceInfo encapsulates the "first/after" (forward) or "last/before" (backward)
+/// pagination arguments as defined in the Relay specification.
+/// </remarks>
 type SliceInfo<'Cursor> =
-    /// Return page of `first` results `after` provided cursor value.
-    /// If `after` value was not provided, start from the beginning of
-    /// the result set.
+    /// <summary>
+    /// Forward pagination: retrieve the first N items after a given cursor.
+    /// If <c>After</c> is <c>ValueNone</c>, starts from the beginning of the result set.
+    /// </summary>
     | Forward of First : int * After : 'Cursor voption
-    /// Return page of `last` results `before` provided cursor value.
-    /// If `before` value was not provided, return `last` results of
-    /// the result set.
+    /// <summary>
+    /// Backward pagination: retrieve the last N items before a given cursor.
+    /// If <c>Before</c> is <c>ValueNone</c>, retrieves the last N items from the end of the result set.
+    /// </summary>
     | Backward of Last : int * Before : 'Cursor voption
 
     member this.PageSize =
@@ -86,24 +110,19 @@ type SliceInfo<'Cursor> =
         | Forward (_, after) -> after
         | Backward (_, before) -> before
 
-[<RequireQualifiedAccess>]
-module Cursor =
-    [<Literal>]
-    let Prefix = "arrayconnection"
-    let toOffset defaultValue cursor =
-        match cursor with
-        | GlobalId (Prefix, id) ->
-            match System.Int32.TryParse id with
-            | true, num -> num
-            | false, _ -> defaultValue
-        | _ -> defaultValue
-    let ofOffset offset = toGlobalId Prefix (offset.ToString ())
-
 [<AutoOpen>]
 module Definitions =
 
-    /// Active pattern used to match context arguments in order
-    /// to construct Relay slice information.
+    /// <summary>
+    /// Active pattern that extracts Relay pagination arguments from a GraphQL field context.
+    /// </summary>
+    /// <param name="ctx">The GraphQL field resolution context.</param>
+    /// <returns>
+    /// <c>ValueSome(Forward)</c> if "first" argument is present (with optional "after"),
+    /// <c>ValueSome(Backward)</c> if "last" argument is present (with optional "before"),
+    /// or <c>ValueNone</c> if no pagination arguments are found.
+    /// </returns>
+    /// <seealso cref="SliceInfo{T}"/>
     [<return: Struct>]
     let (|SliceInfo|_|) (ctx : ResolveFieldContext) =
         match ctx.TryArg "first", ctx.TryArg "after" with
@@ -115,7 +134,10 @@ module Definitions =
             | ValueSome (last), (before) -> ValueSome (Backward (last, before))
             | _, _ -> ValueNone
 
-    /// Object defintion representing information about pagination in context of Relay connection
+    /// <summary>
+    /// GraphQL object type definition for <see cref="PageInfo"/>.
+    /// Defines the schema for pagination metadata in Relay connections.
+    /// </summary>
     let PageInfo =
         Define.Object<PageInfo> (
             name = "PageInfo",
@@ -148,12 +170,19 @@ module Definitions =
             ]
         )
 
-    /// Converts existing output type defintion into an edge in a Relay connection.
-    /// <paramref name="nodeType"/> must not be a List.
+    /// <summary>
+    /// Creates a GraphQL object type definition for a Relay edge wrapping the specified node type.
+    /// </summary>
+    /// <param name="nodeType">The GraphQL output type definition for nodes. Must not be a list type.</param>
+    /// <typeparam name="Node">The .NET type of nodes in the edge.</typeparam>
+    /// <returns>An <c>ObjectDef&lt;Edge&lt;'Node&gt;&gt;</c> with "cursor" and "node" fields.</returns>
+    /// <exception cref="System.Exception">Thrown if <paramref name="nodeType"/> is a list type.</exception>
+    /// <seealso cref="Edge{T}"/>
+    /// <seealso cref="ConnectionOf"/>
     let EdgeOf (nodeType : #OutputDef<'Node>) =
         match nodeType with
         | List _ ->
-            failwith $"{nodeType.ToString ()} cannot be used as a relay Edge or Connection - only non-list type definitions are allowed"
+            failwith $"{nodeType.ToString ()} cannot be used as a relay Edge or Connection – only non-list type definitions are allowed"
         | Named n ->
             Define.Object<Edge<'Node>> (
                 name = n.Name + "Edge",
@@ -170,8 +199,17 @@ module Definitions =
             )
         | _ -> failwithf "Unexpected value of nodeType: %O" nodeType
 
-    /// Converts existing output type definition into Relay-compatible connection.
-    /// <paramref name="nodeType"/> must not be a List.
+    /// <summary>
+    /// Creates a GraphQL object type definition for a Relay connection containing the specified node type.
+    /// </summary>
+    /// <param name="nodeType">The GraphQL output type definition for nodes. Must not be a list type.</param>
+    /// <typeparam name="Node">The .NET type of nodes in the connection.</typeparam>
+    /// <returns>
+    /// An <c>ObjectDef&lt;Connection&lt;'Node&gt;&gt;</c> with "totalCount", "pageInfo", and "edges" fields.
+    /// </returns>
+    /// <exception cref="System.Exception">Thrown if <paramref name="nodeType"/> is a list type.</exception>
+    /// <seealso cref="Connection{T}"/>
+    /// <seealso cref="EdgeOf"/>
     let ConnectionOf (nodeType : #OutputDef<'Node>) =
         let n =
             match nodeType with
@@ -195,21 +233,104 @@ module Definitions =
         )
 
 [<RequireQualifiedAccess>]
+module Cursor =
+    /// <summary>Prefix used for array-based connection cursors when encoding as Global IDs.</summary>
+    [<Literal>]
+    let Prefix = "arrayconnection"
+
+    /// <summary>
+    /// Decodes a cursor string to an integer offset.
+    /// </summary>
+    /// <param name="defaultValue">The value to return if decoding fails.</param>
+    /// <param name="cursor">The cursor string to decode (expected to be a Global ID).</param>
+    /// <returns>The decoded offset, or <paramref name="defaultValue"/> if parsing fails.</returns>
+    let toOffset defaultValue cursor =
+        match cursor with
+        | GlobalId (Prefix, id) ->
+            match System.Int32.TryParse id with
+            | true, num -> num
+            | false, _ -> defaultValue
+        | _ -> defaultValue
+
+    /// <summary>
+    /// Encodes an integer offset as a cursor string using the Global ID format.
+    /// </summary>
+    /// <param name="offset">The zero-based array offset to encode.</param>
+    /// <returns>An opaque cursor string suitable for use in Relay pagination.</returns>
+    let ofOffset offset = toGlobalId Prefix (offset.ToString ())
+
+module Edge =
+
+    /// <summary>
+    /// Transforms the node in an edge while preserving the cursor.
+    /// </summary>
+    /// <param name="mapping">The function to transform the node from type <typeparamref name="T"/> to type <typeparamref name="U"/>.</param>
+    /// <param name="edge">The edge to transform.</param>
+    /// <typeparam name="T">The type of the node in the source edge.</typeparam>
+    /// <typeparam name="U">The type of the node in the resulting edge.</typeparam>
+    /// <returns>A new edge with the transformed node and the same cursor.</returns>
+    let map mapping (edge : Edge<'T>) : Edge<'U> =
+        { Cursor = edge.Cursor; Node = mapping edge.Node }
+
+[<RequireQualifiedAccess>]
 module Connection =
 
-    /// List of argument definitions used to apply
-    /// Relay's connection forwarding ability.
+    /// <summary>
+    /// Transforms a <see cref="Connection{T}"/> into a <see cref="Connection{U}"/>
+    /// by applying a mapping function to each node while preserving cursor information and pagination metadata.
+    /// </summary>
+    /// <param name="mapping">The function to transform nodes from type <typeparamref name="T"/> to type <typeparamref name="U"/>.</param>
+    /// <param name="conn">The source connection to transform.</param>
+    /// <typeparam name="T">The type of nodes in the source connection.</typeparam>
+    /// <typeparam name="U">The type of nodes in the resulting connection.</typeparam>
+    /// <returns>A new connection with transformed nodes. Cursors, page info, and total count are preserved unchanged.</returns>
+    /// <seealso cref="Edge.map"/>
+    let map mapping (conn : Connection<'T>) : Connection<'U> =
+        {
+            TotalCount = conn.TotalCount
+            PageInfo = conn.PageInfo
+            Edges = async {
+                let! edges = conn.Edges
+                return edges |> Seq.map (Edge.map mapping)
+            }
+        }
+
+    /// <summary>
+    /// Argument definitions for forward pagination ("first" and "after").
+    /// Use these when defining GraphQL fields that support forward-only pagination.
+    /// </summary>
+    /// <seealso cref="backwardArgs"/>
+    /// <seealso cref="allArgs"/>
     let forwardArgs = [ Define.Input ("first", Nullable IntType); Define.Input ("after", Nullable StringType) ]
 
-    /// List of argument definitions used to apply
-    /// Relay's connection backwarding ability.
+    /// <summary>
+    /// Argument definitions for backward pagination ("last" and "before").
+    /// Use these when defining GraphQL fields that support backward-only pagination.
+    /// </summary>
+    /// <seealso cref="forwardArgs"/>
+    /// <seealso cref="allArgs"/>
     let backwardArgs = [ Define.Input ("last", Nullable IntType); Define.Input ("before", Nullable StringType) ]
 
-    /// List of argument definitions used to apply
-    /// Relay's ability to move connections forwards and backwards.
+    /// <summary>
+    /// Complete set of argument definitions for bidirectional pagination.
+    /// Combines <see cref="forwardArgs"/> and <see cref="backwardArgs"/>.
+    /// Use these when defining GraphQL fields that support both forward and backward pagination.
+    /// </summary>
     let allArgs = forwardArgs @ backwardArgs
 
-    /// Construct a Relay Connection object from the provided array.
+    /// <summary>
+    /// Creates a Relay connection from an array of nodes using array indices as cursors.
+    /// </summary>
+    /// <param name="array">The array of nodes to convert into a connection.</param>
+    /// <typeparam name="Node">The type of nodes in the array.</typeparam>
+    /// <returns>
+    /// A <see cref="Connection{T}"/> containing all items from the array.
+    /// The <see cref="PageInfo"/> indicates this is a complete result set (no adjacent pages).
+    /// </returns>
+    /// <remarks>
+    /// This is a convenience function for simple scenarios. For proper pagination,
+    /// use slicing based on <see cref="SliceInfo{T}"/>.
+    /// </remarks>
     let ofArray array =
         let edges =
             array
