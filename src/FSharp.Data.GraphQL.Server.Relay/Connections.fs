@@ -14,6 +14,11 @@ type Edge<'Node> = {
     Node : 'Node
 }
 
+module Edge =
+
+    let map mapping (edge : Edge<'T>) : Edge<'U> =
+        { Cursor = edge.Cursor; Node = mapping edge.Node }
+
 /// Record used to represent a information about single page of
 /// results to Relay. Relay uses cursor id to identify the order
 /// between the pages.
@@ -47,6 +52,18 @@ type Connection<'Node> = {
 //    interface seq<'Node> with
 //        member x.GetEnumerator () = (Seq.map (fun edge -> edge.Node) x.Edges).GetEnumerator()
 //        member x.GetEnumerator () : System.Collections.IEnumerator = upcast (x :> seq<'Node>).GetEnumerator()
+
+module Connection =
+
+    let map mapping (conn : Connection<'T>) : Connection<'U> =
+        {
+            TotalCount = conn.TotalCount
+            PageInfo = conn.PageInfo
+            Edges = async {
+                let! edges = conn.Edges
+                return edges |> Seq.map (Edge.map mapping)
+            }
+        }
 
 /// Slice info union describing Relay cursor progression.
 type SliceInfo<'Cursor> =
