@@ -232,7 +232,7 @@
 * Migrated all solutions to SLNX format
 * Various performance optimizations and bug fixes
 
-### 3.1.0 - Unreleased
+### 3.1.0 - 2026-02-04
 
 * Added `TimeOnly` GraphQL type
 * Added `map` function for Relay `Connection` and `Edge` types
