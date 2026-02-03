@@ -11,6 +11,7 @@ open FSharp.Data.GraphQL.Types.Patterns
 /// Edges are used to traverse connections in Relay pagination.
 /// </summary>
 /// <typeparam name="Node">The type of the node at the end of this edge.</typeparam>
+[<Struct>]
 type Edge<'Node> = {
     /// <summary>Opaque cursor string used to identify this node's position in the connection.</summary>
     Cursor : string

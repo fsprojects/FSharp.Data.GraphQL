@@ -249,3 +249,4 @@
 ### 4.0.0 - Unreleased
 
 * **Breaking Change** Migrated to .NET 10
+* **Breaking Change** Made Relay `Edge` a struct
