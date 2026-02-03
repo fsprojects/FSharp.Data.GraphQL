@@ -239,3 +239,7 @@
 * Excluded `GraphQLWebSocketMiddleware` from exception stack trace if request not a Web Socket
 * Changed `GraphQLOptionsDefaults.WebSocketConnectionInitTimeoutInMs` const type to `double`
 * Improved Relay XML documentation comments
+
+### 3.1.1 - Unreleased
+
+* Fixed planning phase crash when inline fragments reference types not included in union or interface definitions

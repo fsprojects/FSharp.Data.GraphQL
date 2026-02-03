@@ -118,9 +118,9 @@ let rec private abstractionInfo (ctx : PlanningContext) (parentDef : AbstractDef
             | ValueSome (Abstract abstractDef) ->
                 abstractionInfo ctx abstractDef field ValueNone includer
             | _ ->
-                let pname = parentDef :?> NamedDef
-                Debug.Fail "Must be prevented by validation"
-                failwith $"There is no object type named '%s{typeName}' that is a possible type of '%s{pname.Name}'"
+                // Type condition doesn't match any possible types of the abstract type.
+                // This is valid and should return an empty map (no fields for this type condition).
+                Map.empty
 
 let private directiveIncluder (directive: Directive) : Includer =
     fun variables ->
@@ -333,9 +333,9 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                 // Filter out already existing fields
                 Map.merge (fun _ -> deepMerge) fields fragmentFields
         ) Map.empty
-    if Map.isEmpty plannedTypeFields
-    then { info with Kind = ResolveDeferred info }
-    else { info with Kind = ResolveAbstraction plannedTypeFields }
+    // Always return ResolveAbstraction kind, even for empty maps.
+    // An empty map is a valid state representing "no fields selected for this type condition."
+    { info with Kind = ResolveAbstraction plannedTypeFields }
 
 let private planVariables (schema: ISchema) (operation: OperationDefinition) =
     operation.VariableDefinitions
