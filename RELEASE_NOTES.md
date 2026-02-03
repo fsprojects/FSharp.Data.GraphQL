@@ -244,3 +244,8 @@
 
 * Fixed planning phase crash when inline fragments reference types not included in union or interface definitions
 * Fixed GraphQL client provider handling for schema types that reuse reserved scalar names such as `Date`, so introspection kind now takes precedence over built-in scalar mappings.
+* Improved Relay XML documentation comments
+
+### 4.0.0 - Unreleased
+
+* **Breaking Change** Migrated to .NET 10
