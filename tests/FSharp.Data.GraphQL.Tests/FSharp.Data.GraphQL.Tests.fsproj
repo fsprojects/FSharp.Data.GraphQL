@@ -72,6 +72,7 @@
     <Compile Include="MiddlewareTests.fs" />
     <Compile Include="FileTests.fs" />
     <Compile Include="AstExtensionsTests.fs" />
+    <Compile Include="LazyEnumerationExceptionTests.fs" />
     <Compile Include="AspNetCore/TestSchema.fs" />
     <Compile Include="AspNetCore/InvalidMessageTests.fs" />
     <Compile Include="AspNetCore/SerializationTests.fs" />

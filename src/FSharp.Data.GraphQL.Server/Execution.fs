@@ -376,8 +376,12 @@ and private executeResolvers (inputContext : InputExecutionContextProvider) (ctx
         | Error errs -> return Error (errs @ additionalErrs)
         | Ok None -> return Error ((nullResolverError name path ctx) @ additionalErrs)
         | Ok (Some v) ->
-            match! onSuccess ctx path parent v with
+            let! onSuccessResult =
+                try onSuccess ctx path parent v
+                with e -> resolverError path ctx e |> Error |> AsyncVal.wrap
+            match onSuccessResult with
             | Ok (res, deferred, errs) -> return Ok (res, deferred, errs @ additionalErrs)
+            | Error errs when ctx.ExecutionInfo.IsNullable -> return Ok (KeyValuePair(name, null), None, errs @ additionalErrs)
             | Error errs -> return Error (errs @ additionalErrs)
     }
 
