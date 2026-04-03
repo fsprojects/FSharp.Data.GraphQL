@@ -297,10 +297,6 @@ module internal ProvidedOperation =
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
         tdef.AddMembersDelayed(fun _ ->
             let operationResultDef = ProvidedOperationResult.makeProvidedType(operationType)
-            let isScalar (typeName: string) =
-                match schemaTypes.TryFind typeName with
-                | Some introspectionType -> introspectionType.Kind = TypeKind.SCALAR
-                | None -> false
             let variables =
                 let rec mapVariable (variableName : string) (variableType : InputType) =
                     match variableType with
@@ -309,9 +305,9 @@ module internal ProvidedOperation =
                         | Some uploadInputTypeName when typeName = uploadInputTypeName ->
                             struct (variableName, typeName, TypeMapping.makeOption typeof<Upload>)
                         | _ ->
-                            match TypeMapping.scalar.TryFind(typeName) with
+                            match TypeMapping.tryFindScalarType schemaTypes typeName with
                             | Some t -> struct (variableName,typeName, TypeMapping.makeOption t)
-                            | None when isScalar typeName -> struct (variableName, typeName, typeof<string option>)
+                            | None when TypeMapping.isScalarTypeName schemaTypes typeName -> struct (variableName, typeName, typeof<string option>)
                             | None ->
                                 match schemaProvidedTypes.TryFind(typeName) with
                                 | Some t -> struct (variableName, typeName, TypeMapping.makeOption t)
@@ -381,7 +377,7 @@ module internal ProvidedOperation =
                     tdef.DeclaredProperties |> Seq.exists ((fun p -> p.PropertyType) >> existsUploadType)
                 variables |> Seq.exists (fun struct (_, _, t) -> existsUploadType t)
                 || variables
-                    |> Seq.where (fun struct (_, typeName, _) -> TypeMapping.scalar.TryGetValue typeName |> fst |> not)
+                    |> Seq.where (fun struct (_, typeName, _) -> not (TypeMapping.isScalarTypeName schemaTypes typeName))
                     |> Seq.choose (fun struct (_, typeName, _) -> schemaProvidedTypes |> Map.tryFind typeName)
                     |> Seq.exists existsUploadTypeDefinition
             let runMethodOverloads : MemberInfo list =

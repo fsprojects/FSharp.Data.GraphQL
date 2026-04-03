@@ -169,6 +169,19 @@ module internal TypeMapping =
            "URI", typeof<Uri> |]
         |> Map.ofArray
 
+    let isBuiltInScalarTypeName (name : string) =
+        scalar |> Map.containsKey name
+
+    let isScalarTypeName (schemaTypes : Map<TypeName, IntrospectionType>) (name : string) =
+        match schemaTypes.TryFind name with
+        | Some schemaType -> schemaType.Kind = TypeKind.SCALAR
+        | None -> isBuiltInScalarTypeName name
+
+    let tryFindScalarType (schemaTypes : Map<TypeName, IntrospectionType>) (name : string) =
+        if isScalarTypeName schemaTypes name
+        then scalar |> Map.tryFind name
+        else None
+
     let getSchemaTypes (introspection : IntrospectionSchema) =
         let schemaTypeNames =
             [| "__TypeKind"
@@ -179,13 +192,11 @@ module internal TypeMapping =
                "__EnumValue"
                "__Directive"
                "__Schema" |]
-        let isScalarType (name : string) =
-            scalar |> Map.containsKey name
         let isIntrospectionType (name : string) =
             schemaTypeNames |> Array.contains name
         introspection.Types
         |> Array.choose (fun t ->
-            if not (isIntrospectionType t.Name) && not (isScalarType t.Name)
+            if not (isIntrospectionType t.Name) && not (t.Kind = TypeKind.SCALAR && isBuiltInScalarTypeName t.Name)
             then Some(t.Name, t)
             else None)
         |> Map.ofArray

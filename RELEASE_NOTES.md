@@ -1,3 +1,6 @@
+### 3.1.1 - 2026-04-03
+* Fixed GraphQL client provider handling for schema types that reuse reserved scalar names such as `Date`, so introspection kind now takes precedence over built-in scalar mappings.
+
 #### 0.0.1-beta - 2016-04-19
 * Initial release
 
