@@ -1,7 +1,6 @@
 module FSharp.Data.GraphQL.IntegrationTests.ReservedScalarNameProviderTests
 
 open Xunit
-open Helpers
 open FSharp.Data.GraphQL
 
 type ObjectDateProvider = GraphQLProvider<"reserved_scalar_object_date_introspection.json">
@@ -42,9 +41,7 @@ module InputDateSchema =
 [<Fact>]
 let ``Should allow object types that reuse reserved scalar names`` () =
     ObjectDateSchema.compileSmoke ()
-    true |> equals true
 
 [<Fact>]
 let ``Should allow input object types that reuse reserved scalar names`` () =
     InputDateSchema.compileSmoke ()
-    true |> equals true

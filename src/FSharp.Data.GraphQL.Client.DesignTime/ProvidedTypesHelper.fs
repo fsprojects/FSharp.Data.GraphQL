@@ -309,7 +309,7 @@ module internal ProvidedOperation =
                             | Some t -> struct (variableName,typeName, TypeMapping.makeOption t)
                             | None when TypeMapping.isScalarTypeName schemaTypes typeName -> struct (variableName, typeName, typeof<string option>)
                             | None ->
-                                match schemaProvidedTypes.TryFind(typeName) with
+                                match schemaProvidedTypes.TryFind typeName with
                                 | Some t -> struct (variableName, typeName, TypeMapping.makeOption t)
                                 | None -> failwith $"""Unable to find variable type "%s{typeName}" in the schema definition."""
                     | ListType itype ->

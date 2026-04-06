@@ -1,6 +1,3 @@
-### 3.1.1 - 2026-04-03
-* Fixed GraphQL client provider handling for schema types that reuse reserved scalar names such as `Date`, so introspection kind now takes precedence over built-in scalar mappings.
-
 #### 0.0.1-beta - 2016-04-19
 * Initial release
 
@@ -243,6 +240,9 @@
 * Changed `GraphQLOptionsDefaults.WebSocketConnectionInitTimeoutInMs` const type to `double`
 * Improved Relay XML documentation comments
 
-### 3.1.1 - Unreleased
+### 3.1.1 - 2026-04-03
 
+* Fixed GraphQL client provider handling for schema types that reuse reserved scalar names such as `Date`, so introspection kind now takes precedence over built-in scalar mappings.
+
+### 3.1.2 - Unreleased
 * Fixed planning phase crash when inline fragments reference types not included in union or interface definitions
