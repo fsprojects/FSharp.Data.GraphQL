@@ -91,7 +91,7 @@ Target.create BuildTarget <| fun _ ->
     })
 
 let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
-    CreateProcess.fromRawCommandLine "dotnet" $"run --project {project} --no-build --configuration {configurationString} --urls=http://localhost:%i{port}/"
+    CreateProcess.fromRawCommandLine "dotnet" $"run --project {project} --no-build --no-launch-profile --configuration {configurationString} --urls=http://localhost:%i{port}/"
     |> CreateProcess.withStandardInput (CreatePipe streamRef)
     |> CreateProcess.redirectOutput
     |> CreateProcess.withOutputEventsNotNull Trace.trace Trace.traceError
