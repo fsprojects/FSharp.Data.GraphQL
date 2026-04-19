@@ -242,7 +242,5 @@
 
 ### 3.1.1 - 2026-04-03
 
-* Fixed GraphQL client provider handling for schema types that reuse reserved scalar names such as `Date`, so introspection kind now takes precedence over built-in scalar mappings.
-
-### 3.1.2 - Unreleased
 * Fixed planning phase crash when inline fragments reference types not included in union or interface definitions
+* Fixed GraphQL client provider handling for schema types that reuse reserved scalar names such as `Date`, so introspection kind now takes precedence over built-in scalar mappings.
