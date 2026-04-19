@@ -32,7 +32,7 @@ let ctx = Context.forceFakeContext ()
 let embedAll = ctx.Arguments |> List.exists (fun arg -> arg = BuildArguments.EmbedAll)
 
 module DotNetCli =
-    let setVersion (o : DotNet.Options) = { o with Version = Some "9.0.307" }
+    let setVersion (o : DotNet.Options) = { o with Version = Some "10.0.202" }
     let setRestoreOptions (o : DotNet.RestoreOptions) = o.WithCommon setVersion
 
 let configurationString = Environment.environVarOrDefault "CONFIGURATION" "Release"
@@ -50,7 +50,7 @@ let configuration =
 //  - for documentation, you also need to edit info in "docs/tools/generate.fsx"
 
 [<Literal>]
-let DotNetMoniker = "net8.0"
+let DotNetMoniker = "net10.0"
 
 let project = "FSharp.Data.GraphQL"
 let release = ReleaseNotes.load "RELEASE_NOTES.md"
