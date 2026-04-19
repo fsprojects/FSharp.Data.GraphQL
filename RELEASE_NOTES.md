@@ -240,6 +240,7 @@
 * Changed `GraphQLOptionsDefaults.WebSocketConnectionInitTimeoutInMs` const type to `double`
 * Improved Relay XML documentation comments
 
-### 3.1.1 - Unreleased
+### 3.1.1 - 2026-04-19
 
 * Fixed planning phase crash when inline fragments reference types not included in union or interface definitions
+* Fixed GraphQL client provider handling for schema types that reuse reserved scalar names such as `Date`, so introspection kind now takes precedence over built-in scalar mappings.
