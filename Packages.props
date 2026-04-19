@@ -1,10 +1,10 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <PropertyGroup>
-    <SystemVersion>8.0.*</SystemVersion>
-    <MicrosoftExtensionsVersion>8.0.*</MicrosoftExtensionsVersion>
-    <AspNetCoreVersion>8.0.*</AspNetCoreVersion>
-    <FSharpCoreVersion>9.0.202</FSharpCoreVersion>
+    <SystemVersion>10.0.*</SystemVersion>
+    <MicrosoftExtensionsVersion>10.0.*</MicrosoftExtensionsVersion>
+    <AspNetCoreVersion>10.0.*</AspNetCoreVersion>
+    <FSharpCoreVersion>10.1.202</FSharpCoreVersion>
     <FsToolkitVersion>4.17.*</FsToolkitVersion>
     <XUnitVersion>2.9.3</XUnitVersion>
     <FAKEVersion>6.*</FAKEVersion>
