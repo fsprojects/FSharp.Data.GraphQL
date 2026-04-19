@@ -287,5 +287,5 @@
 ### 4.0.0 - Unreleased
 
 * **Breaking Change** Migrated to .NET 10
-* **Breaking Change** Made Relay `Edge` a struct
+* **Breaking Change** Made Relay `Edge` a read-only struct
 * Improved Relay XML documentation comments
