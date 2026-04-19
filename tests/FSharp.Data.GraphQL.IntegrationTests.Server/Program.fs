@@ -1,17 +1,18 @@
 namespace FSharp.Data.GraphQL.IntegrationTests.Server
 
-open Microsoft.AspNetCore
+open Microsoft.Extensions.Hosting
 open Microsoft.AspNetCore.Hosting
 
 module Program =
     let exitCode = 0
 
-    let buildWebHost args =
-        WebHost
+    let buildHost args =
+        Host
             .CreateDefaultBuilder(args)
-            .UseStartup<Startup>()
+            .ConfigureWebHostDefaults(fun webBuilder ->
+                webBuilder.UseStartup<Startup>() |> ignore)
 
     [<EntryPoint>]
     let main args =
-        buildWebHost(args).Build().Run()
+        buildHost(args).Build().Run()
         exitCode

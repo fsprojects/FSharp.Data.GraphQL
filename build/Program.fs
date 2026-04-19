@@ -77,6 +77,7 @@ Target.create BuildTarget <| fun _ ->
     "FSharp.Data.GraphQL.slnx"
     |> DotNet.build (fun options -> {
         options with
+            Common = DotNetCli.setVersion options.Common
             Configuration = configuration
             MSBuildParams = {
                 options.MSBuildParams with
@@ -156,7 +157,7 @@ Target.create BuildIntegrationTestServerTarget <| fun _ ->
                 options.MSBuildParams with
                     DisableInternalBinLog = true
             }
-            Common = { options.Common with CustomParams = Some "--no-dependencies" }
+            Common = { DotNetCli.setVersion options.Common with CustomParams = Some "--no-dependencies" }
     })
 
 
