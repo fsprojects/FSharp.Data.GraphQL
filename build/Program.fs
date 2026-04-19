@@ -77,7 +77,7 @@ Target.create BuildTarget <| fun _ ->
     "FSharp.Data.GraphQL.slnx"
     |> DotNet.build (fun options -> {
         options with
-            Common = DotNetCli.setVersion options.Common
+            Common = options.Common.WithRedirectOutput true |> DotNetCli.setVersion
             Configuration = configuration
             MSBuildParams = {
                 options.MSBuildParams with
@@ -93,6 +93,8 @@ Target.create BuildTarget <| fun _ ->
 let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
     CreateProcess.fromRawCommandLine "dotnet" $"run --project {project} --no-build --configuration {configurationString} --urls=http://localhost:%i{port}/"
     |> CreateProcess.withStandardInput (CreatePipe streamRef)
+    |> CreateProcess.redirectOutput
+    |> CreateProcess.withOutputEventsNotNull Trace.trace Trace.traceError
     |> Proc.start
     |> ignore
 
@@ -117,8 +119,8 @@ let runTests (project : string) (args : string) =
                             ]
                     }
             }
-                .WithCommon
-                DotNetCli.setVersion)
+            |> _.WithRedirectOutput(true)
+            |> _.WithCommon(DotNetCli.setVersion))
         project
 
 let starWarsServerStream = StreamRef.Empty
@@ -198,13 +200,36 @@ Target.create UpdateIntrospectionFileTarget <| fun _ ->
         .Wait ()
     client.Dispose ()
 
+let unitTestsProjectPath =
+    "tests"
+    </> "FSharp.Data.GraphQL.Tests"
+    </> "FSharp.Data.GraphQL.Tests.fsproj"
+
+let integrationTestsProjectPath =
+    "tests"
+    </> "FSharp.Data.GraphQL.IntegrationTests"
+    </> "FSharp.Data.GraphQL.IntegrationTests.fsproj"
+
+let [<Literal>] BuildIntegrationTestsTarget = "BuildIntegrationTests"
+Target.create BuildIntegrationTestsTarget <| fun _ ->
+    integrationTestsProjectPath
+    |> DotNet.build (fun options -> {
+        options with
+            Configuration = configuration
+            MSBuildParams = {
+                options.MSBuildParams with
+                    DisableInternalBinLog = true
+            }
+            Common = DotNetCli.setVersion options.Common
+    })
+
 let [<Literal>] RunUnitTestsTarget = "RunUnitTests"
 Target.create RunUnitTestsTarget <| fun _ ->
-    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" ""
+    runTests unitTestsProjectPath ""
 
 let [<Literal>] RunIntegrationTestsTarget = "RunIntegrationTests"
 Target.create RunIntegrationTestsTarget <| fun _ ->
-    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj" "" //"--filter Execution=Sync"
+    runTests integrationTestsProjectPath "" //"--filter Execution=Sync"
 
 let prepareDocGen () =
     Shell.rm "docs/release-notes.md"
@@ -220,12 +245,18 @@ let prepareDocGen () =
 let [<Literal>] GenerateDocsTarget = "GenerateDocs"
 Target.create GenerateDocsTarget <| fun _ ->
     prepareDocGen ()
-    DotNet.exec DotNetCli.setVersion "fsdocs" "build --clean" |> ignore
+    let result = DotNet.exec DotNetCli.setVersion "fsdocs" "build --clean"
+    if not result.OK then
+        result.Errors |> Seq.iter (Trace.traceError)
+        failwithf "fsdocs build failed with exit code %d" result.ExitCode
 
 let [<Literal>] GenerateDocsWatchTarget = "GenerateDocsWatch"
 Target.create GenerateDocsWatchTarget <| fun _ ->
     prepareDocGen ()
-    DotNet.exec DotNetCli.setVersion "fsdocs" "watch --clean" |> ignore
+    let result = DotNet.exec DotNetCli.setVersion "fsdocs" "watch --clean"
+    if not result.OK then
+        result.Errors |> Seq.iter (Trace.traceError)
+        failwithf "fsdocs watch failed with exit code %d" result.ExitCode
     System.Console.ReadKey () |> ignore
 
 let [<Literal>] ReleaseDocsTarget = "ReleaseDocs"
@@ -379,6 +410,7 @@ Target.create "PackAndPush" ignore
 ==> BuildIntegrationTestServerTarget
 ==> StartIntegrationServerTarget
 ==> UpdateIntrospectionFileTarget
+==> BuildIntegrationTestsTarget
 ==> RunIntegrationTestsTarget
 ==> "All"
 =?> (GenerateDocsTarget, Environment.environVar "GITHUB_ACTIONS" = "True")
