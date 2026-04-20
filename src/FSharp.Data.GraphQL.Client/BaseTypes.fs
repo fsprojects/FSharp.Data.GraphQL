@@ -459,3 +459,17 @@ type OperationResultBase (rawResponse: HttpResponseMessage, responseJson : JsonV
 type OperationBase (query : string) =
     /// Gets the query string of the operation.
     member _.Query = query
+
+module VariableMapping =
+
+    open FSharp.Data.GraphQL.Client.ReflectionPatterns
+
+    let rec mapVariableValue (value : obj) =
+        match value with
+        | null -> null
+        | :? string -> value
+        | :? EnumBase as v -> v.GetValue() |> box
+        | :? RecordBase as v -> v.ToDictionary() |> box
+        | OptionValue v -> v |> Option.map mapVariableValue |> box
+        | EnumerableValue v -> v |> Array.map mapVariableValue |> box
+        | v -> v
