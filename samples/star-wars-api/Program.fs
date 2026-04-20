@@ -1,8 +1,9 @@
 module FSharp.Data.GraphQL.Samples.StarWarsApi.Program
 
-open Microsoft.AspNetCore
+open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
 open Microsoft.Extensions.Configuration
+open Microsoft.Extensions.Hosting
 
 let exitCode = 0
 
@@ -29,11 +30,14 @@ let buildWebHost (args : string array) =
             .AddJsonFile("appsettings.json", false, true)
             .AddJsonFile($"appsettings.{envName}.json", true) |> ignore
 
-    WebHost
+    Host
         .CreateDefaultBuilder(args)
-        .UseConfiguration(config)
-        .ConfigureAppConfiguration(configureAppConfiguration)
-        .UseStartup<Startup>()
+        .ConfigureWebHostDefaults(fun webBuilder ->
+            webBuilder
+                .UseConfiguration(config)
+                .ConfigureAppConfiguration(configureAppConfiguration)
+                .UseStartup<Startup>()
+            |> ignore)
 
 [<EntryPoint>]
 let main args =

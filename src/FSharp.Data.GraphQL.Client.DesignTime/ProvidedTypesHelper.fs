@@ -322,16 +322,7 @@ module internal ProvidedOperation =
             let buildVariablesExprFromArgs (varNames : string list) (args : Expr list) =
                 let mapVariableExpr (name : string) (value : Expr) =
                     let value = Expr.Coerce(value, typeof<obj>)
-                    <@@ let rec mapVariableValue (value : obj) =
-                            match value with
-                            | null -> null
-                            | :? string -> value // We need this because strings are enumerables, and we don't want to enumerate them recursively as an object
-                            | :? EnumBase as v -> v.GetValue() |> box
-                            | :? RecordBase as v -> v.ToDictionary() |> box
-                            | OptionValue v -> v |> Option.map mapVariableValue |> box
-                            | EnumerableValue v -> v |> Array.map mapVariableValue |> box
-                            | v -> v
-                        (name, mapVariableValue %%value) @@>
+                    <@@ (name, VariableMapping.mapVariableValue %%value) @@>
                 let args =
                     let varArgs = List.skip (args.Length - variables.Length) args
                     (varNames, varArgs) ||> List.map2 mapVariableExpr

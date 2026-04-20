@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup Label="PackageReferences">
-    <PackageReference Include="FSharp.Core" VersionOverride="9.0.*" />
     <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
     <PackageReference Include="GraphQL.Server.Ui.Altair" />
     <PackageReference Include="GraphQL.Server.Ui.GraphiQL" />
