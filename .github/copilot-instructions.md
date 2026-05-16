@@ -4,6 +4,15 @@ C# 13
 .NET 8 and 9
 Nullability checks enabled
 
+## Shell operations
+
+Always prefer PowerShell for all shell operations.
+Always prefer installing PowerShell modules over installing CLI tools.
+
+## GitHub operations
+
+Use `PowerShellForGitHub` PowerShell module for all GitHub operations. Never use GitHub CLI (`gh`) or any other CLI tool for GitHub.
+
 ## Libraries we use
 
 If you need any source code you can find it in the following repositories:
