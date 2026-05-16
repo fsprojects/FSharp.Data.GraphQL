@@ -257,7 +257,7 @@ module ServiceCollectionExtensions =
         member services.AddGraphQL<'Root, 'Handler when 'Handler :> GraphQLRequestHandler<'Root> and 'Handler : not struct>
             (
                 rootFactory : HttpContext -> 'Root,
-                [<Optional; DefaultParameterValue (GraphQLOptionsDefaults.WebSocketEndpoint)>] webSocketEndpointPath : string,
+                webSocketEndpointPath : string,
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
             let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
@@ -277,7 +277,7 @@ module ServiceCollectionExtensions =
         member services.AddGraphQL<'Root>
             (
                 rootFactory : HttpContext -> 'Root,
-                [<Optional; DefaultParameterValue (GraphQLOptionsDefaults.WebSocketEndpoint)>] webSocketEndpointPath : string,
+                webSocketEndpointPath : string,
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
             let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
@@ -301,7 +301,7 @@ module ServiceCollectionExtensions =
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
             let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
-            services.AddGraphQL<'Root, 'Handler> (getExecutorService, rootFactory, additionalConverters, configure = null)
+            services.AddGraphQL<'Root, 'Handler> (getExecutorService, rootFactory, additionalConverters, configure = configure)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. It gets the executor from the service provider.

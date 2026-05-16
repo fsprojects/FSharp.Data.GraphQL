@@ -15,6 +15,7 @@
   <ItemGroup>
     <None Include="ApplicationInsights.config" />
     <Compile Include="Schema.fs" />
+    <Compile Include="ServiceCollectionExtensionsCompilationTests.fs" />
     <Compile Include="Startup.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
