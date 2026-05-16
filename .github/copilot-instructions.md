@@ -1,7 +1,8 @@
 # Project details
-F# 9
-C# 13
-.NET 8 and 9
+
+F# 10
+C# 14
+.NET 10
 Nullability checks enabled
 
 ## Shell operations
@@ -39,6 +40,7 @@ Prefer `voption` over `option`
 Prefer `task` CE over `async` CE
 
 This is how you define a non-default F# class constructor:
+
 ```fsharp
 type DerivedClass =
     inherit BaseClass
@@ -61,6 +63,7 @@ type DerivedClass =
 Always prefer F# class initializers over property assignment! **You absolutely must use F# class initializers instead of property assignment**!
 
 Having a class declaration:
+
 ``` F#
 type MyClass (someConstructorParam : string) =
     member ReadOnlyProperty = someConstructorParam
@@ -70,6 +73,7 @@ type MyClass (someConstructorParam : string) =
 ```
 
 The following excerpt of class creation is wrong:
+
 ``` F#
 let myClass = MyClass("some value")
 myClass.MutableProperty1 <- "new value"
@@ -77,6 +81,7 @@ myClass.MutableProperty2 <- "new value"
 ```
 
 The following excerpt (uses initializer syntax) of class creation is right:
+
 ``` F#
 let myClass =
     MyClass(
@@ -93,9 +98,11 @@ let myClass =
 ## Coding instructions
 
 During the implementation, if you need some types or members defined in the other project but that project is not referenced, then:
+
 1. stop implementing the solution;
 2. respond with summary about what is needed and which project it is defined in;
 3. ask if you can add the reference before continuing coding.
+
 Never ever duplicate the code unless you got explicit confirmation that you are allowed to do so.
 
 ## Documentation and Naming
