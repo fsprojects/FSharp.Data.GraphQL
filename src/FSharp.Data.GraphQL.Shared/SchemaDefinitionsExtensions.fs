@@ -27,8 +27,10 @@ type internal CustomFieldsObjectDefinition<'Val> (source : ObjectDef<'Val>, fiel
         member _.Implements = source.Implements
         member _.IsTypeOf = source.IsTypeOf
     interface TypeDef with
-        member this.MakeList () = upcast (ListOf this)
-        member this.MakeNullable () = upcast (Nullable this)
+        // We construct wrappers directly here because this API works with untyped TypeDef values.
+        // The public ListOf/Nullable helpers use SRTP dispatch and require statically known direction.
+        member this.MakeList () = upcast { ListOfDefinition.OfType = this }
+        member this.MakeNullable () = upcast { NullableDefinition.OfType = this }
         member _.Type = (source :> TypeDef).Type
     interface NamedDef with
         member _.Name = (source :> NamedDef).Name

@@ -392,17 +392,73 @@ module SchemaDefinitions =
             | false, _ -> getParseError destinationType s
         | InlineConstant value -> value.GetCoerceError destinationType
 
-    /// Wraps a GraphQL type definition, allowing defining field/argument
-    /// to take option of provided value.
-    let Nullable(innerDef : #TypeDef<'Val>) : NullableDef<'Val> = upcast { NullableDefinition.OfType = innerDef }
+    type TypeWrapperStaticDispatch =
 
-    /// Wraps a GraphQL type definition, allowing defining field/argument
-    /// to take voption of provided value.
-    let StructNullable(innerDef : #TypeDef<'Val>) : StructNullableDef<'Val> = upcast { StructNullableDefinition.OfType = innerDef }
+        static member Nullable<'Val>(innerDef : InputOutputDef<'Val>) : NullableDef<'Val> =
+            let ofType : TypeDef<'Val> = upcast innerDef
+            upcast { NullableDefinition.OfType = ofType }
 
-    /// Wraps a GraphQL type definition, allowing defining field/argument
-    /// to take collection of provided value.
-    let ListOf(innerDef : #TypeDef<'Val>) : ListOfDef<'Val, 'Seq> = upcast { ListOfDefinition.OfType = innerDef }
+        static member Nullable<'Val>(innerDef : InputDef<'Val>) : InputDef<'Val option> =
+            let ofType : TypeDef<'Val> = upcast innerDef
+            upcast { NullableDefinition.OfType = ofType }
+
+        static member Nullable<'Val>(innerDef : OutputDef<'Val>) : OutputDef<'Val option> =
+            let ofType : TypeDef<'Val> = upcast innerDef
+            upcast { NullableDefinition.OfType = ofType }
+
+        static member StructNullable<'Val>(innerDef : InputOutputDef<'Val>) : StructNullableDef<'Val> =
+            let ofType : TypeDef<'Val> = upcast innerDef
+            upcast { StructNullableDefinition.OfType = ofType }
+
+        static member StructNullable<'Val>(innerDef : InputDef<'Val>) : InputDef<'Val voption> =
+            let ofType : TypeDef<'Val> = upcast innerDef
+            upcast { StructNullableDefinition.OfType = ofType }
+
+        static member StructNullable<'Val>(innerDef : OutputDef<'Val>) : OutputDef<'Val voption> =
+            let ofType : TypeDef<'Val> = upcast innerDef
+            upcast { StructNullableDefinition.OfType = ofType }
+
+        static member ListOf<'Val, 'Seq when 'Seq :> 'Val seq>(innerDef : InputOutputDef<'Val>) : ListOfDef<'Val, 'Seq> =
+            let ofType : TypeDef<'Val> = upcast innerDef
+            upcast { ListOfDefinition.OfType = ofType }
+
+        static member ListOf<'Val, 'Seq when 'Seq :> 'Val seq>(innerDef : InputDef<'Val>) : InputDef<'Seq> =
+            let ofType : TypeDef<'Val> = upcast innerDef
+            upcast { ListOfDefinition.OfType = ofType }
+
+        static member ListOf<'Val, 'Seq when 'Seq :> 'Val seq>(innerDef : OutputDef<'Val>) : OutputDef<'Seq> =
+            let ofType : TypeDef<'Val> = upcast innerDef
+            upcast { ListOfDefinition.OfType = ofType }
+
+    /// Wraps a GraphQL input or output type definition, allowing defining field/argument
+    /// to take option of provided value while preserving input/output kind of wrapped type.
+    /// Input wrappers produce input definitions, output wrappers produce output definitions,
+    /// and wrappers over types implementing both kinds keep both capabilities.
+    /// Dispatch is selected at compile time via SRTP.
+    let inline Nullable< ^Def, ^Wrapped when (^Def or TypeWrapperStaticDispatch) : (static member Nullable : ^Def -> ^Wrapped) >
+        (innerDef : ^Def)
+        : ^Wrapped =
+        ((^Def or TypeWrapperStaticDispatch) : (static member Nullable : ^Def -> ^Wrapped) innerDef)
+
+    /// Wraps a GraphQL input or output type definition, allowing defining field/argument
+    /// to take voption of provided value while preserving input/output kind of wrapped type.
+    /// Input wrappers produce input definitions, output wrappers produce output definitions,
+    /// and wrappers over types implementing both kinds keep both capabilities.
+    /// Dispatch is selected at compile time via SRTP.
+    let inline StructNullable< ^Def, ^Wrapped when (^Def or TypeWrapperStaticDispatch) : (static member StructNullable : ^Def -> ^Wrapped) >
+        (innerDef : ^Def)
+        : ^Wrapped =
+        ((^Def or TypeWrapperStaticDispatch) : (static member StructNullable : ^Def -> ^Wrapped) innerDef)
+
+    /// Wraps a GraphQL input or output type definition, allowing defining field/argument
+    /// to take collection of provided value while preserving input/output kind of wrapped type.
+    /// Input wrappers produce input definitions, output wrappers produce output definitions,
+    /// and wrappers over types implementing both kinds keep both capabilities.
+    /// Dispatch is selected at compile time via SRTP.
+    let inline ListOf< ^Def, ^Wrapped when (^Def or TypeWrapperStaticDispatch) : (static member ListOf : ^Def -> ^Wrapped) >
+        (innerDef : ^Def)
+        : ^Wrapped =
+        ((^Def or TypeWrapperStaticDispatch) : (static member ListOf : ^Def -> ^Wrapped) innerDef)
 
     let internal variableOrElse other (_ : InputExecutionContextProvider) value (variables : IReadOnlyDictionary<string, obj>)  =
         match value with
@@ -1415,13 +1471,14 @@ module SchemaDefinitions =
         /// <param name="defaultValue">If defined, this value will be used when no matching input has been provided by the requester.</param>
         /// <param name="description">Optional input description. Usefull for generating documentation.</param>
         static member SkippableInput(name : string, typedef : #InputDef<'In>, ?description : string) : InputFieldDef =
+            let typedef : InputDef<'In> = upcast typedef
             upcast { InputFieldDefinition.Name = name
                      Description = description |> Option.map (fun s -> s + " Skip this field if you want to avoid saving it")
                      IsSkippable = true
                      TypeDef =
-                        match (box typedef) with
-                        | :? NullableDef<'In> as n -> n
-                        | _ -> Nullable typedef
+                         match (box typedef) with
+                         | :? NullableDef<'In> as n -> (n :> InputDef<'In option>)
+                         | _ -> Nullable typedef
                      DefaultValue = None
                      ExecuteInput = Unchecked.defaultof<ExecuteInput> }
 
@@ -1539,4 +1596,3 @@ module SchemaDefinitions =
                      Description = description
                      FieldsFn = fun () -> fieldsFn() |> List.toArray
                      ResolveType = resolveType }
-
