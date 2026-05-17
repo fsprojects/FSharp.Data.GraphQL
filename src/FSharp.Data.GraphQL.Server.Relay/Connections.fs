@@ -303,9 +303,7 @@ module Connection =
     /// </summary>
     /// <seealso cref="backwardArgs"/>
     /// <seealso cref="allArgs"/>
-    let forwardArgs =
-        [ Define.Input ("first", Nullable IntType)
-          Define.Input ("after", Nullable StringType) ]
+    let forwardArgs = [ Define.Input ("first", Nullable IntType); Define.Input ("after", Nullable StringType) ]
 
     /// <summary>
     /// Argument definitions for backward pagination ("last" and "before").
@@ -313,9 +311,7 @@ module Connection =
     /// </summary>
     /// <seealso cref="forwardArgs"/>
     /// <seealso cref="allArgs"/>
-    let backwardArgs =
-        [ Define.Input ("last", Nullable IntType)
-          Define.Input ("before", Nullable StringType) ]
+    let backwardArgs = [ Define.Input ("last", Nullable IntType); Define.Input ("before", Nullable StringType) ]
 
     /// <summary>
     /// Complete set of argument definitions for bidirectional pagination.
