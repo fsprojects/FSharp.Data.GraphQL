@@ -56,19 +56,19 @@ let ``Should parse all combinations of optional operation error fields`` () =
                       includePath, includeLocations, includeExtensions ]
 
     for includePath, includeLocations, includeExtensions in combinations do
-        let errorFields = ResizeArray<string>([ "\"message\":\"unit-test combination error\"" ])
+        let optionalFields =
+            [ if includePath then
+                  "\"path\":[\"alwaysError\",0]"
+              if includeLocations then
+                  "\"locations\":[{\"line\":2,\"column\":13}]"
+              if includeExtensions then
+                  "\"extensions\":{\"code\":\"UNIT_TEST\",\"retryable\":false,\"severity\":7}" ]
 
-        if includePath then
-            errorFields.Add "\"path\":[\"alwaysError\",0]"
+        let errorObjectJson =
+            "\"message\":\"unit-test combination error\"" :: optionalFields
+            |> String.concat ","
 
-        if includeLocations then
-            errorFields.Add "\"locations\":[{\"line\":2,\"column\":13}]"
-
-        if includeExtensions then
-            errorFields.Add "\"extensions\":{\"code\":\"UNIT_TEST\",\"retryable\":false,\"severity\":7}"
-
-        let responseJson =
-            $"""{{"errors":[{{{String.concat "," errorFields}}}]}}"""
+        let responseJson = $"""{{"errors":[{{{errorObjectJson}}}]}}"""
 
         let result =
             OperationResultBase(
