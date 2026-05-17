@@ -609,17 +609,20 @@ and OutputDef<'Val> =
         inherit TypeDef<'Val>
     end
 
-/// Representation of all type definitions, that can be used as both inputs and outputs.
+/// Representation of type definitions that can be used as both inputs and outputs
+/// (for example scalars and enums). This marker is also used by SRTP wrapper dispatch.
 and InputOutputDef =
     interface
         inherit InputDef
         inherit OutputDef
     end
 
-/// Representation of all type definitions, that can be used as both inputs and outputs.
+/// Representation of all type definitions, that can be used as both inputs and outputs
+/// and are constrained to represent the provided .NET type.
 and InputOutputDef<'Val> =
     interface
         inherit InputOutputDef
+        inherit TypeDef<'Val>
         inherit InputDef<'Val>
         inherit OutputDef<'Val>
     end

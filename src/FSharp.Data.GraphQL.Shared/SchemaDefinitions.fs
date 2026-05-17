@@ -392,7 +392,7 @@ module SchemaDefinitions =
             | false, _ -> getParseError destinationType s
         | InlineConstant value -> value.GetCoerceError destinationType
 
-    type TypeWrapperDispatch =
+    type TypeWrapperStaticDispatch =
         static member Nullable<'Val>(innerDef : InputOutputDef<'Val>) : NullableDef<'Val> =
             let ofType : TypeDef<'Val> = upcast innerDef
             upcast { NullableDefinition.OfType = ofType }
@@ -431,24 +431,33 @@ module SchemaDefinitions =
 
     /// Wraps a GraphQL input or output type definition, allowing defining field/argument
     /// to take option of provided value while preserving input/output kind of wrapped type.
-    let inline Nullable< ^Def, ^Wrapped when (^Def or TypeWrapperDispatch) : (static member Nullable : ^Def -> ^Wrapped) >
+    /// Input wrappers produce input definitions, output wrappers produce output definitions,
+    /// and wrappers over types implementing both kinds keep both capabilities.
+    /// Dispatch is selected at compile time via SRTP.
+    let inline Nullable< ^Def, ^Wrapped when (^Def or TypeWrapperStaticDispatch) : (static member Nullable : ^Def -> ^Wrapped) >
         (innerDef : ^Def)
         : ^Wrapped =
-        ((^Def or TypeWrapperDispatch) : (static member Nullable : ^Def -> ^Wrapped) innerDef)
+        ((^Def or TypeWrapperStaticDispatch) : (static member Nullable : ^Def -> ^Wrapped) innerDef)
 
     /// Wraps a GraphQL input or output type definition, allowing defining field/argument
     /// to take voption of provided value while preserving input/output kind of wrapped type.
-    let inline StructNullable< ^Def, ^Wrapped when (^Def or TypeWrapperDispatch) : (static member StructNullable : ^Def -> ^Wrapped) >
+    /// Input wrappers produce input definitions, output wrappers produce output definitions,
+    /// and wrappers over types implementing both kinds keep both capabilities.
+    /// Dispatch is selected at compile time via SRTP.
+    let inline StructNullable< ^Def, ^Wrapped when (^Def or TypeWrapperStaticDispatch) : (static member StructNullable : ^Def -> ^Wrapped) >
         (innerDef : ^Def)
         : ^Wrapped =
-        ((^Def or TypeWrapperDispatch) : (static member StructNullable : ^Def -> ^Wrapped) innerDef)
+        ((^Def or TypeWrapperStaticDispatch) : (static member StructNullable : ^Def -> ^Wrapped) innerDef)
 
     /// Wraps a GraphQL input or output type definition, allowing defining field/argument
     /// to take collection of provided value while preserving input/output kind of wrapped type.
-    let inline ListOf< ^Def, ^Wrapped when (^Def or TypeWrapperDispatch) : (static member ListOf : ^Def -> ^Wrapped) >
+    /// Input wrappers produce input definitions, output wrappers produce output definitions,
+    /// and wrappers over types implementing both kinds keep both capabilities.
+    /// Dispatch is selected at compile time via SRTP.
+    let inline ListOf< ^Def, ^Wrapped when (^Def or TypeWrapperStaticDispatch) : (static member ListOf : ^Def -> ^Wrapped) >
         (innerDef : ^Def)
         : ^Wrapped =
-        ((^Def or TypeWrapperDispatch) : (static member ListOf : ^Def -> ^Wrapped) innerDef)
+        ((^Def or TypeWrapperStaticDispatch) : (static member ListOf : ^Def -> ^Wrapped) innerDef)
 
     let internal variableOrElse other (_ : InputExecutionContextProvider) value (variables : IReadOnlyDictionary<string, obj>)  =
         match value with

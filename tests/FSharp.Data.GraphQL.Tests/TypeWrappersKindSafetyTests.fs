@@ -20,18 +20,21 @@ let private OutputOnlyType =
 
 [<Fact>]
 let ``ListOf keeps input-output direction`` () =
-    let _ : InputDef<InputOnly list> = ListOf InputOnlyType
-    let _ : OutputDef<OutputOnly list> = ListOf OutputOnlyType
-    Assert.True true
+    let inputList : InputDef<InputOnly list> = ListOf InputOnlyType
+    let outputList : OutputDef<OutputOnly list> = ListOf OutputOnlyType
+    Assert.Equal ("[InputOnlyType!]!", inputList.ToString ())
+    Assert.Equal ("[OutputOnlyType!]!", outputList.ToString ())
 
 [<Fact>]
 let ``Nullable keeps input-output direction`` () =
-    let _ : InputDef<InputOnly option> = Nullable InputOnlyType
-    let _ : OutputDef<OutputOnly option> = Nullable OutputOnlyType
-    Assert.True true
+    let nullableInput : InputDef<InputOnly option> = Nullable InputOnlyType
+    let nullableOutput : OutputDef<OutputOnly option> = Nullable OutputOnlyType
+    Assert.Equal ("InputOnlyType", nullableInput.ToString ())
+    Assert.Equal ("OutputOnlyType", nullableOutput.ToString ())
 
 [<Fact>]
 let ``StructNullable keeps input-output direction`` () =
-    let _ : InputDef<InputOnly voption> = StructNullable InputOnlyType
-    let _ : OutputDef<OutputOnly voption> = StructNullable OutputOnlyType
-    Assert.True true
+    let nullableInput : InputDef<InputOnly voption> = StructNullable InputOnlyType
+    let nullableOutput : OutputDef<OutputOnly voption> = StructNullable OutputOnlyType
+    Assert.Equal ("InputOnlyType", nullableInput.ToString ())
+    Assert.Equal ("OutputOnlyType", nullableOutput.ToString ())
