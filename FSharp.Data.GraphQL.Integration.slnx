@@ -4,6 +4,9 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Folder Name="/samples/">
+    <Project Path="samples/star-wars-api/star-wars-api.fsproj" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path="Directory.Build.props" />
     <File Path="Directory.Build.targets" />
@@ -12,7 +15,9 @@
   <Folder Name="/src/">
     <Project Path="src/FSharp.Data.GraphQL.Server.AspNetCore/FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
     <Project Path="src/FSharp.Data.GraphQL.Server.Giraffe/FSharp.Data.GraphQL.Server.Giraffe.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Server.Middleware/FSharp.Data.GraphQL.Server.Middleware.fsproj" />
     <Project Path="src/FSharp.Data.GraphQL.Server.Oxpecker/FSharp.Data.GraphQL.Server.Oxpecker.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Server.Relay/FSharp.Data.GraphQL.Server.Relay.fsproj" />
     <Project Path="src/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.fsproj" />
     <Project Path="src/FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj" />
   </Folder>

@@ -15,10 +15,10 @@ module ObjectDateSchema =
               value
               category
             }
-          }""">()
+          }"""> ()
 
     let compileSmoke () =
-        let schemaDate = SchemaDate(value = "2026-04-03", category = "default")
+        let schemaDate = SchemaDate (value = "2026-04-03", category = "default")
         let operationInstance : ObjectDateProvider.Operations.Q = operation
         schemaDate |> ignore
         operationInstance |> ignore
@@ -29,19 +29,17 @@ module InputDateSchema =
     let operation =
         InputDateProvider.Operation<"""query Q($input: Date) {
             echoDate(input: $input)
-          }""">()
+          }"""> ()
 
     let compileSmoke () =
-        let schemaDate = SchemaDate(value = "2026-04-03", category = "default")
+        let schemaDate = SchemaDate (value = "2026-04-03", category = "default")
         let deferredRun : unit -> _ =
-            fun () -> operation.Run(Unchecked.defaultof<GraphQLProviderRuntimeContext>, schemaDate)
+            fun () -> operation.Run (Unchecked.defaultof<GraphQLProviderRuntimeContext>, schemaDate)
         schemaDate |> ignore
         deferredRun |> ignore
 
 [<Fact>]
-let ``Should allow object types that reuse reserved scalar names`` () =
-    ObjectDateSchema.compileSmoke ()
+let ``Should allow object types that reuse reserved scalar names`` () = ObjectDateSchema.compileSmoke ()
 
 [<Fact>]
-let ``Should allow input object types that reuse reserved scalar names`` () =
-    InputDateSchema.compileSmoke ()
+let ``Should allow input object types that reuse reserved scalar names`` () = InputDateSchema.compileSmoke ()
