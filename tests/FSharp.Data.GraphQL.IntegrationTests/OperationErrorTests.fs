@@ -7,9 +7,12 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
 
 [<Literal>]
-let ServerUrl = "http://localhost:8085"
+let IntrospectionPath = "integration-introspection.json"
 
-type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName="File", explicitOptionalParameters=false>
+type Provider = GraphQLProvider<IntrospectionPath, uploadInputTypeName="File", explicitOptionalParameters=false>
+
+let connection = TestHosts.createIntegrationConnection ()
+let context = Provider.GetContext(serverUrl = TestHosts.integrationServerUrl, connectionFactory = fun () -> connection)
 
 module ErrorOperation =
     let operation =
@@ -106,7 +109,7 @@ let ``Should parse all combinations of optional operation error fields`` () =
 
 [<Fact; Trait("OperationError", "Integration")>]
 let ``Should map server error extensions and locations into operation result`` () =
-    let result = ErrorOperation.operation.Run ()
+    let result = ErrorOperation.operation.Run(context)
 
     result.Errors.Length |> equals 1
 
