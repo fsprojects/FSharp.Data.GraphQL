@@ -17,8 +17,7 @@ type IValidationResultCache =
 /// An in-memory cache for the results of schema/document validations, with a lifetime of 30 seconds.
 type MemoryValidationResultCache () =
     let expirationPolicy = CacheExpirationPolicy.SlidingExpiration(TimeSpan.FromSeconds 30.0)
-    let internalCache = MemoryCache<int, ValidationResult<GQLProblemDetails>>(expirationPolicy)
+    let internalCache = MemoryCache<ValidationResultKey, ValidationResult<GQLProblemDetails>>(expirationPolicy)
     interface IValidationResultCache with
         member _.GetOrAdd producer key =
-            let internalKey = key.GetHashCode()
-            internalCache.GetOrAddResult internalKey producer
+            internalCache.GetOrAddResult key producer
