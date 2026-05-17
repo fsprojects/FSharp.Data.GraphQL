@@ -14,6 +14,12 @@
   <Project Path="StarWars.Android/StarWars.Android.fsproj">
     <BuildType Solution="Ad-Hoc|*" Project="Release" />
     <BuildType Solution="AppStore|*" Project="Release" />
+    <Build Solution="*|Any CPU" Project="false" />
+    <Build Solution="*|ARM" Project="false" />
+    <Build Solution="*|iPhone" Project="false" />
+    <Build Solution="*|iPhoneSimulator" Project="false" />
+    <Build Solution="*|x64" Project="false" />
+    <Build Solution="*|x86" Project="false" />
     <Deploy Solution="Debug|Any CPU" />
     <Deploy Solution="Release|Any CPU" />
   </Project>
