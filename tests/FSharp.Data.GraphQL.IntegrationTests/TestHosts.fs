@@ -14,29 +14,30 @@ type StarWarsApplicationFactory () =
 let private integrationFactory = lazy (new IntegrationServerApplicationFactory ())
 let private starWarsFactory = lazy (new StarWarsApplicationFactory ())
 
-let private integrationClient : Lazy<HttpClient> =
-    lazy (integrationFactory.Value.CreateClient ())
+let createIntegrationHttpClient () : HttpClient =
+    integrationFactory.Value.CreateClient ()
 
-let private starWarsClient : Lazy<HttpClient> =
-    lazy (starWarsFactory.Value.CreateClient ())
+let createStarWarsHttpClient () : HttpClient =
+    starWarsFactory.Value.CreateClient ()
+
+let private getIntegrationServerUrl () =
+    use client = createIntegrationHttpClient ()
+    client.BaseAddress.ToString().TrimEnd '/'
+
+let private getStarWarsServerUrl () =
+    use client = createStarWarsHttpClient ()
+    client.BaseAddress.ToString().TrimEnd '/'
 
 do
     AppDomain.CurrentDomain.ProcessExit.Add(fun _ ->
-        if integrationClient.IsValueCreated then
-            integrationClient.Value.Dispose ()
-
-        if starWarsClient.IsValueCreated then
-            starWarsClient.Value.Dispose ()
-
         if integrationFactory.IsValueCreated then
             integrationFactory.Value.Dispose ()
 
         if starWarsFactory.IsValueCreated then
             starWarsFactory.Value.Dispose ())
 
-let integrationServerUrl = integrationClient.Value.BaseAddress.ToString().TrimEnd '/'
-let starWarsServerUrl = starWarsClient.Value.BaseAddress.ToString().TrimEnd '/'
+let integrationServerUrl = getIntegrationServerUrl ()
+let starWarsServerUrl = getStarWarsServerUrl ()
 
-let createIntegrationConnection () = new GraphQLClientConnection (integrationClient.Value)
-let createStarWarsConnection () = new GraphQLClientConnection (starWarsClient.Value)
-let createIntegrationHttpClient () = integrationFactory.Value.CreateClient ()
+let createIntegrationConnection () = new GraphQLClientConnection (createIntegrationHttpClient ())
+let createStarWarsConnection () = new GraphQLClientConnection (createStarWarsHttpClient ())
