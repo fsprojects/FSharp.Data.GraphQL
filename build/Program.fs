@@ -169,18 +169,36 @@ let integrationTestsProjectPath =
 
 let [<Literal>] UpdateIntrospectionFileTarget = "UpdateIntrospectionFile"
 Target.create UpdateIntrospectionFileTarget <| fun _ ->
-    integrationTestsProjectPath
-    |> DotNet.test (fun options -> {
-        options with
-            Framework = Some DotNetMoniker
-            Configuration = configuration
-            Common = { DotNetCli.setVersion options.Common with CustomParams = Some "--filter FullyQualifiedName~IntrospectionUpdateTests" }
-            MSBuildParams = {
-                options.MSBuildParams with
-                    DisableInternalBinLog = true
-                    Verbosity = Some Normal
+    let projectName = Path.GetFileNameWithoutExtension integrationTestsProjectPath
+    let resultsFileName = $"{projectName}.trx"
+
+    DotNet.test
+        (fun options ->
+            {
+                options with
+                    NoBuild = true
+                    Logger = Some $"trx;LogFileName={resultsFileName}"
+                    ResultsDirectory = Some "test-results"
+                    Framework = Some DotNetMoniker
+                    Configuration = configuration
+                    Common = {
+                        options.Common with
+                            CustomParams = Some "--filter FullyQualifiedName~IntrospectionUpdateTests"
+                    }
+                    MSBuildParams = {
+                        options.MSBuildParams with
+                            DisableInternalBinLog = true
+                            Verbosity = Some Normal
+                            Properties = [
+                                if embedAll then
+                                    ("DebugType", "embedded")
+                                    ("EmbedAllSources", "true")
+                            ]
+                    }
             }
-    })
+            |> _.WithRedirectOutput(true)
+            |> _.WithCommon(DotNetCli.setVersion))
+        integrationTestsProjectPath
 
 let unitTestsProjectPath =
     "tests"
