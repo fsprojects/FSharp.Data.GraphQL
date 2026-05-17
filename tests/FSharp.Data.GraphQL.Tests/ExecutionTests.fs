@@ -385,9 +385,9 @@ let ``Execution when querying returns unique document id with response`` () =
                 ]))
     let query = "query Example { a, b, a }"
     // Deterministic SHA-256-based documentId for canonical `query Example { a b a }`,
-    // using the first 4 bytes of the hash as a big-endian int32.
+    // folding all 32 hash bytes into an int32 via 8 big-endian chunks.
     // Computed once via parse + ToQueryString + SHA-256 and kept fixed to catch regressions.
-    let expectedDocumentId = -2063861555
+    let expectedDocumentId = 154204461
     let result1 = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, { A = "aa"; B = 2 })
     let result2 = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, { A = "aa"; B = 2 })
     result1.DocumentId |> notEquals Unchecked.defaultof<int>

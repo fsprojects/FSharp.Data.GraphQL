@@ -83,12 +83,18 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     let middlewaresList = Seq.toList middlewares
 
     /// Generates a deterministic document identifier from the canonical query string.
-    /// The SHA-256 hash is truncated to 32 bits to preserve the existing int32 documentId contract.
+    /// The full SHA-256 hash is folded into 32 bits to preserve the existing int32 documentId contract.
     let getDocumentId (document : Document) =
         let canonicalQuery = document.ToQueryString()
         let queryBytes = Encoding.UTF8.GetBytes canonicalQuery
         let hash = SHA256.HashData queryBytes
-        BinaryPrimitives.ReadInt32BigEndian(hash.AsSpan(0, 4))
+        [ 0 .. 7 ]
+        |> List.fold
+            (fun acc index ->
+                let start = index * 4
+                let hashChunk = BinaryPrimitives.ReadInt32BigEndian(hash.AsSpan(start, 4))
+                acc ^^^ hashChunk)
+            0
 
     let rec runMiddlewares (phaseSel : IExecutorMiddleware -> ('ctx -> ('ctx -> 'res) -> 'res) option)
                            (initialCtx : 'ctx)

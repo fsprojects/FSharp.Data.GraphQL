@@ -17,6 +17,7 @@
     </PackageReference>
     <PackageReference Update="FSharp.Control.FusionTasks" Version="2.6.*" />
     <PackageReference Update="FSharp.Control.Reactive" Version="6.*" />
+    <PackageReference Update="FSharp.Data.LiteralProviders" Version="1.0.3" />
     <PackageReference Update="FSharp.SystemTextJson" Version="1.*" />
     <PackageReference Update="FsToolkit.ErrorHandling" Version="$(FsToolkitVersion)" />
     <PackageReference Update="FsToolkit.ErrorHandling.TaskResult" Version="$(FsToolkitVersion)" />
