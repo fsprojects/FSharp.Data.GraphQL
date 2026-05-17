@@ -17,9 +17,10 @@ type IValidationResultCache =
 module SchemaId =
     /// <summary>
     /// Computes an in-memory schema identifier from an introspection schema instance.
+    /// This identifier is valid only within the current process/runtime and is not deterministic across process restarts.
     /// </summary>
     /// <param name="introspectionSchema">The introspection schema.</param>
-    /// <returns>A string representation of the schema hash code.</returns>
+    /// <returns>A string representation of the schema hash code for in-process cache keys.</returns>
     [<CompiledName("FromIntrospectionSchema")>]
     let fromIntrospectionSchema (introspectionSchema : IntrospectionSchema) =
         introspectionSchema.GetHashCode().ToString(System.Globalization.CultureInfo.InvariantCulture)
