@@ -80,6 +80,7 @@ let ``Update integration introspection file when schema changes`` () =
     task {
         use httpClient = TestHosts.createIntegrationHttpClient ()
         let! sourceStream = httpClient.GetStreamAsync("/")
-        let! _ = updateIntrospectionFileAsync CancellationToken.None sourceStream
+        let! wasUpdated = updateIntrospectionFileAsync CancellationToken.None sourceStream
         Assert.True(File.Exists introspectionFilePath)
+        wasUpdated |> ignore
     }
