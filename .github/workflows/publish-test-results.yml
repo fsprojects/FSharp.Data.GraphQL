@@ -34,10 +34,24 @@ jobs:
         path: test-results
         pattern: test-results-*
 
+    - name: Resolve event file path
+      id: event_file
+      shell: pwsh
+      run: |
+        $eventFilePath =
+          Get-ChildItem -Path artifacts -Filter event.json -Recurse |
+          Select-Object -First 1 -ExpandProperty FullName
+
+        if ($null -eq $eventFilePath) {
+          throw "event.json file was not found in downloaded artifacts"
+        }
+
+        "path=$eventFilePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
     - name: Publish test results
       uses: EnricoMi/publish-unit-test-result-action@v2
       with:
         commit: ${{ github.event.workflow_run.head_sha }}
-        event_file: artifacts/event.json
+        event_file: ${{ steps.event_file.outputs.path }}
         event_name: ${{ github.event.workflow_run.event }}
         files: "test-results/**/*.trx"

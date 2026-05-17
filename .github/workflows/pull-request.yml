@@ -14,11 +14,15 @@ env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
   DOTNET_NOLOGO: true
 
+permissions: {}
+
 jobs:
   event_file:
     if: github.event_name == 'pull_request'
     name: Publish event file
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
     - name: Upload event file
       uses: actions/upload-artifact@v4
@@ -27,6 +31,8 @@ jobs:
         path: ${{ github.event_path }}
 
   build:
+    permissions:
+      contents: read
 
     strategy:
       fail-fast: false
