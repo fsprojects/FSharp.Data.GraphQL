@@ -47,6 +47,59 @@ let ``Should parse operation error fields from raw response`` () =
     error.Extensions.["retryable"] |> equals (box false)
     error.Extensions.["severity"] |> equals (box 7)
 
+[<Fact; Trait("OperationError", "Unit")>]
+let ``Should parse all combinations of optional operation error fields`` () =
+    let combinations =
+        [ for includePath in [ false; true ] do
+              for includeLocations in [ false; true ] do
+                  for includeExtensions in [ false; true ] do
+                      includePath, includeLocations, includeExtensions ]
+
+    for includePath, includeLocations, includeExtensions in combinations do
+        let errorFields = ResizeArray<string>([ "\"message\":\"unit-test combination error\"" ])
+
+        if includePath then
+            errorFields.Add "\"path\":[\"alwaysError\",0]"
+
+        if includeLocations then
+            errorFields.Add "\"locations\":[{\"line\":2,\"column\":13}]"
+
+        if includeExtensions then
+            errorFields.Add "\"extensions\":{\"code\":\"UNIT_TEST\",\"retryable\":false,\"severity\":7}"
+
+        let responseJson =
+            $"""{{"errors":[{{{String.concat "," errorFields}}}]}}"""
+
+        let result =
+            OperationResultBase(
+                rawResponse = new HttpResponseMessage(),
+                responseJson = JsonValue.Parse responseJson,
+                operationFields = [||],
+                operationTypeName = "Query"
+            )
+
+        result.Errors.Length |> equals 1
+
+        let error : FSharp.Data.GraphQL.OperationError = result.Errors.[0]
+        error.Message |> equals "unit-test combination error"
+
+        if includePath then
+            error.Path |> equals [| box "alwaysError"; box 0 |]
+        else
+            error.Path |> equals [||]
+
+        if includeLocations then
+            error.Locations |> equals [| { Line = 2; Column = 13 } |]
+        else
+            error.Locations |> equals [||]
+
+        if includeExtensions then
+            error.Extensions.["code"] |> equals (box "UNIT_TEST")
+            error.Extensions.["retryable"] |> equals (box false)
+            error.Extensions.["severity"] |> equals (box 7)
+        else
+            error.Extensions |> equals Map.empty
+
 [<Fact; Trait("OperationError", "Integration")>]
 let ``Should map server error extensions and locations into operation result`` () =
     let result = ErrorOperation.operation.Run()
