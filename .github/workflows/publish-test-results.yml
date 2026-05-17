@@ -33,6 +33,7 @@ jobs:
         run_id: ${{ github.event.workflow_run.id }}
         path: test-results
         pattern: test-results-*
+        if_no_artifact_found: warn
 
     - name: Resolve event file path
       id: event_file
@@ -49,6 +50,7 @@ jobs:
         "path=$eventFilePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
     - name: Publish test results
+      if: ${{ hashFiles('test-results/**/*.trx') != '' }}
       uses: EnricoMi/publish-unit-test-result-action@v2
       with:
         commit: ${{ github.event.workflow_run.head_sha }}
