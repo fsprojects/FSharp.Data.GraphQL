@@ -46,7 +46,7 @@ type TestInput =
       optArr : string option array option
       voptArr : string option array voption } // string voption array voption is too hard to implement
 
-let InputArrayOf (innerDef : #TypeDef<'Val>) : ListOfDef<'Val, 'Val array> = ListOf innerDef
+let InputArrayOf (innerDef : #InputDef<'Val>) : InputDef<'Val array> = ListOf (innerDef :> InputDef<'Val>)
 
 let TestInputObject =
     Define.InputObject<TestInput> (

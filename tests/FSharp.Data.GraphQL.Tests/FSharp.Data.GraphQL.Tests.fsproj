@@ -41,6 +41,7 @@
     <Compile Include="UnionInterfaceTests.fs" />
     <Compile Include="DirectivesTests.fs" />
     <Compile Include="TypeValidationTests.fs" />
+    <Compile Include="TypeWrappersKindSafetyTests.fs" />
     <Compile Include="AstValidationTests.fs" />
     <Compile Include="ParserTests.fs" />
     <Compile Include="SchemaTests.fs" />

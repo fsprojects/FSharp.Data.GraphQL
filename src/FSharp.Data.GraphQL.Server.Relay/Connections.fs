@@ -159,13 +159,13 @@ module Definitions =
                 )
                 Define.AsyncField (
                     "startCursor",
-                    Nullable StringType,
+                    Nullable (StringType :> OutputDef<string>),
                     "When paginating backwards, the cursor to continue.",
                     fun _ pageInfo -> pageInfo.StartCursor
                 )
                 Define.AsyncField (
                     "endCursor",
-                    Nullable StringType,
+                    Nullable (StringType :> OutputDef<string>),
                     "When paginating forwards, the cursor to continue.",
                     fun _ pageInfo -> pageInfo.EndCursor
                 )
@@ -225,7 +225,7 @@ module Definitions =
             fields = [
                 Define.AsyncField (
                     "totalCount",
-                    Nullable IntType,
+                    Nullable (IntType :> OutputDef<int>),
                     """A count of the total number of objects in this connection, ignoring pagination. This allows a client to fetch the first five objects by passing \"5\" as the argument to `first`, then fetch the total count so it could display \"5 of 83\", for example. In cases where we employ infinite scrolling or don't have an exact count of entries, this field will return `null`.""",
                     fun _ conn -> conn.TotalCount
                 )
@@ -303,7 +303,9 @@ module Connection =
     /// </summary>
     /// <seealso cref="backwardArgs"/>
     /// <seealso cref="allArgs"/>
-    let forwardArgs = [ Define.Input ("first", Nullable IntType); Define.Input ("after", Nullable StringType) ]
+    let forwardArgs =
+        [ Define.Input ("first", Nullable (IntType :> InputDef<int>))
+          Define.Input ("after", Nullable (StringType :> InputDef<string>)) ]
 
     /// <summary>
     /// Argument definitions for backward pagination ("last" and "before").
@@ -311,7 +313,9 @@ module Connection =
     /// </summary>
     /// <seealso cref="forwardArgs"/>
     /// <seealso cref="allArgs"/>
-    let backwardArgs = [ Define.Input ("last", Nullable IntType); Define.Input ("before", Nullable StringType) ]
+    let backwardArgs =
+        [ Define.Input ("last", Nullable (IntType :> InputDef<int>))
+          Define.Input ("before", Nullable (StringType :> InputDef<string>)) ]
 
     /// <summary>
     /// Complete set of argument definitions for bidirectional pagination.

@@ -90,8 +90,8 @@ let rec __Type =
         fieldsFn =
             fun () -> [
                 Define.Field ("kind", __TypeKind, (fun _ t -> t.Kind))
-                Define.Field ("name", Nullable StringType, resolve = (fun _ t -> t.Name))
-                Define.Field ("description", Nullable StringType, resolve = (fun _ t -> t.Description))
+                Define.Field ("name", Nullable (StringType :> OutputDef<string>), resolve = (fun _ t -> t.Name))
+                Define.Field ("description", Nullable (StringType :> OutputDef<string>), resolve = (fun _ t -> t.Description))
                 Define.Field (
                     "fields",
                     Nullable (ListOf __Field),
@@ -173,9 +173,9 @@ and __InputValue =
         fieldsFn =
             fun () -> [
                 Define.Field ("name", StringType, resolve = (fun _ f -> f.Name))
-                Define.Field ("description", Nullable StringType, resolve = (fun _ f -> f.Description))
+                Define.Field ("description", Nullable (StringType :> OutputDef<string>), resolve = (fun _ f -> f.Description))
                 Define.Field ("type", __Type, resolve = (fun _ f -> f.Type))
-                Define.Field ("defaultValue", Nullable StringType, (fun _ f -> f.DefaultValue))
+                Define.Field ("defaultValue", Nullable (StringType :> OutputDef<string>), (fun _ f -> f.DefaultValue))
             ]
     )
 
@@ -189,11 +189,11 @@ and __Field =
         fieldsFn =
             fun () -> [
                 Define.Field ("name", StringType, (fun _ f -> f.Name))
-                Define.Field ("description", Nullable StringType, (fun _ f -> f.Description))
+                Define.Field ("description", Nullable (StringType :> OutputDef<string>), (fun _ f -> f.Description))
                 Define.Field ("args", ListOf __InputValue, (fun _ f -> f.Args))
                 Define.Field ("type", __Type, (fun _ f -> f.Type))
                 Define.Field ("isDeprecated", BooleanType, resolve = (fun _ f -> f.IsDeprecated))
-                Define.Field ("deprecationReason", Nullable StringType, (fun _ f -> f.DeprecationReason))
+                Define.Field ("deprecationReason", Nullable (StringType :> OutputDef<string>), (fun _ f -> f.DeprecationReason))
             ]
     )
 
@@ -208,9 +208,9 @@ and __EnumValue =
         fieldsFn =
             fun () -> [
                 Define.Field ("name", StringType, resolve = (fun _ e -> e.Name))
-                Define.Field ("description", Nullable StringType, resolve = (fun _ e -> e.Description))
+                Define.Field ("description", Nullable (StringType :> OutputDef<string>), resolve = (fun _ e -> e.Description))
                 Define.Field ("isDeprecated", BooleanType, resolve = (fun _ e -> Option.isSome e.DeprecationReason))
-                Define.Field ("deprecationReason", Nullable StringType, resolve = (fun _ e -> e.DeprecationReason))
+                Define.Field ("deprecationReason", Nullable (StringType :> OutputDef<string>), resolve = (fun _ e -> e.DeprecationReason))
             ]
     )
 
@@ -231,8 +231,8 @@ and __Directive =
         fieldsFn =
             fun () -> [
                 Define.Field ("name", StringType, resolve = (fun _ directive -> directive.Name))
-                Define.Field ("description", Nullable StringType, resolve = (fun _ directive -> directive.Description))
-                Define.Field ("locations", ListOf __DirectiveLocation, resolve = (fun _ directive -> directive.Locations))
+                Define.Field ("description", Nullable (StringType :> OutputDef<string>), resolve = (fun _ directive -> directive.Description))
+                Define.Field ("locations", ListOf (__DirectiveLocation :> OutputDef<DirectiveLocation>), resolve = (fun _ directive -> directive.Locations))
                 Define.Field ("args", ListOf __InputValue, resolve = (fun _ directive -> directive.Args))
                 Define.Field (
                     "onOperation",

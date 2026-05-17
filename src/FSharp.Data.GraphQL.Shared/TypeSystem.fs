@@ -609,6 +609,21 @@ and OutputDef<'Val> =
         inherit TypeDef<'Val>
     end
 
+/// Representation of all type definitions, that can be used as both inputs and outputs.
+and InputOutputDef =
+    interface
+        inherit InputDef
+        inherit OutputDef
+    end
+
+/// Representation of all type definitions, that can be used as both inputs and outputs.
+and InputOutputDef<'Val> =
+    interface
+        inherit InputOutputDef
+        inherit InputDef<'Val>
+        inherit OutputDef<'Val>
+    end
+
 /// Representation of leaf type definitions. Leaf types represents leafs
 /// of the GraphQL query tree. Each query path must end with a leaf.
 /// By default only scalars and enums are valid leaf types.
@@ -1067,8 +1082,7 @@ and ScalarDef =
         abstract CoerceOutput : obj -> obj option
         inherit TypeDef
         inherit NamedDef
-        inherit InputDef
-        inherit OutputDef
+        inherit InputOutputDef
         inherit LeafDef
     end
 
@@ -1098,6 +1112,7 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Primitive, 'Val> = {
 
     interface InputDef
     interface OutputDef
+    interface InputOutputDef
 
     interface ScalarDef with
         member x.Name = x.Name
@@ -1107,6 +1122,7 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Primitive, 'Val> = {
 
     interface InputDef<'Val>
     interface OutputDef<'Val>
+    interface InputOutputDef<'Val>
     interface LeafDef
 
     interface NamedDef with
@@ -1182,8 +1198,7 @@ and EnumDef =
         /// List of available enum cases.
         abstract Options : EnumVal[]
         inherit TypeDef
-        inherit InputDef
-        inherit OutputDef
+        inherit InputOutputDef
         inherit LeafDef
         inherit NamedDef
     end
@@ -1197,8 +1212,7 @@ and EnumDef<'Val> =
         abstract Options : EnumValue<'Val>[]
         inherit EnumDef
         inherit TypeDef<'Val>
-        inherit InputDef<'Val>
-        inherit OutputDef<'Val>
+        inherit InputOutputDef<'Val>
     end
 
 and internal EnumDefinition<'Val> = {
@@ -1212,6 +1226,7 @@ and internal EnumDefinition<'Val> = {
 
     interface InputDef
     interface OutputDef
+    interface InputOutputDef
 
     interface TypeDef with
         member _.Type = typeof<'Val>
@@ -1523,8 +1538,7 @@ and ListOfDef<'Val, 'Seq when 'Seq :> 'Val seq> =
         /// GraphQL type definition of the container element type.
         abstract OfType : TypeDef<'Val>
         inherit TypeDef<'Seq>
-        inherit InputDef<'Seq>
-        inherit OutputDef<'Seq>
+        inherit InputOutputDef<'Seq>
         inherit ListOfDef
     end
 
@@ -1574,8 +1588,7 @@ and NullableDef<'Val> =
     interface
         /// GraphQL type definition of the nested type.
         abstract OfType : TypeDef<'Val>
-        inherit InputDef<'Val option>
-        inherit OutputDef<'Val option>
+        inherit InputOutputDef<'Val option>
         inherit NullableDef
     end
 
@@ -1614,8 +1627,7 @@ and StructNullableDef<'Val> =
     interface
         /// GraphQL type definition of the nested type.
         abstract OfType : TypeDef<'Val>
-        inherit InputDef<'Val voption>
-        inherit OutputDef<'Val voption>
+        inherit InputOutputDef<'Val voption>
         inherit NullableDef
     end
 
