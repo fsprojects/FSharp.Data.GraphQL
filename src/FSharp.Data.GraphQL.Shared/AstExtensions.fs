@@ -110,14 +110,14 @@ type Document with
             for c in s do
                 let appendStr =
                     match c with
-                    | '"' -> "\\\"" 
+                    | '"' -> "\\\""
                     | '\\' -> "\\\\"
                     | '\b' -> "\\b"
                     | '\f' -> "\\f"
                     | '\n' -> "\\n"
                     | '\r' -> "\\r"
                     | '\t' -> "\\t"
-                    | c when c < '\u0020' -> 
+                    | c when c < '\u0020' ->
                         let hex = (int c).ToString("X4", CultureInfo.InvariantCulture)
                         "\\u" + hex
                     | c -> string c
