@@ -6,23 +6,24 @@ open Helpers
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
 
-let [<Literal>] ServerUrl = "http://localhost:8085"
+[<Literal>]
+let ServerUrl = "http://localhost:8085"
 
-type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName = "File", explicitOptionalParameters = false>
+type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName="File", explicitOptionalParameters=false>
 
 module ErrorOperation =
     let operation =
         Provider.Operation<"""query ErrorQuery {
             alwaysError
-        }""">()
+        }"""> ()
 
     type Operation = Provider.Operations.ErrorQuery
 
 [<Fact; Trait("OperationError", "Unit")>]
 let ``Should parse operation error fields from raw response`` () =
     let result =
-        OperationResultBase(
-            rawResponse = new HttpResponseMessage(),
+        OperationResultBase (
+            rawResponse = new HttpResponseMessage (),
             responseJson =
                 JsonValue.Parse
                     """{
@@ -49,30 +50,33 @@ let ``Should parse operation error fields from raw response`` () =
 
 [<Fact; Trait("OperationError", "Unit")>]
 let ``Should parse all combinations of optional operation error fields`` () =
-    let combinations =
-        [ for includePath in [ false; true ] do
-              for includeLocations in [ false; true ] do
-                  for includeExtensions in [ false; true ] do
-                      includePath, includeLocations, includeExtensions ]
+    let combinations = [
+        for includePath in [ false; true ] do
+            for includeLocations in [ false; true ] do
+                for includeExtensions in [ false; true ] do
+                    includePath, includeLocations, includeExtensions
+    ]
 
     for includePath, includeLocations, includeExtensions in combinations do
-        let optionalFields =
-            [ if includePath then
-                  "\"path\":[\"alwaysError\",0]"
-              if includeLocations then
-                  "\"locations\":[{\"line\":2,\"column\":13}]"
-              if includeExtensions then
-                  "\"extensions\":{\"code\":\"UNIT_TEST\",\"retryable\":false,\"severity\":7}" ]
+        let optionalFields = [
+            if includePath then
+                "\"path\":[\"alwaysError\",0]"
+            if includeLocations then
+                "\"locations\":[{\"line\":2,\"column\":13}]"
+            if includeExtensions then
+                "\"extensions\":{\"code\":\"UNIT_TEST\",\"retryable\":false,\"severity\":7}"
+        ]
 
         let errorObjectJson =
-            "\"message\":\"unit-test combination error\"" :: optionalFields
+            "\"message\":\"unit-test combination error\""
+            :: optionalFields
             |> String.concat ","
 
         let responseJson = $"""{{"errors":[{{{errorObjectJson}}}]}}"""
 
         let result =
-            OperationResultBase(
-                rawResponse = new HttpResponseMessage(),
+            OperationResultBase (
+                rawResponse = new HttpResponseMessage (),
                 responseJson = JsonValue.Parse responseJson,
                 operationFields = [||],
                 operationTypeName = "Query"
@@ -102,7 +106,7 @@ let ``Should parse all combinations of optional operation error fields`` () =
 
 [<Fact; Trait("OperationError", "Integration")>]
 let ``Should map server error extensions and locations into operation result`` () =
-    let result = ErrorOperation.operation.Run()
+    let result = ErrorOperation.operation.Run ()
 
     result.Errors.Length |> equals 1
 
@@ -113,7 +117,8 @@ let ``Should map server error extensions and locations into operation result`` (
     error.Locations |> equals [||]
 
     error.Extensions.ContainsKey "code" |> equals true
-    error.Extensions.["code"] |> equals (box "OPERATION_ERROR_TEST")
+    error.Extensions.["code"]
+    |> equals (box "OPERATION_ERROR_TEST")
     error.Extensions.ContainsKey "severity" |> equals true
     error.Extensions.["severity"] |> equals (box 7)
     error.Extensions.ContainsKey "kind" |> equals true
