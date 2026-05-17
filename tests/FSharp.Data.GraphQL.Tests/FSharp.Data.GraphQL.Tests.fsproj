@@ -38,10 +38,18 @@
     <Compile Include="Helpers and Extensions\ObservableExtensionsTests.fs" />
     <Compile Include="PropertyTrackingTests.fs" />
     <Compile Include="AbstractionTests.fs" />
+    <Compile Include="TypeWrappersKindSafetyTests.fs" />
     <Compile Include="UnionInterfaceTests.fs" />
     <Compile Include="DirectivesTests.fs" />
     <Compile Include="TypeValidationTests.fs" />
-    <Compile Include="TypeWrappersKindSafetyTests.fs" />
+    <None Include="TypeWrappersKindSafety\References.fsx" Condition="exists('TypeWrappersKindSafety\References.fsx')" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TypeWrappersKindSafety\ListOf.InputAsOutput.fsx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TypeWrappersKindSafety\ListOf.OutputAsInput.fsx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TypeWrappersKindSafety\Nullable.InputAsOutput.fsx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TypeWrappersKindSafety\Nullable.OutputAsInput.fsx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TypeWrappersKindSafety\StructNullable.InputAsOutput.fsx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TypeWrappersKindSafety\StructNullable.OutputAsInput.fsx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TypeWrappersKindSafety\Valid.fsx" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="AstValidationTests.fs" />
     <Compile Include="ParserTests.fs" />
     <Compile Include="SchemaTests.fs" />
