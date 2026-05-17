@@ -2,8 +2,6 @@ module Program
 
 open System
 open System.IO
-open System.Net.Http
-open System.Text.Json
 
 open Fake.Core
 open Fake.Core.TargetOperators
@@ -123,26 +121,6 @@ let runTests (project : string) (args : string) =
             |> _.WithCommon(DotNetCli.setVersion))
         project
 
-let starWarsServerStream = StreamRef.Empty
-
-let [<Literal>] StartStarWarsServerTarget = "StartStarWarsServer"
-Target.create StartStarWarsServerTarget <| fun _ ->
-    Target.activateFinal "StopStarWarsServer"
-
-    let project =
-        "samples"
-        </> "star-wars-api"
-        </> "star-wars-api.fsproj"
-
-    startGraphQLServer project 8086 starWarsServerStream
-
-let [<Literal>] StopStarWarsServerTarget = "StopStarWarsServer"
-Target.createFinal StopStarWarsServerTarget <| fun _ ->
-    try
-        starWarsServerStream.Value.Write ([| 0uy |], 0, 1)
-    with e ->
-        printfn "%s" e.Message
-
 let integrationTestServerProjectPath =
     "tests"
     </> "FSharp.Data.GraphQL.IntegrationTests.Server"
@@ -179,26 +157,14 @@ Target.createFinal StopIntegrationServerTarget <| fun _ ->
     with e ->
         printfn "%s" e.Message
 
+let integrationTestsProjectPath =
+    "tests"
+    </> "FSharp.Data.GraphQL.IntegrationTests"
+    </> "FSharp.Data.GraphQL.IntegrationTests.fsproj"
+
 let [<Literal>] UpdateIntrospectionFileTarget = "UpdateIntrospectionFile"
 Target.create UpdateIntrospectionFileTarget <| fun _ ->
-    let client = new HttpClient ()
-    (task {
-        let! result = client.GetAsync ("http://localhost:8086")
-        let! contentStream = result.Content.ReadAsStreamAsync ()
-        let! jsonDocument = JsonDocument.ParseAsync contentStream
-        let file =
-            new FileStream ("tests/FSharp.Data.GraphQL.IntegrationTests/introspection.json", FileMode.Create, FileAccess.Write, FileShare.None)
-        let encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-        let jsonWriterOptions = JsonWriterOptions (Indented = true, Encoder = encoder)
-        let writer = new Utf8JsonWriter (file, jsonWriterOptions)
-        jsonDocument.WriteTo writer
-        do! writer.FlushAsync ()
-        do! writer.DisposeAsync ()
-        do! file.DisposeAsync ()
-        result.Dispose ()
-    })
-        .Wait ()
-    client.Dispose ()
+    runTests integrationTestsProjectPath "--filter FullyQualifiedName~IntrospectionUpdateTests"
 
 let unitTestsProjectPath =
     "tests"
@@ -384,7 +350,6 @@ Target.create "PackAndPush" ignore
 ==> RestoreTarget
 ==> BuildTarget
 ==> RunUnitTestsTarget
-==> StartStarWarsServerTarget
 ==> UpdateIntrospectionFileTarget
 ==> "All"
 =?> (GenerateDocsTarget, Environment.environVar "GITHUB_ACTIONS" = "True")
