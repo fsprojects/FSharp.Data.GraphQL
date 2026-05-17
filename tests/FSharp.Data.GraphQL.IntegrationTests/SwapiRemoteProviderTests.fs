@@ -52,21 +52,25 @@ hero (id: "1000") {
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
         let friends = result.Data.Value.Hero.Value.Friends.Edges |> Array.map (fun e -> e.Node)
         friends.Length |> equals 4
-        let friend0 = friends[0]
-        friend0.IsHuman() |> equals true
-        friend0.AsHuman().Name |> equals (Some "Han Solo")
-        let friend1 = friends[1]
-        friend1.IsHuman() |> equals true
-        friend1.AsHuman().Name |> equals (Some "Leia Organa")
-        friend1.AsHuman().HomePlanet |> equals (Some "Alderaan")
-        let friend2 = friends[2]
-        friend2.IsDroid() |> equals true
-        friend2.AsDroid().Name |> equals (Some "C-3PO")
-        friend2.AsDroid().PrimaryFunction |> equals (Some "Protocol")
-        let friend3 = friends[3]
-        friend3.IsDroid() |> equals true
-        friend3.AsDroid().Name |> equals (Some "R2-D2")
-        friend3.AsDroid().PrimaryFunction |> equals (Some "Astromech")
+        do
+            let friend0 = friends[0]
+            friend0.IsHuman() |> equals true
+            friend0.AsHuman().Name |> equals (Some "Han Solo")
+        do
+            let friend1 = friends[1]
+            friend1.IsHuman() |> equals true
+            friend1.AsHuman().Name |> equals (Some "Leia Organa")
+            friend1.AsHuman().HomePlanet |> equals (Some "Alderaan")
+        do
+            let friend2 = friends[2]
+            friend2.IsDroid() |> equals true
+            friend2.AsDroid().Name |> equals (Some "C-3PO")
+            friend2.AsDroid().PrimaryFunction |> equals (Some "Protocol")
+        do
+            let friend3 = friends[3]
+            friend3.IsDroid() |> equals true
+            friend3.AsDroid().Name |> equals (Some "R2-D2")
+            friend3.AsDroid().PrimaryFunction |> equals (Some "Astromech")
         result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
         let actual = normalize <| sprintf "%A" result.Data
         let expected = normalize <| """Some
@@ -184,21 +188,25 @@ module FileOperation =
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
         let friends = result.Data.Value.Hero.Value.Friends.Edges |> Array.map _.Node
         friends.Length |> equals 4
-        let friend0 = friends[0]
-        friend0.IsHuman() |> equals true
-        friend0.AsHuman().Name |> equals (Some "Han Solo")
-        let friend1 = friends[1]
-        friend1.IsHuman() |> equals true
-        friend1.AsHuman().Name |> equals (Some "Leia Organa")
-        friend1.AsHuman().HomePlanet |> equals (Some "Alderaan")
-        let friend2 = friends[2]
-        friend2.IsDroid() |> equals true
-        friend2.AsDroid().Name |> equals (Some "C-3PO")
-        friend2.AsDroid().PrimaryFunction |> equals (Some "Protocol")
-        let friend3 = friends[3]
-        friend3.IsDroid() |> equals true
-        friend3.AsDroid().Name |> equals (Some "R2-D2")
-        friend3.AsDroid().PrimaryFunction |> equals (Some "Astromech")
+        do
+            let friend0 = friends[0]
+            friend0.IsHuman() |> equals true
+            friend0.AsHuman().Name |> equals (Some "Han Solo")
+        do
+            let friend1 = friends[1]
+            friend1.IsHuman() |> equals true
+            friend1.AsHuman().Name |> equals (Some "Leia Organa")
+            friend1.AsHuman().HomePlanet |> equals (Some "Alderaan")
+        do
+            let friend2 = friends[2]
+            friend2.IsDroid() |> equals true
+            friend2.AsDroid().Name |> equals (Some "C-3PO")
+            friend2.AsDroid().PrimaryFunction |> equals (Some "Protocol")
+        do
+            let friend3 = friends[3]
+            friend3.IsDroid() |> equals true
+            friend3.AsDroid().Name |> equals (Some "R2-D2")
+            friend3.AsDroid().PrimaryFunction |> equals (Some "Astromech")
         result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
         let actual = normalize <| sprintf "%A" result.Data
         let expected = normalize <| """Some
