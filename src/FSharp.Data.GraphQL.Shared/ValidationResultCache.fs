@@ -6,7 +6,7 @@ open System
 
 type ValidationResultKey =
     { DocumentId : string
-      SchemaId : string }
+      SchemaId : int }
 
 type ValidationResultProducer =
     unit -> ValidationResult<GQLProblemDetails>
@@ -20,10 +20,10 @@ module SchemaId =
     /// This identifier is valid only within the current process/runtime and is not deterministic across process restarts.
     /// </summary>
     /// <param name="introspectionSchema">The introspection schema.</param>
-    /// <returns>A string representation of the schema hash code for in-process cache keys.</returns>
+    /// <returns>The schema hash code for in-process cache keys.</returns>
     [<CompiledName("FromIntrospectionSchema")>]
     let fromIntrospectionSchema (introspectionSchema : IntrospectionSchema) =
-        introspectionSchema.GetHashCode().ToString(System.Globalization.CultureInfo.InvariantCulture)
+        introspectionSchema.GetHashCode()
 
 /// An in-memory cache for the results of schema/document validations, with a lifetime of 30 seconds.
 type MemoryValidationResultCache () =

@@ -16,7 +16,7 @@ let ``MemoryValidationResultCache caches results for same key`` () =
         Interlocked.Increment(&callCount) |> ignore
         Success
     
-    let key = { DocumentId = "doc1"; SchemaId = "schema1" }
+    let key = { DocumentId = "doc1"; SchemaId = 1 }
     
     // First call should invoke producer
     let result1 = cache.GetOrAdd producer key
@@ -36,8 +36,8 @@ let ``MemoryValidationResultCache uses different cache entries for different Doc
         Interlocked.Increment(&callCount) |> ignore
         Success
     
-    let key1 = { DocumentId = "doc1"; SchemaId = "schema1" }
-    let key2 = { DocumentId = "doc2"; SchemaId = "schema1" }
+    let key1 = { DocumentId = "doc1"; SchemaId = 1 }
+    let key2 = { DocumentId = "doc2"; SchemaId = 1 }
     
     // First call
     let result1 = cache.GetOrAdd producer key1
@@ -55,8 +55,8 @@ let ``MemoryValidationResultCache uses different cache entries for different Sch
         Interlocked.Increment(&callCount) |> ignore
         Success
     
-    let key1 = { DocumentId = "doc1"; SchemaId = "schema1" }
-    let key2 = { DocumentId = "doc1"; SchemaId = "schema2" }
+    let key1 = { DocumentId = "doc1"; SchemaId = 1 }
+    let key2 = { DocumentId = "doc1"; SchemaId = 2 }
     
     // First call
     let result1 = cache.GetOrAdd producer key1
@@ -72,8 +72,8 @@ let ``MemoryValidationResultCache distinguishes keys with same hash code`` () =
     
     // Create two different keys that might have hash collisions
     // Using very similar but different strings
-    let key1 = { DocumentId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; SchemaId = "schema1" }
-    let key2 = { DocumentId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"; SchemaId = "schema1" }
+    let key1 = { DocumentId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; SchemaId = 1 }
+    let key2 = { DocumentId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"; SchemaId = 1 }
     
     let mutable callCount = 0
     let producer () =
@@ -97,7 +97,7 @@ let ``MemoryValidationResultCache caches error results`` () =
         Interlocked.Increment(&callCount) |> ignore
         ValidationError [error]
     
-    let key = { DocumentId = "doc1"; SchemaId = "schema1" }
+    let key = { DocumentId = "doc1"; SchemaId = 1 }
     
     // First call should invoke producer
     let result1 = cache.GetOrAdd producer key
@@ -122,7 +122,7 @@ let ``MemoryValidationResultCache handles concurrent access`` () =
         Thread.Sleep(10)  // Simulate some work
         Success
     
-    let key = { DocumentId = "doc1"; SchemaId = "schema1" }
+    let key = { DocumentId = "doc1"; SchemaId = 1 }
     
     // Call cache from multiple threads simultaneously
     let tasks = 
