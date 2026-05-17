@@ -64,3 +64,7 @@ let ``Should map server error extensions and locations into operation result`` (
     error.Extensions.ContainsKey "severity" |> equals true
     error.Extensions.["severity"] |> equals (box 7)
     error.Extensions.ContainsKey "kind" |> equals true
+    match error.Extensions.["kind"] with
+    | :? string as kind -> kind |> equals "Execution"
+    | :? int as kind -> kind |> equals 3
+    | kind -> failwithf "Unexpected kind extension value: %A" kind
