@@ -20,9 +20,9 @@ let normalizeJsonDocument options (document : JsonDocument) =
     JsonDocument.Parse buffer
 
 let parseAndNormalizeJsonAsync ct options stream = task {
-    let! document = JsonDocument.ParseAsync (stream, cancellationToken = ct)
-    return normalizeJsonDocument options document
-}
+        let! document = JsonDocument.ParseAsync (stream, cancellationToken = ct)
+        return normalizeJsonDocument options document
+    }
 
 let areSchemasEqual (document1 : JsonDocument) (document2 : JsonDocument) =
     let schema1 = document1.RootElement.GetProperty("data").GetProperty ("__schema")
@@ -30,56 +30,56 @@ let areSchemasEqual (document1 : JsonDocument) (document2 : JsonDocument) =
     schema1.GetRawText () = schema2.GetRawText ()
 
 let readDestinationDocumentAsync ct (stream : FileStream) = task {
-    try
-        let! document = JsonDocument.ParseAsync (stream, cancellationToken = ct)
-        return ValueSome document
-    with :? JsonException ->
-        return ValueNone
-}
+        try
+            let! document = JsonDocument.ParseAsync (stream, cancellationToken = ct)
+            return ValueSome document
+        with :? JsonException ->
+            return ValueNone
+    }
 
 let updateIntrospectionFileAsync ct sourceStream = task {
-    use destinationStream =
-        new FileStream (introspectionFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read)
+        use destinationStream =
+            new FileStream (introspectionFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read)
 
     let options = JsonWriterOptions (Indented = true)
-    let! sourceDocument = parseAndNormalizeJsonAsync ct options sourceStream
-    destinationStream.Seek (0L, SeekOrigin.Begin) |> ignore
-    let! destinationDocument = readDestinationDocumentAsync ct destinationStream
-
-    let shouldUpdate =
-        match destinationDocument with
-        | ValueNone -> true
-        | ValueSome document -> not (areSchemasEqual document sourceDocument)
-
-    if shouldUpdate then
+        let! sourceDocument = parseAndNormalizeJsonAsync ct options sourceStream
         destinationStream.Seek (0L, SeekOrigin.Begin) |> ignore
-        destinationStream.SetLength 0
-        use writer = new Utf8JsonWriter (destinationStream, options)
-        sourceDocument.WriteTo writer
-        writer.Flush ()
+        let! destinationDocument = readDestinationDocumentAsync ct destinationStream
 
-    return shouldUpdate
-}
+        let shouldUpdate =
+            match destinationDocument with
+            | ValueNone -> true
+            | ValueSome document -> not (areSchemasEqual document sourceDocument)
+
+        if shouldUpdate then
+            destinationStream.Seek (0L, SeekOrigin.Begin) |> ignore
+            destinationStream.SetLength 0
+            use writer = new Utf8JsonWriter (destinationStream, options)
+            sourceDocument.WriteTo writer
+            writer.Flush ()
+
+        return shouldUpdate
+    }
 
 [<Fact>]
 let ``Get GraphQL introspection response returns schema`` () = task {
-    use httpClient = TestHosts.createIntegrationHttpClient ()
+        use httpClient = TestHosts.createIntegrationHttpClient ()
     let! response = httpClient.GetFromJsonAsync<JsonElement> ("/", CancellationToken.None)
     let schema = response.GetProperty("data").GetProperty ("__schema")
     Assert.NotEqual (Unchecked.defaultof<JsonElement>, schema)
-    let hasErrors, _ = response.TryGetProperty "errors"
-    Assert.False hasErrors
-}
+        let hasErrors, _ = response.TryGetProperty "errors"
+        Assert.False hasErrors
+    }
 
 [<Fact>]
 let ``Update integration introspection file when schema changes`` () = task {
-    use httpClient = TestHosts.createIntegrationHttpClient ()
+        use httpClient = TestHosts.createIntegrationHttpClient ()
     let! sourceStream = httpClient.GetStreamAsync ("/")
-    let! wasUpdated = updateIntrospectionFileAsync CancellationToken.None sourceStream
+        let! wasUpdated = updateIntrospectionFileAsync CancellationToken.None sourceStream
     Assert.True (File.Exists introspectionFilePath)
-    if wasUpdated then
+        if wasUpdated then
         let! sourceStreamSecondRun = httpClient.GetStreamAsync ("/")
-        use sourceStreamForVerification = sourceStreamSecondRun
-        let! wasUpdatedSecondRun = updateIntrospectionFileAsync CancellationToken.None sourceStreamForVerification
-        Assert.False wasUpdatedSecondRun
-}
+            use sourceStreamForVerification = sourceStreamSecondRun
+            let! wasUpdatedSecondRun = updateIntrospectionFileAsync CancellationToken.None sourceStreamForVerification
+            Assert.False wasUpdatedSecondRun
+    }
