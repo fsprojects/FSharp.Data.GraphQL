@@ -164,7 +164,18 @@ let integrationTestsProjectPath =
 
 let [<Literal>] UpdateIntrospectionFileTarget = "UpdateIntrospectionFile"
 Target.create UpdateIntrospectionFileTarget <| fun _ ->
-    runTests integrationTestsProjectPath "--filter FullyQualifiedName~IntrospectionUpdateTests"
+    integrationTestsProjectPath
+    |> DotNet.test (fun options -> {
+        options with
+            Framework = Some DotNetMoniker
+            Configuration = configuration
+            Common = { DotNetCli.setVersion options.Common with CustomParams = Some "--filter FullyQualifiedName~IntrospectionUpdateTests" }
+            MSBuildParams = {
+                options.MSBuildParams with
+                    DisableInternalBinLog = true
+                    Verbosity = Some Normal
+            }
+    })
 
 let unitTestsProjectPath =
     "tests"
