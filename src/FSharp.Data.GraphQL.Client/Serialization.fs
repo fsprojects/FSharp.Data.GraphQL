@@ -6,7 +6,6 @@ namespace FSharp.Data.GraphQL.Client
 open System
 open System.Collections.Generic
 open System.IO
-open System.Reflection
 open System.Text
 open System.Text.Json
 open FSharp.Data.GraphQL
@@ -202,8 +201,24 @@ module private SchemaParser =
 
 module Serialization =
 
-    let private isoDateFormat = "yyyy-MM-dd"
-    let private isoDateTimeFormat = "O"
+    /// The default JSON serializer options used for request serialization when no custom options are provided.
+    let defaultSerializerOptions =
+        lazy (FSharp.Data.GraphQL.Shared.Json.getSerializerOptions Seq.empty)
+
+    /// Converts special types (Uri, Upload, etc.) that System.Text.Json cannot handle natively
+    /// into their JSON-serializable representations. Applied recursively to variable values.
+    /// Also normalizes dictionary keys to camelCase to match GraphQL field naming conventions.
+    let rec private normalizeForSerialization (value : obj) : obj =
+        match value with
+        | null -> null
+        | :? string -> value // Must come before EnumerableValue: string implements IEnumerable
+        | :? Uri as u -> box (u.ToString ())
+        | :? Upload as u -> box u.Name // File variables are written as the form-part name string
+        | :? IDictionary<string, obj> as d ->
+            // Apply FirstCharLower to keys: RecordBase.ToDictionary() uses PascalCase (FirstCharUpper) for property names
+            d |> Seq.map (fun kvp -> kvp.Key.FirstCharLower (), normalizeForSerialization kvp.Value) |> dict |> box
+        | EnumerableValue items -> items |> Array.map normalizeForSerialization |> box
+        | v -> v
 
     /// Converts a JsonElement to an F# object recursively.
     let rec private deserializeElement (element : JsonElement) : obj =
@@ -236,55 +251,11 @@ module Serialization =
             |> Array.map (fun (name, element) -> name, deserializeElement element)
             |> Map.ofArray)
 
-    let private writeValue (writer : Utf8JsonWriter) =
-        let rec write (value : obj) =
-            match value with
-            | null -> writer.WriteNullValue ()
-            | OptionValue None -> writer.WriteNullValue ()
-            | OptionValue (Some v) -> write v
-            | :? bool as b -> writer.WriteBooleanValue b
-            | :? int as n -> writer.WriteNumberValue n
-            | :? float as f -> writer.WriteNumberValue f
-            | :? decimal as d -> writer.WriteNumberValue d
-            | :? int64 as n -> writer.WriteNumberValue n
-            | :? uint64 as n -> writer.WriteNumberValue n
-            | :? int16 as n -> writer.WriteNumberValue (int n)
-            | :? uint16 as n -> writer.WriteNumberValue (uint32 n)
-            | :? byte as n -> writer.WriteNumberValue (uint32 n)
-            | :? sbyte as n -> writer.WriteNumberValue (int n)
-            | :? string as s -> writer.WriteStringValue s
-            | :? Guid as g -> writer.WriteStringValue (g.ToString ())
-            | :? DateTime as d when d.Date = d -> writer.WriteStringValue (d.ToString isoDateFormat)
-            | :? DateTime as d -> writer.WriteStringValue (d.ToString isoDateTimeFormat)
-            | :? DateTimeOffset as d -> writer.WriteStringValue (d.ToString isoDateTimeFormat)
-            | :? Uri as u -> writer.WriteStringValue (u.ToString ())
-            | :? Upload as u -> writer.WriteStringValue u.Name
-            | :? IDictionary<string, obj> as dict ->
-                writer.WriteStartObject ()
-                for kvp in dict do
-                    writer.WritePropertyName (kvp.Key.FirstCharLower ())
-                    write kvp.Value
-                writer.WriteEndObject ()
-            | EnumerableValue items ->
-                writer.WriteStartArray ()
-                Array.iter write items
-                writer.WriteEndArray ()
-            | EnumValue s -> writer.WriteStringValue s
-            | _ ->
-                let props = value.GetType().GetProperties (BindingFlags.Public ||| BindingFlags.Instance)
-                writer.WriteStartObject ()
-                for p in props do
-                    writer.WritePropertyName (p.Name.FirstCharLower ())
-                    write (p.GetValue value)
-                writer.WriteEndObject ()
-        write
-
     /// Builds the JSON body for a standard GraphQL request.
-    let buildRequestJson (operationName : string option) (query : string) (variables : (string * obj) []) =
+    let buildRequestJson (options : JsonSerializerOptions) (operationName : string option) (query : string) (variables : (string * obj) []) =
         Tracer.runAndMeasureExecutionTime "Built GraphQL request JSON" (fun _ ->
             use stream = new MemoryStream ()
             use writer = new Utf8JsonWriter (stream, JsonWriterOptions (Indented = false))
-            let write = writeValue writer
             writer.WriteStartObject ()
             writer.WritePropertyName "operationName"
             match operationName with
@@ -296,11 +267,8 @@ module Serialization =
             if variables = null || variables.Length = 0 then
                 writer.WriteNullValue ()
             else
-                writer.WriteStartObject ()
-                for (name, value) in variables do
-                    writer.WritePropertyName name
-                    write value
-                writer.WriteEndObject ()
+                let dict = variables |> Array.map (fun (k, v) -> k, normalizeForSerialization v) |> dict
+                JsonSerializer.Serialize (writer, dict, options)
             writer.WriteEndObject ()
             writer.Flush ()
             Encoding.UTF8.GetString (stream.ToArray ()))

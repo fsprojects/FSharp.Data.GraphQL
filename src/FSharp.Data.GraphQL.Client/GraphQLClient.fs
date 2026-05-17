@@ -7,6 +7,7 @@ open System
 open System.Collections.Generic
 open System.Net.Http
 open System.Text
+open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
 
@@ -26,6 +27,8 @@ type GraphQLRequest = {
     Query : string
     /// Gets variables to be sent with the query.
     Variables : (string * obj)[]
+    /// Gets the JSON serializer options used for serializing request variables.
+    JsonSerializerOptions : JsonSerializerOptions
 }
 
 /// Executes calls to GraphQL servers and return their responses.
@@ -56,7 +59,7 @@ module GraphQLClient =
     /// Sends a request to a GraphQL server asynchronously.
     let sendRequestAsync ct (connection : GraphQLClientConnection) (request : GraphQLRequest) = task {
         let invoker = connection.Invoker
-        let json = Serialization.buildRequestJson request.OperationName request.Query request.Variables
+        let json = Serialization.buildRequestJson request.JsonSerializerOptions request.OperationName request.Query request.Variables
         let content = new StringContent (json, Encoding.UTF8, "application/json")
         return! postAsync ct invoker request.ServerUrl request.HttpHeaders content
     }
@@ -88,6 +91,7 @@ module GraphQLClient =
                     OperationName = None
                     Query = IntrospectionQuery.Definition
                     Variables = [||]
+                    JsonSerializerOptions = Serialization.defaultSerializerOptions.Value
                 }
                 try
                     return! sendRequestAsync ct connection request
@@ -130,7 +134,7 @@ module GraphQLClient =
             |> Array.collect (tryMapFileVariable >> (Option.defaultValue [||]))
 
         let operationContent =
-            let json = Serialization.buildRequestJson request.OperationName request.Query request.Variables
+            let json = Serialization.buildRequestJson request.JsonSerializerOptions request.OperationName request.Query request.Variables
             let content = new StringContent (json)
             content.Headers.Add ("Content-Disposition", "form-data; name=\"operations\"")
             content

@@ -636,6 +636,7 @@ module VariableMapping =
         | :? string -> value
         | :? EnumBase as v -> v.GetValue () |> box
         | :? RecordBase as v -> v.ToDictionary () |> box
-        | OptionValue v -> v |> Option.map mapVariableValue |> box
+        | OptionValue None -> null
+        | OptionValue (Some v) -> mapVariableValue v
         | EnumerableValue v -> v |> Array.map mapVariableValue |> box
         | v -> v
