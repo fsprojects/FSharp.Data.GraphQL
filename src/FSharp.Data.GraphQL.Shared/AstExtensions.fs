@@ -116,7 +116,7 @@ type Document with
                 | '\n' -> escaped.Append("\\n") |> ignore
                 | '\r' -> escaped.Append("\\r") |> ignore
                 | '\t' -> escaped.Append("\\t") |> ignore
-                | c when c < '\u0020' -> escaped.AppendFormat("\\u{0:x4}", int c) |> ignore
+                | c when c < '\u0020' -> escaped.AppendFormat("\\u{0:X4}", int c) |> ignore
                 | c -> escaped.Append(c) |> ignore
             escaped.Append('"').ToString()
         let withQuotes = escapeGraphQLString

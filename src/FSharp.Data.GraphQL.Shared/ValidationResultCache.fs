@@ -27,9 +27,10 @@ module SchemaId =
     /// <param name="introspectionSchema">The introspection schema to hash.</param>
     /// <returns>A lowercase hexadecimal SHA-256 hash string that uniquely identifies the schema structure.</returns>
     let fromIntrospectionSchema (introspectionSchema : IntrospectionSchema) =
-        let options = JsonSerializerOptions()
-        options.WriteIndented <- false
-        options.DefaultIgnoreCondition <- System.Text.Json.Serialization.JsonIgnoreCondition.Never
+        let options = JsonSerializerOptions(
+            WriteIndented = false,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
+        )
         let json = JsonSerializer.Serialize(introspectionSchema, options)
         let jsonBytes = Encoding.UTF8.GetBytes json
         use sha256 = SHA256.Create()
