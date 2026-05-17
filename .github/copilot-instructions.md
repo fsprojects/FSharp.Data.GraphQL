@@ -12,7 +12,8 @@ Always prefer installing PowerShell modules over installing CLI tools.
 
 ## GitHub operations
 
-Use `PowerShellForGitHub` PowerShell module for all GitHub operations. Never use GitHub CLI (`gh`) or any other CLI tool for GitHub.
+First of all use GitHub MCP tools.
+If no tool avaialble, use `PowerShellForGitHub` PowerShell module for all GitHub operations. Never use GitHub CLI (`gh`) or any other CLI tool for GitHub.
 
 ## Libraries we use
 
