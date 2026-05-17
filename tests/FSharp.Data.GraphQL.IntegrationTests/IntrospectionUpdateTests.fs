@@ -42,7 +42,7 @@ let readDestinationDocumentAsync ct (stream : FileStream) =
 let updateIntrospectionFileAsync ct sourceStream =
     task {
         use destinationStream =
-            new FileStream (introspectionFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+            new FileStream (introspectionFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read)
 
         let options = JsonWriterOptions(Indented = true)
         let! sourceDocument = parseAndNormalizeJsonAsync ct options sourceStream
@@ -67,8 +67,7 @@ let updateIntrospectionFileAsync ct sourceStream =
 [<Fact>]
 let ``Get GraphQL introspection response returns schema`` () =
     task {
-        use factory = new TestHosts.IntegrationServerApplicationFactory ()
-        use httpClient = factory.CreateClient ()
+        use httpClient = TestHosts.createIntegrationHttpClient ()
         let! response = httpClient.GetFromJsonAsync<JsonElement>("/", CancellationToken.None)
         let schema = response.GetProperty("data").GetProperty("__schema")
         Assert.NotEqual(Unchecked.defaultof<JsonElement>, schema)
@@ -79,8 +78,7 @@ let ``Get GraphQL introspection response returns schema`` () =
 [<Fact>]
 let ``Update integration introspection file when schema changes`` () =
     task {
-        use factory = new TestHosts.IntegrationServerApplicationFactory ()
-        use httpClient = factory.CreateClient ()
+        use httpClient = TestHosts.createIntegrationHttpClient ()
         let! sourceStream = httpClient.GetStreamAsync("/")
         let! _ = updateIntrospectionFileAsync CancellationToken.None sourceStream
         Assert.True(File.Exists introspectionFilePath)
