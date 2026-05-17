@@ -39,6 +39,7 @@ module SchemaId =
     /// </summary>
     /// <param name="introspectionSchema">The introspection schema to hash.</param>
     /// <returns>A lowercase hexadecimal SHA-256 hash string that uniquely identifies the schema structure.</returns>
+    [<CompiledName("FromIntrospectionSchema")>]
     let fromIntrospectionSchema (introspectionSchema : IntrospectionSchema) =
         use stream = new MemoryStream()
         JsonSerializer.Serialize(stream, introspectionSchema, jsonOptions)
