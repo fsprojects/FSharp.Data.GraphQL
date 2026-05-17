@@ -26,14 +26,18 @@ type SchemaFieldInfo =
 /// A type alias to represent a Type name.
 type TypeName = string
 
-/// Contains data about a GQL operation error.
+/// Contains source location information for a single GraphQL error location entry in the response.
+/// See GraphQL specification sections <see href="https://spec.graphql.org/October2021/#sec-Errors"/> and
+/// <see href="https://spec.graphql.org/October2021/#sec-Response-Format"/>.
 type OperationErrorLocation =
     { /// The source line of the GraphQL operation document where the error occurred.
       Line : int
       /// The source column of the GraphQL operation document where the error occurred.
       Column : int }
 
-/// Contains data about a GQL operation error.
+/// Contains data about a GraphQL operation error as defined by the GraphQL response format.
+/// See GraphQL specification sections <see href="https://spec.graphql.org/October2021/#sec-Errors"/> and
+/// <see href="https://spec.graphql.org/October2021/#sec-Response-Format"/>.
 type OperationError =
     { /// The description of the error that happened in the operation.
       Message : string
@@ -475,7 +479,9 @@ type OperationResultBase (rawResponse: HttpResponseMessage, responseJson : JsonV
     [<CompilerMessageAttribute("This property is intended for use in generated code only.", 10001, IsHidden=true, IsError=false)>]
     member _.RawData = rawData
 
-    /// Gets all the errors returned by the operation on the server.
+    /// Gets all GraphQL errors returned by the server.
+    /// See GraphQL specification sections <see href="https://spec.graphql.org/October2021/#sec-Errors"/> and
+    /// <see href="https://spec.graphql.org/October2021/#sec-Response-Format"/>.
     member _.Errors = errors
 
     /// Gets all the custom data returned by the operation on server as a map of names and values.
