@@ -210,7 +210,7 @@ module HttpHandlers =
             setHeader "Request-Type" requestType httpContext
 
     /// <summary>
-    /// Creates a Suave <see cref="T:Suave.WebPart.WebPart`1" /> that handles GraphQL GET and POST requests.
+    /// Creates a Suave WebPart that handles GraphQL GET and POST requests.
     /// </summary>
     /// <param name="executor">The GraphQL executor.</param>
     /// <param name="rootFactory">Creates the GraphQL root object from the current Suave HTTP context.</param>
