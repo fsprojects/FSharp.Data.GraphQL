@@ -529,6 +529,3 @@ let ``Should be able to upload file using complex input object with context asyn
     let! result = UploadComplexOperation.operation.AsyncRun(context, input)
     result |> UploadComplexOperation.validateResult file
 }
-
-
-
