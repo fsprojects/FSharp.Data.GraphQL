@@ -66,6 +66,9 @@ type ExecutorMiddleware(?compile, ?postCompile, ?plan, ?execute) =
 /// An optional pre-existing validation cache can be supplied.  If not, one is created and used internally.
 type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware seq, [<Optional>] validationCache : IValidationResultCache voption) =
     let validationCache = validationCache |> ValueOption.defaultWith (fun () -> upcast MemoryValidationResultCache())
+    
+    // Compute schema ID once and cache it for the lifetime of this Executor instance
+    let schemaId = SchemaId.fromIntrospectionSchema schema.Introspected
 
     let fieldExecuteMap = FieldExecuteMap(compileField)
 
@@ -161,7 +164,6 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                             ErrorKind.Validation
                         )]
                 do!
-                    let schemaId = SchemaId.fromIntrospectionSchema schema.Introspected
                     let key = { DocumentId = documentId; SchemaId = schemaId }
                     let producer = fun () -> Validation.Ast.validateDocument schema.Introspected ast
                     validationCache.GetOrAdd producer key
