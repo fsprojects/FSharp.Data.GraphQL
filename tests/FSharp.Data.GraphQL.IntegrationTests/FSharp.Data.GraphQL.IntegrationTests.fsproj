@@ -26,6 +26,7 @@
     <Compile Include="Helpers.fs" />
     <Compile Include="OperationErrorTests.fs" />
     <Compile Include="TestHosts.fs" />
+    <Compile Include="IntrospectionUpdateTests.fs" />
     <Compile Include="ReservedScalarNameProviderTests.fs" />
     <Compile Include="LocalProviderTests.fs" />
     <Compile Include="LocalProviderWithOptionalParametersOnlyTests.fs" />
