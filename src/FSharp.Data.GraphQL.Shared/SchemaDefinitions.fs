@@ -393,6 +393,7 @@ module SchemaDefinitions =
         | InlineConstant value -> value.GetCoerceError destinationType
 
     type TypeWrapperStaticDispatch =
+
         static member Nullable<'Val>(innerDef : InputOutputDef<'Val>) : NullableDef<'Val> =
             let ofType : TypeDef<'Val> = upcast innerDef
             upcast { NullableDefinition.OfType = ofType }

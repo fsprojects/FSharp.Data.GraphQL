@@ -114,8 +114,6 @@ type SliceInfo<'Cursor> =
 
 [<AutoOpen>]
 module Definitions =
-    let inline private nullableOutput (innerDef : #OutputDef<'Val>) : OutputDef<'Val option> =
-        Nullable (innerDef :> OutputDef<'Val>)
 
     /// <summary>
     /// Active pattern that extracts Relay pagination arguments from a GraphQL field context.
@@ -161,13 +159,13 @@ module Definitions =
                 )
                 Define.AsyncField (
                     "startCursor",
-                    nullableOutput StringType,
+                    Nullable StringType,
                     "When paginating backwards, the cursor to continue.",
                     fun _ pageInfo -> pageInfo.StartCursor
                 )
                 Define.AsyncField (
                     "endCursor",
-                    nullableOutput StringType,
+                    Nullable StringType,
                     "When paginating forwards, the cursor to continue.",
                     fun _ pageInfo -> pageInfo.EndCursor
                 )
@@ -227,7 +225,7 @@ module Definitions =
             fields = [
                 Define.AsyncField (
                     "totalCount",
-                    nullableOutput IntType,
+                    Nullable IntType,
                     """A count of the total number of objects in this connection, ignoring pagination. This allows a client to fetch the first five objects by passing \"5\" as the argument to `first`, then fetch the total count so it could display \"5 of 83\", for example. In cases where we employ infinite scrolling or don't have an exact count of entries, this field will return `null`.""",
                     fun _ conn -> conn.TotalCount
                 )
@@ -278,8 +276,6 @@ module Edge =
 
 [<RequireQualifiedAccess>]
 module Connection =
-    let inline private nullableInput (innerDef : #InputDef<'Val>) : InputDef<'Val option> =
-        Nullable (innerDef :> InputDef<'Val>)
 
     /// <summary>
     /// Transforms a <see cref="Connection{T}"/> into a <see cref="Connection{U}"/>
@@ -308,8 +304,8 @@ module Connection =
     /// <seealso cref="backwardArgs"/>
     /// <seealso cref="allArgs"/>
     let forwardArgs =
-        [ Define.Input ("first", nullableInput IntType)
-          Define.Input ("after", nullableInput StringType) ]
+        [ Define.Input ("first", Nullable IntType)
+          Define.Input ("after", Nullable StringType) ]
 
     /// <summary>
     /// Argument definitions for backward pagination ("last" and "before").
@@ -318,8 +314,8 @@ module Connection =
     /// <seealso cref="forwardArgs"/>
     /// <seealso cref="allArgs"/>
     let backwardArgs =
-        [ Define.Input ("last", nullableInput IntType)
-          Define.Input ("before", nullableInput StringType) ]
+        [ Define.Input ("last", Nullable IntType)
+          Define.Input ("before", Nullable StringType) ]
 
     /// <summary>
     /// Complete set of argument definitions for bidirectional pagination.
