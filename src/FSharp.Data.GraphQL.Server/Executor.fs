@@ -3,10 +3,7 @@ namespace FSharp.Data.GraphQL
 open System
 open System.Collections.Concurrent
 open System.Collections.Immutable
-open System.Buffers.Binary
-open System.Security.Cryptography
 open System.Runtime.InteropServices
-open System.Text
 open System.Text.Json
 open FsToolkit.ErrorHandling
 
@@ -83,18 +80,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     let middlewaresList = Seq.toList middlewares
 
     /// Generates a deterministic document identifier from the canonical query string.
-    /// The full SHA-256 hash is folded into 32 bits to preserve the existing int32 documentId contract.
     let getDocumentId (document : Document) =
-        let canonicalQuery = document.ToQueryString()
-        let queryBytes = Encoding.UTF8.GetBytes canonicalQuery
-        let hash = SHA256.HashData queryBytes
-        [ 0 .. 7 ]
-        |> List.fold
-            (fun acc index ->
-                let start = index * 4
-                let hashChunk = BinaryPrimitives.ReadInt32BigEndian(hash.AsSpan(start, 4))
-                acc ^^^ hashChunk)
-            0
+        DocumentId.fromDocument document
 
     let rec runMiddlewares (phaseSel : IExecutorMiddleware -> ('ctx -> ('ctx -> 'res) -> 'res) option)
                            (initialCtx : 'ctx)

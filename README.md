@@ -230,7 +230,7 @@ printfn "Custom data: %A\n" result.CustomData
 
 // Errors: <null>
 
-// Custom data: map [("documentId", 1221427401)]
+// Custom data: map [("documentId", "84fbf8cde7d1ce2c00b8e92e5f3472919b89c97c8c853b6c95619a0cb7fb3c6f")]
 ```
 
 For more information about how to use the client provider, see the [examples folder](samples/client-provider).

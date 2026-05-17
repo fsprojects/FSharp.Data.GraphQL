@@ -4,7 +4,7 @@ open FSharp.Data.GraphQL
 open System
 
 type ValidationResultKey =
-    { DocumentId : int
+    { DocumentId : string
       SchemaId : int }
 
 type ValidationResultProducer =

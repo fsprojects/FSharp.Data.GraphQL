@@ -671,7 +671,7 @@ and PlanningContext = {
     RootDef : ObjectDef
     Document : Document
     Operation : OperationDefinition
-    DocumentId : int
+    DocumentId : string
     Metadata : Metadata
 }
 
@@ -888,7 +888,7 @@ and SchemaCompileContext = {
 /// It is used by the execution process to execute an operation.
 and ExecutionPlan = {
     /// Unique identifier of the current execution plan.
-    DocumentId : int
+    DocumentId : string
     /// AST definition of current operation.
     Operation : OperationDefinition
     /// Definition of the root type (either query or mutation) used by the

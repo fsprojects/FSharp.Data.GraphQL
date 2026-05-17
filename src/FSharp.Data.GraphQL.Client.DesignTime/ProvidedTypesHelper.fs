@@ -799,7 +799,7 @@ module internal Provider =
                                     match validationResult with
                                     | ValidationError msgs -> failwith (formatValidationExceptionMessage msgs)
                                     | Success -> ()
-                                let key = { DocumentId = queryAst.GetHashCode(); SchemaId = schema.GetHashCode() }
+                                let key = { DocumentId = DocumentId.fromDocument queryAst; SchemaId = schema.GetHashCode() }
                                 let refMaker = lazy Validation.Ast.validateDocument schema queryAst
                                 if clientQueryValidation then
                                     refMaker.Force

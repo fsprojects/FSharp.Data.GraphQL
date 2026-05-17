@@ -385,12 +385,12 @@ let ``Execution when querying returns unique document id with response`` () =
                 ]))
     let query = "query Example { a, b, a }"
     // Deterministic SHA-256-based documentId for canonical `query Example { a b a }`,
-    // folding all 32 hash bytes into an int32 via 8 big-endian chunks.
+    // represented as lowercase hex string.
     // Computed once via parse + ToQueryString + SHA-256 and kept fixed to catch regressions.
-    let expectedDocumentId = 154204461
+    let expectedDocumentId = "84fbf8cde7d1ce2c00b8e92e5f3472919b89c97c8c853b6c95619a0cb7fb3c6f"
     let result1 = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, { A = "aa"; B = 2 })
     let result2 = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, { A = "aa"; B = 2 })
-    result1.DocumentId |> notEquals Unchecked.defaultof<int>
+    result1.DocumentId |> notEquals Unchecked.defaultof<string>
     result1.DocumentId |> equals expectedDocumentId
     result1.DocumentId |> equals result2.DocumentId
     match result1,result2 with
@@ -442,7 +442,7 @@ let ``Execution handles errors: properly propagates errors`` () =
         let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
         sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } partialSuccess { kaboom } }", getMockInputContext, variables)
     ensureDirect result <| fun data errors ->
-        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        result.DocumentId |> notEquals Unchecked.defaultof<string>
         data |> equals (upcast expectedData)
         errors |> equals expectedErrors
 
@@ -480,7 +480,7 @@ let ``Execution handles errors: nullable list fields`` () =
         ]
     let result = sync <| Executor(schema).AsyncExecute("query Test { list { error } }", getMockInputContext, ())
     ensureDirect result <| fun data errors ->
-        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        result.DocumentId |> notEquals Unchecked.defaultof<string>
         data |> equals (upcast expectedData)
         errors |> equals expectedErrors
 
@@ -516,7 +516,7 @@ let ``Execution handles errors: additional error added when exception is raised 
         let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
         sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", getMockInputContext, variables)
     ensureDirect result <| fun data errors ->
-        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        result.DocumentId |> notEquals Unchecked.defaultof<string>
         data |> equals (upcast expectedData)
         errors |> equals expectedErrors
 
@@ -550,7 +550,7 @@ let ``Execution handles errors: additional error added when None returned from a
         let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
         sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", getMockInputContext, variables)
     ensureDirect result <| fun data errors ->
-        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        result.DocumentId |> notEquals Unchecked.defaultof<string>
         data |> equals (upcast expectedData)
         errors |> equals expectedErrors
 
@@ -579,7 +579,7 @@ let ``Execution handles errors: additional error added when exception is rised i
         let variables = { Inner = { Kaboom = "Yes, Rico, Kaboom" }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
         sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", getMockInputContext, variables)
     ensureRequestError result <| fun  errors ->
-        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        result.DocumentId |> notEquals Unchecked.defaultof<string>
         errors |> equals expectedErrors
 
 [<Fact>]
@@ -607,5 +607,5 @@ let ``Execution handles errors: additional error added and when null returned fr
         let variables = { Inner = { Kaboom = "Yes, Rico, Kaboom" }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
         sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", getMockInputContext, variables)
     ensureRequestError result <| fun errors ->
-        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        result.DocumentId |> notEquals Unchecked.defaultof<string>
         errors |> equals expectedErrors
