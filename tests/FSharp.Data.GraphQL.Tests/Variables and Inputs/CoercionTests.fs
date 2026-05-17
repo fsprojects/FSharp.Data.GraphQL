@@ -121,8 +121,8 @@ let private testOutputCoercion graphQLType (expected: 'a) (input: obj) =
 
 [<Fact>]
 let ``ID coerces output`` () =
-    testOutputCoercion IDType "abc" ("abc" : obj)
-    testOutputCoercion IDType "123" (123 : obj)
-    testOutputCoercion IDType "123" (123L : obj)
+    testOutputCoercion IDType "abc" (box "abc")
+    testOutputCoercion IDType "123" (box 123)
+    testOutputCoercion IDType "123" (box 123L)
     let guid = Guid.Parse "d6c684d9-aaaa-4e88-bbb2-0bb584f1661d"
-    testOutputCoercion IDType (string guid) (guid : obj)
+    testOutputCoercion IDType (string guid) (box guid)
