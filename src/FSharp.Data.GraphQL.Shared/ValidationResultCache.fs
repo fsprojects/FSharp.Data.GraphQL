@@ -21,17 +21,18 @@ module SchemaId =
     let private formatByteAsLowerHex (value : byte) =
         value.ToString("x2", System.Globalization.CultureInfo.InvariantCulture)
     
+    let private jsonOptions = JsonSerializerOptions(
+        WriteIndented = false,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
+    )
+    
     /// <summary>
     /// Computes a deterministic schema identifier from an introspection schema.
     /// </summary>
     /// <param name="introspectionSchema">The introspection schema to hash.</param>
     /// <returns>A lowercase hexadecimal SHA-256 hash string that uniquely identifies the schema structure.</returns>
     let fromIntrospectionSchema (introspectionSchema : IntrospectionSchema) =
-        let options = JsonSerializerOptions(
-            WriteIndented = false,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
-        )
-        let json = JsonSerializer.Serialize(introspectionSchema, options)
+        let json = JsonSerializer.Serialize(introspectionSchema, jsonOptions)
         let jsonBytes = Encoding.UTF8.GetBytes json
         use sha256 = SHA256.Create()
         let hash = sha256.ComputeHash jsonBytes

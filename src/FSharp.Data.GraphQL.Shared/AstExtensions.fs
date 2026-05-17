@@ -108,16 +108,18 @@ type Document with
             let escaped = StringBuilder(s.Length + 2)
             escaped.Append('"') |> ignore
             for c in s do
-                match c with
-                | '"' -> escaped.Append("\\\"") |> ignore
-                | '\\' -> escaped.Append("\\\\") |> ignore
-                | '\b' -> escaped.Append("\\b") |> ignore
-                | '\f' -> escaped.Append("\\f") |> ignore
-                | '\n' -> escaped.Append("\\n") |> ignore
-                | '\r' -> escaped.Append("\\r") |> ignore
-                | '\t' -> escaped.Append("\\t") |> ignore
-                | c when c < '\u0020' -> escaped.AppendFormat("\\u{0:X4}", int c) |> ignore
-                | c -> escaped.Append(c) |> ignore
+                let appendStr =
+                    match c with
+                    | '"' -> "\\\"" 
+                    | '\\' -> "\\\\"
+                    | '\b' -> "\\b"
+                    | '\f' -> "\\f"
+                    | '\n' -> "\\n"
+                    | '\r' -> "\\r"
+                    | '\t' -> "\\t"
+                    | c when c < '\u0020' -> sprintf "\\u%04X" (int c)
+                    | c -> string c
+                escaped.Append(appendStr) |> ignore
             escaped.Append('"').ToString()
         let withQuotes = escapeGraphQLString
         let rec printValue x =
