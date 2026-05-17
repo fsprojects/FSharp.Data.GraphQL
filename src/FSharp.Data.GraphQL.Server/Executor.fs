@@ -102,7 +102,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         | ValidationError errors -> raise (GQLMessageException (System.String.Join("\n", errors)))
     
     // Compute schema ID once after middleware has run and cache it for the lifetime of this Executor instance
-    let schemaId = SchemaId.fromIntrospectionSchema schema.Introspected
+    let schemaId = schema.Introspected.GetHashCode()
 
     let eval (executionPlan: ExecutionPlan, data: 'Root option, variables: ImmutableDictionary<string, JsonElement>, getInputContext : InputExecutionContextProvider): Async<GQLExecutionResult> =
         let documentId = executionPlan.DocumentId
