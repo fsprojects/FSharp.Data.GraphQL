@@ -42,11 +42,10 @@ module SchemaId =
     let fromIntrospectionSchema (introspectionSchema : IntrospectionSchema) =
         use stream = new MemoryStream()
         JsonSerializer.Serialize(stream, introspectionSchema, jsonOptions)
-        stream.Position <- 0L
         // Note: Creating SHA256 instance per call is acceptable since schema ID computation
         // happens infrequently (typically once per schema during validation cache key creation)
         use sha256 = SHA256.Create()
-        let hash = sha256.ComputeHash stream
+        let hash = sha256.ComputeHash(stream.ToArray())
         hash
         |> Seq.map formatByteAsLowerHex
         |> String.concat ""

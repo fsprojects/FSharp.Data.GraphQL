@@ -399,6 +399,54 @@ let ``Execution when querying returns unique document id with response`` () =
         equals errors1 errors2
     | response -> fail $"Expected a 'Direct' GQLResponse but got\n{response}"
 
+[<Fact>]
+let ``Execution documentId handles escaped string values correctly`` () =
+    let schema =
+      Schema(Define.Object<TwiceTest>(
+                "Type", [
+                    Define.Field("a", StringType, fun _ x -> x.A)
+                    Define.Field("b", IntType, fun _ x -> x.B)
+                ]))
+    // Query with string containing special characters that need escaping
+    let query = """query Example { a(arg: "test\"quote\nline\ttab\\backslash") }"""
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, { A = "test"; B = 1 })
+    // DocumentId should be deterministic and not empty
+    result.DocumentId |> notEquals Unchecked.defaultof<string>
+    result.DocumentId.Length |> equals 64  // SHA-256 hex string is always 64 chars
+
+[<Fact>]
+let ``Execution documentId is different for different queries`` () =
+    let schema =
+      Schema(Define.Object<TwiceTest>(
+                "Type", [
+                    Define.Field("a", StringType, fun _ x -> x.A)
+                    Define.Field("b", IntType, fun _ x -> x.B)
+                ]))
+    let query1 = "query Example1 { a }"
+    let query2 = "query Example2 { b }"
+    let result1 = sync <| Executor(schema).AsyncExecute(query1, getMockInputContext, { A = "aa"; B = 2 })
+    let result2 = sync <| Executor(schema).AsyncExecute(query2, getMockInputContext, { A = "aa"; B = 2 })
+    result1.DocumentId |> notEquals result2.DocumentId
+
+[<Fact>]
+let ``Execution documentId is same for semantically identical queries`` () =
+    let schema =
+      Schema(Define.Object<TwiceTest>(
+                "Type", [
+                    Define.Field("a", StringType, fun _ x -> x.A)
+                    Define.Field("b", IntType, fun _ x -> x.B)
+                ]))
+    // Same query with different whitespace/formatting
+    let query1 = "query Example { a b }"
+    let query2 = "query Example{a b}"
+    let query3 = "query Example { a, b }"
+    let result1 = sync <| Executor(schema).AsyncExecute(query1, getMockInputContext, { A = "aa"; B = 2 })
+    let result2 = sync <| Executor(schema).AsyncExecute(query2, getMockInputContext, { A = "aa"; B = 2 })
+    let result3 = sync <| Executor(schema).AsyncExecute(query3, getMockInputContext, { A = "aa"; B = 2 })
+    // All should produce the same documentId since they parse to the same AST
+    result1.DocumentId |> equals result2.DocumentId
+    result1.DocumentId |> equals result3.DocumentId
+
 type InnerNullableTest = { Kaboom : string }
 type NullableTest = {
     Inner : InnerNullableTest
