@@ -66,9 +66,6 @@ type ExecutorMiddleware(?compile, ?postCompile, ?plan, ?execute) =
 /// An optional pre-existing validation cache can be supplied.  If not, one is created and used internally.
 type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware seq, [<Optional>] validationCache : IValidationResultCache voption) =
     let validationCache = validationCache |> ValueOption.defaultWith (fun () -> upcast MemoryValidationResultCache())
-    
-    // Compute schema ID once and cache it for the lifetime of this Executor instance
-    let schemaId = SchemaId.fromIntrospectionSchema schema.Introspected
 
     let fieldExecuteMap = FieldExecuteMap(compileField)
 
@@ -103,6 +100,9 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         match Validation.Types.validateTypeMap schema.TypeMap with
         | Success -> ()
         | ValidationError errors -> raise (GQLMessageException (System.String.Join("\n", errors)))
+    
+    // Compute schema ID once after middleware has run and cache it for the lifetime of this Executor instance
+    let schemaId = SchemaId.fromIntrospectionSchema schema.Introspected
 
     let eval (executionPlan: ExecutionPlan, data: 'Root option, variables: ImmutableDictionary<string, JsonElement>, getInputContext : InputExecutionContextProvider): Async<GQLExecutionResult> =
         let documentId = executionPlan.DocumentId
