@@ -20,6 +20,7 @@
       <ExcludeAssets>contentFiles;runtime</ExcludeAssets>
     </PackageReference>
     <PackageReference Include="FSharp.TypeProviders.SDK" VersionOverride="8.1.0" />
+    <PackageReference Include="FSharp.SystemTextJson" />
     <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="FParsec" />
     <PackageReference Include="Microsoft.Extensions.Http">
@@ -29,8 +30,6 @@
 
   <ItemGroup>
     <Compile Include="..\FSharp.Data.GraphQL.Client\MimeTypes.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\TextConversions.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\JsonValue.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\Extensions.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\Schema.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\ReflectionPatterns.fs" />

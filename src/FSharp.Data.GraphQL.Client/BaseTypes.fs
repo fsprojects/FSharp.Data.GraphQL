@@ -267,55 +267,54 @@ module internal TypeMapping =
     let makeAsync (t : Type) = typedefof<Async<_>>.MakeGenericType (t)
 
 module internal JsonValueHelper =
-    let getResponseFields (responseJson : JsonValue) =
-        match responseJson with
-        | JsonValue.Record fields -> fields
-        | _ -> failwithf "Expected root type to be a Record type, but type is %A." responseJson
+    open System.Text.Json
 
-    let getResponseDataFields (responseJson : JsonValue) =
-        match
-            getResponseFields responseJson
-            |> Array.tryFind (fun (name, _) -> name = "data")
-        with
-        | Some (_, data) ->
-            match data with
-            | JsonValue.Record fields -> Some fields
-            | JsonValue.Null -> None
-            | _ -> failwithf "Expected data field of root type to be a Record type, but type is %A." data
-        | None -> None
+    let getResponseDataFields (responseJson : JsonElement) =
+        match responseJson.TryGetProperty "data" with
+        | true, data ->
+            match data.ValueKind with
+            | JsonValueKind.Object ->
+                data.EnumerateObject ()
+                |> Seq.map (fun prop -> prop.Name, prop.Value)
+                |> Array.ofSeq
+                |> Some
+            | JsonValueKind.Null -> None
+            | _ -> failwithf "Expected data field of root type to be a Record type, but type is %A." data.ValueKind
+        | _ -> None
 
-    let getResponseErrors (responseJson : JsonValue) =
-        match
-            getResponseFields responseJson
-            |> Array.tryFind (fun (name, _) -> name = "errors")
-        with
-        | Some (_, errors) ->
-            match errors with
-            | JsonValue.Array [||]
-            | JsonValue.Null -> None
-            | JsonValue.Array items -> Some items
-            | _ -> failwithf "Expected error field of root type to be an Array type, but type is %A." errors
-        | None -> None
+    let getResponseErrors (responseJson : JsonElement) =
+        match responseJson.TryGetProperty "errors" with
+        | true, errors ->
+            match errors.ValueKind with
+            | JsonValueKind.Null -> None
+            | JsonValueKind.Array ->
+                let items = errors.EnumerateArray () |> Array.ofSeq
+                if items.Length = 0 then None
+                else Some items
+            | _ -> failwithf "Expected error field of root type to be an Array type, but type is %A." errors.ValueKind
+        | _ -> None
 
-    let getResponseCustomFields (responseJson : JsonValue) =
-        getResponseFields responseJson
-        |> Array.filter (fun (name, _) -> name <> "data" && name <> "errors")
+    let getResponseCustomFields (responseJson : JsonElement) =
+        responseJson.EnumerateObject ()
+        |> Seq.filter (fun prop -> prop.Name <> "data" && prop.Name <> "errors")
+        |> Seq.map (fun prop -> prop.Name, prop.Value)
+        |> Array.ofSeq
 
-    let private removeTypeNameField (fields : (string * JsonValue)[]) =
+    let private removeTypeNameField (fields : (string * JsonElement) []) =
         fields
         |> Array.filter (fun (name, _) -> name <> "__typename")
 
     let firstUpper (name : string, value) = name.FirstCharUpper (), value
 
-    let getTypeName (fields : (string * JsonValue) seq) =
+    let getTypeName (fields : (string * JsonElement) seq) =
         fields
         |> Seq.tryFind (fun (name, _) -> name = "__typename")
         |> Option.map (fun (_, value) ->
-            match value with
-            | JsonValue.String x -> x
-            | _ -> failwithf "Expected \"__typename\" field to be a string field, but it was %A." value)
+            match value.ValueKind with
+            | JsonValueKind.String -> value.GetString ()
+            | _ -> failwithf "Expected \"__typename\" field to be a string field, but it was %A." value.ValueKind)
 
-    let rec getFieldValue (schemaField : SchemaFieldInfo) (fieldName : string, fieldValue : JsonValue) =
+    let rec getFieldValue (schemaField : SchemaFieldInfo) (fieldName : string, fieldValue : JsonElement) =
         let getScalarType (typeRef : IntrospectionTypeRef) =
             let getType (typeName : string) =
                 match Map.tryFind typeName TypeMapping.scalar with
@@ -324,7 +323,16 @@ module internal JsonValueHelper =
             match typeRef.Name with
             | Some name -> getType name
             | None -> failwith "Expected scalar type to have a name, but it does not have one."
-        let rec helper (useOption : bool) (schemaField : SchemaFieldInfo) (fieldValue : JsonValue) : obj =
+
+        let getNumericValue (typeRef : IntrospectionTypeRef) (element : JsonElement) : obj =
+            let t = getScalarType typeRef
+            if t = typeof<float> then element.GetDouble () |> box
+            elif t = typeof<int> then element.GetInt32 () |> box
+            elif t = typeof<decimal> then element.GetDecimal () |> box
+            elif t = typeof<int64> then element.GetInt64 () |> box
+            else element.GetDouble () |> box
+
+        let rec helper (useOption : bool) (schemaField : SchemaFieldInfo) (fieldValue : JsonElement) : obj =
             let makeSomeIfNeeded value =
                 match schemaField.SchemaTypeRef.Kind with
                 | TypeKind.NON_NULL -> value
@@ -335,8 +343,9 @@ module internal JsonValueHelper =
                 | TypeKind.NON_NULL -> null
                 | _ when useOption -> makeNone t
                 | _ -> null
-            match fieldValue with
-            | JsonValue.Array items ->
+            match fieldValue.ValueKind with
+            | JsonValueKind.Array ->
+                let itemsArr = fieldValue.EnumerateArray () |> Array.ofSeq
                 let items =
                     let itemType =
                         let tref =
@@ -355,7 +364,7 @@ module internal JsonValueHelper =
                         | None -> failwith "Schema type is a list type, but no underlying type was specified."
                     let items =
                         let schemaField = { schemaField with SchemaTypeRef = itemType }
-                        items |> Array.map (helper false schemaField)
+                        itemsArr |> Array.map (helper false schemaField)
                     match itemType.Kind with
                     | TypeKind.NON_NULL ->
                         match itemType.OfType with
@@ -376,12 +385,16 @@ module internal JsonValueHelper =
                     | TypeKind.SCALAR -> makeOptionArray (getScalarType itemType) items
                     | kind -> failwithf "Unsupported type kind \"%A\"." kind
                 makeSomeIfNeeded items
-            | JsonValue.Record props ->
+            | JsonValueKind.Object ->
+                let props =
+                    fieldValue.EnumerateObject ()
+                    |> Seq.map (fun p -> p.Name, p.Value)
+                    |> Array.ofSeq
                 let typeName =
                     match getTypeName props with
                     | Some typeName -> typeName
                     | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
-                let mapRecordProperty (aliasOrName : string, value : JsonValue) =
+                let mapRecordProperty (aliasOrName : string, value : JsonElement) =
                     let schemaField =
                         match
                             schemaField.Fields
@@ -400,9 +413,22 @@ module internal JsonValueHelper =
                     |> removeTypeNameField
                     |> Array.map (firstUpper >> mapRecordProperty)
                 RecordBase (typeName, props) |> makeSomeIfNeeded
-            | JsonValue.Boolean b -> makeSomeIfNeeded b
-            | JsonValue.Float f -> makeSomeIfNeeded f
-            | JsonValue.Null ->
+            | JsonValueKind.True -> makeSomeIfNeeded true
+            | JsonValueKind.False -> makeSomeIfNeeded false
+            | JsonValueKind.Number ->
+                // Use the schema type to determine the correct numeric CLR type,
+                // fixing the issue where JSON integers (e.g. 0) were returned as int
+                // even when the schema declares the field as Float.
+                let innerTypeRef =
+                    match schemaField.SchemaTypeRef.Kind with
+                    | TypeKind.NON_NULL ->
+                        match schemaField.SchemaTypeRef.OfType with
+                        | Some t -> t
+                        | None -> schemaField.SchemaTypeRef
+                    | _ -> schemaField.SchemaTypeRef
+                let numVal = getNumericValue innerTypeRef fieldValue
+                makeSomeIfNeeded numVal
+            | JsonValueKind.Null ->
                 match schemaField.SchemaTypeRef.Kind with
                 | TypeKind.NON_NULL -> failwith "Expected a non null item from the schema definition, but a null item was found in the response."
                 | TypeKind.OBJECT
@@ -412,8 +438,8 @@ module internal JsonValueHelper =
                 | TypeKind.SCALAR -> getScalarType schemaField.SchemaTypeRef |> makeNoneIfNeeded
                 | TypeKind.LIST -> null
                 | kind -> failwithf "Unsupported type kind \"%A\"." kind
-            | JsonValue.Integer n -> makeSomeIfNeeded n
-            | JsonValue.String s ->
+            | JsonValueKind.String ->
+                let s = fieldValue.GetString ()
                 match schemaField.SchemaTypeRef.Kind with
                 | TypeKind.NON_NULL ->
                     match schemaField.SchemaTypeRef.OfType with
@@ -457,10 +483,11 @@ module internal JsonValueHelper =
                 | _ ->
                     failwith
                         "A string type was received in the query response item, but the matching schema field is not a string based type or an enum type."
+            | kind -> failwithf "Unexpected JSON value kind \"%A\"." kind
         fieldName, (helper true schemaField fieldValue)
 
-    let getFieldValues (schemaTypeName : string) (schemaFields : SchemaFieldInfo[]) (dataFields : (string * JsonValue)[]) =
-        let mapFieldValue (aliasOrName : string, value : JsonValue) =
+    let getFieldValues (schemaTypeName : string) (schemaFields : SchemaFieldInfo[]) (dataFields : (string * JsonElement) []) =
+        let mapFieldValue (aliasOrName : string, value : JsonElement) =
             let schemaField =
                 match
                     schemaFields
@@ -476,66 +503,73 @@ module internal JsonValueHelper =
         removeTypeNameField dataFields
         |> Array.map (firstUpper >> mapFieldValue)
 
-    let getErrors (errors : JsonValue[]) =
-        let tryFindField fieldName (fields : (string * JsonValue)[]) =
-            fields
-            |> Array.tryFind (fun (name, _) -> name = fieldName)
-            |> Option.map snd
+    let getErrors (errors : JsonElement []) =
+        let tryGetProperty (name : string) (element : JsonElement) =
+            match element.TryGetProperty name with
+            | true, v -> Some v
+            | _ -> None
 
-        let parsePath =
-            function
-            | Some (JsonValue.Array path) ->
-                let pathMapper =
-                    function
-                    | JsonValue.String x -> box x
-                    | JsonValue.Integer x -> box x
+        let parsePath (pathElement : JsonElement option) =
+            match pathElement with
+            | Some e when e.ValueKind = JsonValueKind.Array ->
+                let pathMapper (item : JsonElement) =
+                    match item.ValueKind with
+                    | JsonValueKind.String -> item.GetString () |> box
+                    | JsonValueKind.Number -> item.GetInt32 () |> box
                     | _ -> failwith "Error parsing response errors. An item in the path is neither a String nor an Integer."
-                path |> Array.map pathMapper
-            | Some JsonValue.Null
+                e.EnumerateArray () |> Seq.map pathMapper |> Array.ofSeq
             | None -> [||]
+            | Some e when e.ValueKind = JsonValueKind.Null -> [||]
             | _ -> failwith "Error parsing response errors. Path field must be an Array."
 
-        let parseLocations =
-            function
-            | Some (JsonValue.Array locations) ->
-                let parseLocation =
-                    function
-                    | JsonValue.Record locationFields ->
-                        match tryFindField "line" locationFields, tryFindField "column" locationFields with
-                        | Some (JsonValue.Integer line), Some (JsonValue.Integer column) -> { Line = line; Column = column }
+        let parseLocations (locElement : JsonElement option) =
+            match locElement with
+            | Some e when e.ValueKind = JsonValueKind.Array ->
+                let parseLocation (loc : JsonElement) =
+                    match loc.ValueKind with
+                    | JsonValueKind.Object ->
+                        match loc.TryGetProperty "line", loc.TryGetProperty "column" with
+                        | (true, lineEl), (true, colEl) -> { Line = lineEl.GetInt32 (); Column = colEl.GetInt32 () }
                         | _ -> failwith "Error parsing response errors. A location item must contain Integer fields named \"line\" and \"column\"."
                     | _ -> failwith "Error parsing response errors. A location item is not a Record."
-                locations |> Array.map parseLocation
-            | Some JsonValue.Null
+                e.EnumerateArray () |> Seq.map parseLocation |> Array.ofSeq
             | None -> [||]
+            | Some e when e.ValueKind = JsonValueKind.Null -> [||]
             | _ -> failwith "Error parsing response errors. Locations field must be an Array."
 
-        let parseExtensions =
-            function
-            | Some (JsonValue.Record fields) -> Serialization.deserializeMap fields
-            | Some JsonValue.Null
+        let parseExtensions (extElement : JsonElement option) =
+            match extElement with
+            | Some e when e.ValueKind = JsonValueKind.Object ->
+                e.EnumerateObject ()
+                |> Seq.map (fun prop -> prop.Name, prop.Value)
+                |> Array.ofSeq
+                |> Serialization.deserializeMap
             | None -> Map.empty
+            | Some e when e.ValueKind = JsonValueKind.Null -> Map.empty
             | _ -> failwith "Error parsing response errors. Extensions field must be a Record."
 
-        let errorMapper =
-            function
-            | JsonValue.Record fields ->
-                match tryFindField "message" fields with
-                | Some (JsonValue.String message) -> {
-                    Message = message
-                    Locations = tryFindField "locations" fields |> parseLocations
-                    Path = tryFindField "path" fields |> parsePath
-                    Extensions = tryFindField "extensions" fields |> parseExtensions
+        let errorMapper (errorElement : JsonElement) =
+            match errorElement.ValueKind with
+            | JsonValueKind.Object ->
+                match tryGetProperty "message" errorElement with
+                | Some msgEl when msgEl.ValueKind = JsonValueKind.String -> {
+                    Message = msgEl.GetString ()
+                    Locations = tryGetProperty "locations" errorElement |> parseLocations
+                    Path = tryGetProperty "path" errorElement |> parsePath
+                    Extensions = tryGetProperty "extensions" errorElement |> parseExtensions
                   }
                 | _ -> failwith "Error parsing response errors. Unsupported errors field format."
-            | other -> failwithf "Error parsing response errors. Expected error to be a Record type, but it is %s." (other.ToString ())
+            | _ -> failwith "Error parsing response errors. Expected error to be a Record type."
         Array.map errorMapper errors
 
 /// The base type for all GraphQLProvider operation result provided types.
 type OperationResultBase
-    (rawResponse : HttpResponseMessage, responseJson : JsonValue, operationFields : SchemaFieldInfo[], operationTypeName : string) =
+    (rawResponse : HttpResponseMessage, responseJson : string, operationFields : SchemaFieldInfo[], operationTypeName : string) =
+    let parsedJson = System.Text.Json.JsonDocument.Parse responseJson
+    let rootElement = parsedJson.RootElement
+
     let rawData =
-        let data = JsonValueHelper.getResponseDataFields responseJson
+        let data = JsonValueHelper.getResponseDataFields rootElement
         match data with
         | Some [||]
         | None -> None
@@ -547,13 +581,13 @@ type OperationResultBase
             Some (RecordBase (operationTypeName, props))
 
     let errors =
-        let errors = JsonValueHelper.getResponseErrors responseJson
+        let errors = JsonValueHelper.getResponseErrors rootElement
         match errors with
         | None -> [||]
         | Some errors -> JsonValueHelper.getErrors errors
 
     let customData =
-        JsonValueHelper.getResponseCustomFields responseJson
+        JsonValueHelper.getResponseCustomFields rootElement
         |> Serialization.deserializeMap
 
     member private _.ResponseJson = responseJson
@@ -581,6 +615,9 @@ type OperationResultBase
         | _ -> false
 
     override x.GetHashCode () = x.ResponseJson.GetHashCode ()
+
+    interface IDisposable with
+        member _.Dispose () = parsedJson.Dispose ()
 
 /// The base type for al GraphQLProvider operation provided types.
 type OperationBase (query : string) =

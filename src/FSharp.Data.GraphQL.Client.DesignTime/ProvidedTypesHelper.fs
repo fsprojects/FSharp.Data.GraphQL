@@ -409,10 +409,9 @@ module internal ProvidedOperation =
                                 then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
                                 else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
                             let responseString = response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-                            let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse responseString)
                             // If the user does not provide a context, we should dispose the default one after running the query
                             if isDefaultContext then (context :> IDisposable).Dispose()
-                            OperationResultBase(response, responseJson, %%operationFieldsExpr, operationTypeName) @@>
+                            new OperationResultBase(response, responseString, %%operationFieldsExpr, operationTypeName) @@>
                     let methodParameters = overloadParameters |> List.map (fun struct (name, _, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
                     let methodDef = ProvidedMethod("Run", methodParameters, operationResultDef, invoker)
                     methodDef.AddXmlDoc("Executes the operation on the server and fetch its results.")
@@ -457,17 +456,16 @@ module internal ProvidedOperation =
                                     then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync ct context.Connection request |> Async.AwaitTask)
                                     else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync ct context.Connection request |> Async.AwaitTask)
                                 let! responseString = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-                                let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse responseString)
                                 // If the user does not provide a context, we should dispose the default one after running the query
                                 if isDefaultContext then (context :> IDisposable).Dispose()
-                                return OperationResultBase(response, responseJson, %%operationFieldsExpr, operationTypeName)
+                                return new OperationResultBase(response, responseString, %%operationFieldsExpr, operationTypeName)
                             } @@>
                     let methodParameters = overloadParameters |> List.map (fun struct (name, _, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
                     let methodDef = ProvidedMethod("AsyncRun", methodParameters, TypeMapping.makeAsync operationResultDef, invoker)
                     methodDef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
                     upcast methodDef)
             let parseResultDef =
-                let invoker (args : Expr list) = <@@ OperationResultBase(%%args.[1], JsonValue.Parse %%args.[2], %%operationFieldsExpr, operationTypeName) @@>
+                let invoker (args : Expr list) = <@@ new OperationResultBase(%%args.[1], %%args.[2], %%operationFieldsExpr, operationTypeName) @@>
                 let parameters = [
                     ProvidedParameter("rawResponse", typeof<HttpResponseMessage>)
                     ProvidedParameter("responseJson", typeof<string>)
