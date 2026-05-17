@@ -27,11 +27,22 @@ type SchemaFieldInfo =
 type TypeName = string
 
 /// Contains data about a GQL operation error.
+type OperationErrorLocation =
+    { /// The source line of the GraphQL operation document where the error occurred.
+      Line : int
+      /// The source column of the GraphQL operation document where the error occurred.
+      Column : int }
+
+/// Contains data about a GQL operation error.
 type OperationError =
     { /// The description of the error that happened in the operation.
       Message : string
+      /// The source locations in the GraphQL operation document where the error occurred.
+      Locations : OperationErrorLocation []
       /// The path to the field that produced the error while resolving its value.
-      Path : obj [] }
+      Path : obj []
+      /// Extension data attached to the error.
+      Extensions : Map<string, obj> }
 
 /// Contains helpers to build HTTP header sequences to be used in GraphQLProvider Run methods.
 module HttpHeaders =
@@ -394,17 +405,44 @@ module internal JsonValueHelper =
         |> Array.map (firstUpper >> mapFieldValue)
 
     let getErrors (errors : JsonValue []) =
+        let tryFindField fieldName (fields : (string * JsonValue) []) =
+            fields |> Array.tryFind (fun (name, _) -> name = fieldName) |> Option.map snd
+
+        let parsePath = function
+            | Some (JsonValue.Array path) ->
+                let pathMapper = function
+                    | JsonValue.String x -> box x
+                    | JsonValue.Integer x -> box x
+                    | _ -> failwith "Error parsing response errors. An item in the path is neither a String nor a Number."
+                path |> Array.map pathMapper
+            | Some JsonValue.Null | None -> [||]
+            | _ -> failwith "Error parsing response errors. Path field must be an Array."
+
+        let parseLocations = function
+            | Some (JsonValue.Array locations) ->
+                let parseLocation = function
+                    | JsonValue.Record locationFields ->
+                        match tryFindField "line" locationFields, tryFindField "column" locationFields with
+                        | Some (JsonValue.Integer line), Some (JsonValue.Integer column) -> { Line = line; Column = column }
+                        | _ -> failwith "Error parsing response errors. A location item must contain Integer fields named \"line\" and \"column\"."
+                    | _ -> failwith "Error parsing response errors. A location item is not a Record."
+                locations |> Array.map parseLocation
+            | Some JsonValue.Null | None -> [||]
+            | _ -> failwith "Error parsing response errors. Locations field must be an Array."
+
+        let parseExtensions = function
+            | Some (JsonValue.Record fields) -> Serialization.deserializeMap fields
+            | Some JsonValue.Null | None -> Map.empty
+            | _ -> failwith "Error parsing response errors. Extensions field must be a Record."
+
         let errorMapper = function
             | JsonValue.Record fields ->
-                match fields |> Array.tryFind (fun (name, _) -> name = "message"), fields |> Array.tryFind (fun (name, _) -> name = "path") with
-                | Some (_, JsonValue.String message), Some (_, JsonValue.Array path) ->
-                    let pathMapper = function
-                        | JsonValue.String x -> box x
-                        | JsonValue.Integer x -> box x
-                        | _ -> failwith "Error parsing response errors. A item in the path is neither a String or a Number."
-                    { Message = message; Path = Array.map pathMapper path }
-                | Some (_, JsonValue.String message), None->
-                    { Message = message; Path = [||]}
+                match tryFindField "message" fields with
+                | Some (JsonValue.String message) ->
+                    { Message = message
+                      Locations = tryFindField "locations" fields |> parseLocations
+                      Path = tryFindField "path" fields |> parsePath
+                      Extensions = tryFindField "extensions" fields |> parseExtensions }
                 | _ -> failwith "Error parsing response errors. Unsupported errors field format."
             | other -> failwithf "Error parsing response errors. Expected error to be a Record type, but it is %s." (other.ToString())
         Array.map errorMapper errors
