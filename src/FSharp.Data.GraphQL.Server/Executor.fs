@@ -79,10 +79,6 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     let middlewaresList = Seq.toList middlewares
 
-    /// Generates a deterministic document identifier from the canonical query string.
-    let getDocumentId (document : Document) =
-        DocumentId.fromDocument document
-
     let rec runMiddlewares (phaseSel : IExecutorMiddleware -> ('ctx -> ('ctx -> 'res) -> 'res) option)
                            (initialCtx : 'ctx)
                            (onComplete : 'ctx -> 'res)
@@ -143,7 +139,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         eval (executionPlan, data, variables, getInputContext)
 
     let createExecutionPlan (ast: Document, operationName: string option, meta : Metadata) =
-        let documentId = getDocumentId ast
+        let documentId = DocumentId.fromCanonicalQuery (ast.ToQueryString())
         result {
             match findOperation ast operationName with
             | Some operation ->

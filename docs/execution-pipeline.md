@@ -52,7 +52,7 @@ The execution phase can be performed using one of the two strategies:
 
 The result of a GraphQL query execution is a `GQLResponse` object with the following fields:
 
-- `documentId`: deterministic SHA-256 hash (lowercase hex string) of the canonical query document - it can be used to implement execution plan caching (persistent queries).
+- `documentId`: deterministic SHA-256 hash (lowercase hex string) of the canonical query document – it can be used to implement execution plan caching (persistent queries).
 - `data`: optional, a formatted GraphQL response matching the requested query (`KeyValuePair seq`). Absent in case of an error that does not allow continuing processing and returning any GraphQL results.
 - `errors`: optional, contains a list of errors (`GQLProblemDetails`) that occurred during query execution.
 
