@@ -56,7 +56,7 @@ type TypeWrappersKindSafetyFixture () =
         let sharedAssembly = IO.Path.Combine (AppContext.BaseDirectory, "FSharp.Data.GraphQL.Shared.dll")
         let serverAssembly = IO.Path.Combine (AppContext.BaseDirectory, "FSharp.Data.GraphQL.Server.dll")
 
-        [ sprintf "#r @\"%s\"" sharedAssembly; sprintf "#r @\"%s\"" serverAssembly ]
+        [| sprintf "#r @\"%s\"" sharedAssembly; sprintf "#r @\"%s\"" serverAssembly |]
         |> String.concat "\n"
 
     interface IAsyncLifetime with

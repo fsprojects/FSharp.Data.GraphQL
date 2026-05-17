@@ -38,10 +38,11 @@
     <Compile Include="Helpers and Extensions\ObservableExtensionsTests.fs" />
     <Compile Include="PropertyTrackingTests.fs" />
     <Compile Include="AbstractionTests.fs" />
-    <Compile Include="TypeWrappersKindSafetyTests.fs" />
     <Compile Include="UnionInterfaceTests.fs" />
     <Compile Include="DirectivesTests.fs" />
     <Compile Include="TypeValidationTests.fs" />
+    <Compile Include="TypeWrappersKindSafetyTests.fs" />
+    <None Include="TypeWrappersKindSafety\.gitignore" />
     <None Include="TypeWrappersKindSafety\References.fsx" Condition="exists('TypeWrappersKindSafety\References.fsx')" CopyToOutputDirectory="PreserveNewest" />
     <None Include="TypeWrappersKindSafety\ListOf.InputAsOutput.fsx" CopyToOutputDirectory="PreserveNewest" />
     <None Include="TypeWrappersKindSafety\ListOf.OutputAsInput.fsx" CopyToOutputDirectory="PreserveNewest" />
