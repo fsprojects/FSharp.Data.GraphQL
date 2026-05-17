@@ -147,7 +147,12 @@ let ``Suave GraphQL handler executes multipart upload requests`` () =
         }
 
         let operations =
-            """{"query":"mutation ($file: File!) { upload(file: $file) { name content } }","variables":{"file":"file0"}}"""
+            """{
+                "query": "mutation ($file: File!) { upload(file: $file) { name content } }",
+                "variables": {
+                    "file": "file0"
+                }
+            }"""
 
         let request =
             createRequest
