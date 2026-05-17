@@ -1,14 +1,19 @@
 namespace FSharp.Data.GraphQL
 
+open System
 open System.Collections.Concurrent
 open System.Collections.Immutable
+open System.Buffers.Binary
+open System.Security.Cryptography
 open System.Runtime.InteropServices
+open System.Text
 open System.Text.Json
 open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Ast
+open FSharp.Data.GraphQL.Ast.Extensions
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Planning
@@ -77,6 +82,12 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     let middlewaresList = Seq.toList middlewares
 
+    let getDocumentId (document : Document) =
+        let canonicalQuery = document.ToQueryString()
+        let queryBytes = Encoding.UTF8.GetBytes canonicalQuery
+        let hash = SHA256.HashData queryBytes
+        BinaryPrimitives.ReadInt32BigEndian(ReadOnlySpan<byte>(hash, 0, 4))
+
     let rec runMiddlewares (phaseSel : IExecutorMiddleware -> ('ctx -> ('ctx -> 'res) -> 'res) option)
                            (initialCtx : 'ctx)
                            (onComplete : 'ctx -> 'res)
@@ -137,7 +148,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         eval (executionPlan, data, variables, getInputContext)
 
     let createExecutionPlan (ast: Document, operationName: string option, meta : Metadata) =
-        let documentId = ast.GetHashCode()
+        let documentId = getDocumentId ast
         result {
             match findOperation ast operationName with
             | Some operation ->

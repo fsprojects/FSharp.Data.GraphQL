@@ -5,6 +5,9 @@ module FSharp.Data.GraphQL.Tests.ExecutionTests
 
 open Xunit
 open System
+open System.Buffers.Binary
+open System.Security.Cryptography
+open System.Text
 open System.Text.Json
 open System.Text.Json.Serialization
 open System.Collections.Immutable
@@ -17,6 +20,7 @@ open FSharp.Data.GraphQL.Shared
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Ast.Extensions
 
 type TestSubject = {
     a: string
@@ -383,9 +387,17 @@ let ``Execution when querying returns unique document id with response`` () =
                     Define.Field("a", StringType, fun _ x -> x.A)
                     Define.Field("b", IntType, fun _ x -> x.B)
                 ]))
-    let result1 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", getMockInputContext, { A = "aa"; B = 2 })
-    let result2 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", getMockInputContext, { A = "aa"; B = 2 })
+    let query = "query Example { a, b, a }"
+    let expectedDocumentId =
+        let canonicalQuery =
+            let ast = parse query
+            ast.ToQueryString()
+        let hash = SHA256.HashData(Encoding.UTF8.GetBytes canonicalQuery)
+        BinaryPrimitives.ReadInt32BigEndian(ReadOnlySpan<byte>(hash, 0, 4))
+    let result1 = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, { A = "aa"; B = 2 })
+    let result2 = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, { A = "aa"; B = 2 })
     result1.DocumentId |> notEquals Unchecked.defaultof<int>
+    result1.DocumentId |> equals expectedDocumentId
     result1.DocumentId |> equals result2.DocumentId
     match result1,result2 with
     | Direct(data1, errors1), Direct(data2, errors2) ->
