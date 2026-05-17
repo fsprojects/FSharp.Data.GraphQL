@@ -112,3 +112,17 @@ let ``ID coerces input`` () =
     // We have no idea that it is an enum
     testCoercion IDType "enum" (Variable (JsonDocument.Parse "\"enum\"").RootElement)
     testCoercionError IDType "Inline value 'enum' of type enum cannot be converted into identifier" (InlineConstant (EnumValue "enum"))
+
+let private testOutputCoercion graphQLType (expected: 'a) (input: obj) =
+    let (Scalar scalar) = graphQLType
+    match scalar.CoerceOutput input with
+    | Some actual -> equals (box expected) actual
+    | None -> Assert.Fail $"Expected CoerceOutput of %A{input} to return Some but got None"
+
+[<Fact>]
+let ``ID coerces output`` () =
+    testOutputCoercion IDType "abc" ("abc" : obj)
+    testOutputCoercion IDType "123" (123 : obj)
+    testOutputCoercion IDType "123" (123L : obj)
+    let guid = Guid.Parse "d6c684d9-aaaa-4e88-bbb2-0bb584f1661d"
+    testOutputCoercion IDType (string guid) (guid : obj)
