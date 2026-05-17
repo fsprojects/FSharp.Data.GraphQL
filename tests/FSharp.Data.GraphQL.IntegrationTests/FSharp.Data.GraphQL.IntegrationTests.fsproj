@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
@@ -15,6 +16,7 @@
 
   <ItemGroup>
     <Content Include="introspection.json" />
+    <Content Include="integration-introspection.json" />
     <Content Include="reserved_scalar_input_date_introspection.json" />
     <Content Include="reserved_scalar_object_date_introspection.json" />
     <None Include="operation.graphql">
@@ -23,11 +25,17 @@
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="Helpers.fs" />
     <Compile Include="OperationErrorTests.fs" />
+    <Compile Include="TestHosts.fs" />
     <Compile Include="ReservedScalarNameProviderTests.fs" />
     <Compile Include="LocalProviderTests.fs" />
     <Compile Include="LocalProviderWithOptionalParametersOnlyTests.fs" />
     <Compile Include="SwapiLocalProviderTests.fs" />
     <Compile Include="SwapiRemoteProviderTests.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FSharp.Data.GraphQL.IntegrationTests.Server\FSharp.Data.GraphQL.IntegrationTests.Server.fsproj" />
+    <ProjectReference Include="..\..\samples\star-wars-api\star-wars-api.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,9 +45,9 @@
       <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Client\netstandard2.0\FSharp.Data.GraphQL.Client.dll')">..\..\bin\FSharp.Data.GraphQL.Client\netstandard2.0\FSharp.Data.GraphQL.Client.dll</HintPath>
     </Reference>
     <Reference Include="FSharp.Data.GraphQL.Shared">
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FSharp.Data.GraphQL.Shared.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FSharp.Data.GraphQL.Shared.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
-      <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Client\netstandard2.0\FSharp.Data.GraphQL.Shared.dll')">..\..\bin\FSharp.Data.GraphQL.Client\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Shared\bin\Debug\net10.0\FSharp.Data.GraphQL.Shared.dll')">..\..\src\FSharp.Data.GraphQL.Shared\bin\Debug\net10.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Shared\bin\Release\net10.0\FSharp.Data.GraphQL.Shared.dll')">..\..\src\FSharp.Data.GraphQL.Shared\bin\Release\net10.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Shared\net10.0\FSharp.Data.GraphQL.Shared.dll')">..\..\bin\FSharp.Data.GraphQL.Shared\net10.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
     </Reference>
   </ItemGroup>
 </Project>

@@ -5,7 +5,10 @@ open Helpers
 open FSharp.Data.GraphQL
 open System.Threading.Tasks
 
-type Provider = GraphQLProvider<"http://localhost:8086">
+type Provider = GraphQLProvider<"introspection.json">
+
+let connection = TestHosts.createStarWarsConnection ()
+let context = Provider.GetContext(serverUrl = TestHosts.starWarsServerUrl, connectionFactory = fun () -> connection)
 
 type Episode = Provider.Types.Episode
 
@@ -47,7 +50,7 @@ hero (id: "1000") {
         result.Data.IsSome |> equals true
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
-        let expectedFriends : Operation.Types.HeroFields.FriendsFields.EdgesFields.NodeFields.Character array =
+        let expectedFriends =
           [| Operation.Types.HeroFields.FriendsFields.EdgesFields.NodeFields.Human(name = "Han Solo")
              Operation.Types.HeroFields.FriendsFields.EdgesFields.NodeFields.Human(name = "Leia Organa", homePlanet = "Alderaan")
              Operation.Types.HeroFields.FriendsFields.EdgesFields.NodeFields.Droid(name = "C-3PO", primaryFunction = "Protocol")
@@ -80,18 +83,18 @@ hero (id: "1000") {
 
 [<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to start a simple query operation synchronously`` () =
-    SimpleOperation.operation.Run()
+    SimpleOperation.operation.Run(context)
     |> SimpleOperation.validateResult
 
 [<Fact; Trait("Execution", "Async")>]
 let ``Should be able to start a simple query operation asynchronously`` () : Task = task {
-    let! result = SimpleOperation.operation.AsyncRun()
+    let! result = SimpleOperation.operation.AsyncRun(context)
     result |> SimpleOperation.validateResult
 }
 
 [<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to use pattern matching methods on an union type`` () =
-    let result = SimpleOperation.operation.Run()
+    let result = SimpleOperation.operation.Run(context)
     result.Data.IsSome |> equals true
     result.Data.Value.Hero.IsSome |> equals true
     let friends = result.Data.Value.Hero.Value.Friends.Edges |> Array.map (fun e -> e.Node)
@@ -149,12 +152,12 @@ module MutationOperation =
 
 [<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to run a mutation synchronously`` () =
-    MutationOperation.operation.Run()
+    MutationOperation.operation.Run(context)
     |> MutationOperation.validateResult
 
 [<Fact; Trait("Execution", "Async")>]
 let ``Should be able to run a mutation asynchronously`` () : Task = task {
-    let! result = MutationOperation.operation.AsyncRun()
+    let! result = MutationOperation.operation.AsyncRun(context)
     result |> MutationOperation.validateResult
 }
 
@@ -169,7 +172,7 @@ module FileOperation =
         result.Data.IsSome |> equals true
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
-        let expectedFriends : Operation.Types.HeroFields.FriendsFields.EdgesFields.NodeFields.Character array =
+        let expectedFriends =
           [| Operation.Types.HeroFields.FriendsFields.EdgesFields.NodeFields.Human(name = "Han Solo")
              Operation.Types.HeroFields.FriendsFields.EdgesFields.NodeFields.Human(name = "Leia Organa", homePlanet = "Alderaan")
              Operation.Types.HeroFields.FriendsFields.EdgesFields.NodeFields.Droid(name = "C-3PO", primaryFunction = "Protocol")
@@ -202,5 +205,5 @@ module FileOperation =
 
 [<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to run a query from a query file`` () =
-    FileOperation.fileOp.Run()
+    FileOperation.fileOp.Run(context)
     |> FileOperation.validateResult

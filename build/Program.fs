@@ -406,10 +406,6 @@ Target.create "PackAndPush" ignore
 ==> RestoreTarget
 ==> BuildTarget
 ==> RunUnitTestsTarget
-==> StartStarWarsServerTarget
-==> BuildIntegrationTestServerTarget
-==> StartIntegrationServerTarget
-==> UpdateIntrospectionFileTarget
 ==> BuildIntegrationTestsTarget
 ==> RunIntegrationTestsTarget
 ==> "All"
