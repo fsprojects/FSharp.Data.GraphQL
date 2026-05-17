@@ -23,7 +23,9 @@ module SchemaId =
     
     let private jsonOptions = JsonSerializerOptions(
         WriteIndented = false,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never,
+        PropertyNamingPolicy = null,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     )
     
     /// <summary>
