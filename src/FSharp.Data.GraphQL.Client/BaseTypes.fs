@@ -413,7 +413,7 @@ module internal JsonValueHelper =
                 let pathMapper = function
                     | JsonValue.String x -> box x
                     | JsonValue.Integer x -> box x
-                    | _ -> failwith "Error parsing response errors. An item in the path is neither a String nor a Number."
+                    | _ -> failwith "Error parsing response errors. An item in the path is neither a String nor an Integer."
                 path |> Array.map pathMapper
             | Some JsonValue.Null | None -> [||]
             | _ -> failwith "Error parsing response errors. Path field must be an Array."
