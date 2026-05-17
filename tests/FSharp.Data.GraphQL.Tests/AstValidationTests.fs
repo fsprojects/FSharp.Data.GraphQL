@@ -220,6 +220,12 @@ let Arguments =
                 (fun ctx _ -> ctx.Arg ("intArg"))
             )
             Define.Field (
+                "longArgField",
+                Nullable LongType,
+                [ Define.Input ("longArg", Nullable LongType) ],
+                (fun ctx _ -> ctx.Arg ("longArg"))
+            )
+            Define.Field (
                 "nonNullBooleanListField",
                 ListOf BooleanType,
                 [ Define.Input ("nonNullBooleanListArg", ListOf BooleanType) ],
@@ -1018,6 +1024,10 @@ fragment nullRequiredBooleanArg on Arguments {
 fragment coercedIntIntoFloatArg on Arguments {
   # Note: The input coercion rules for Float allow Int literals.
   floatArgField(floatArg: 123)
+}
+
+fragment coercedIntIntoLongArg on Arguments {
+  longArgField(longArg: 123)
 }
 
 query goodComplexDefaultValue($search: ComplexInput = { name: "Fido" }) {

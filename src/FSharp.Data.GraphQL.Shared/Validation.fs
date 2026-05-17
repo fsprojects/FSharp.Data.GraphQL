@@ -920,7 +920,7 @@ module Ast =
             | _ when tref.Kind = TypeKind.NON_NULL -> checkIsCoercible tref.OfType.Value argName value
             | IntValue _ ->
                 match tref.Name, tref.Kind with
-                | Some ("ID" | "Int" | "Float"), TypeKind.SCALAR -> Success
+                | Some ("ID" | "Int" | "Long" | "Float"), TypeKind.SCALAR -> Success
                 | _ -> canNotCoerce
             | FloatValue _ ->
                 match tref.Name, tref.Kind with
