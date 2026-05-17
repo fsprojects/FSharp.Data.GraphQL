@@ -1,7 +1,7 @@
 module FSharp.Data.GraphQL.Tests.Literals
 
 let [<Literal>] IntrospectionSchemaJson = """{
-    "documentId": 869718943,
+    "documentId": 1417518537,
     "data": {
       "__schema": {
         "queryType": {
