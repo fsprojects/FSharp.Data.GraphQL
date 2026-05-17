@@ -384,6 +384,8 @@ Target.create "PackAndPush" ignore
 ==> RestoreTarget
 ==> BuildTarget
 ==> RunUnitTestsTarget
+==> StartStarWarsServerTarget
+==> UpdateIntrospectionFileTarget
 ==> "All"
 =?> (GenerateDocsTarget, Environment.environVar "GITHUB_ACTIONS" = "True")
 |> ignore
