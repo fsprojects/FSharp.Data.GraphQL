@@ -104,7 +104,22 @@ type Document with
     /// <param name="options">Specify custom printing voptions for the query string.</param>
     member x.ToQueryString ([<Optional; DefaultParameterValue (QueryStringPrintingOptions.None)>] options : QueryStringPrintingOptions) =
         let sb = PaddedStringBuilder ()
-        let withQuotes (s : string) = "\"" + s + "\""
+        let escapeGraphQLString (s : string) =
+            let escaped = StringBuilder(s.Length + 2)
+            escaped.Append('"') |> ignore
+            for c in s do
+                match c with
+                | '"' -> escaped.Append("\\\"") |> ignore
+                | '\\' -> escaped.Append("\\\\") |> ignore
+                | '\b' -> escaped.Append("\\b") |> ignore
+                | '\f' -> escaped.Append("\\f") |> ignore
+                | '\n' -> escaped.Append("\\n") |> ignore
+                | '\r' -> escaped.Append("\\r") |> ignore
+                | '\t' -> escaped.Append("\\t") |> ignore
+                | c when c < '\u0020' -> escaped.AppendFormat("\\u{0:x4}", int c) |> ignore
+                | c -> escaped.Append(c) |> ignore
+            escaped.Append('"').ToString()
+        let withQuotes = escapeGraphQLString
         let rec printValue x =
             let printObjectValue (name, value) =
                 sb.Append (name)

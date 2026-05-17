@@ -161,7 +161,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                             ErrorKind.Validation
                         )]
                 do!
-                    let schemaId = schema.Introspected.GetHashCode()
+                    let schemaId = SchemaId.fromIntrospectionSchema schema.Introspected
                     let key = { DocumentId = documentId; SchemaId = schemaId }
                     let producer = fun () -> Validation.Ast.validateDocument schema.Introspected ast
                     validationCache.GetOrAdd producer key
