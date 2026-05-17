@@ -117,7 +117,9 @@ type Document with
                     | '\n' -> "\\n"
                     | '\r' -> "\\r"
                     | '\t' -> "\\t"
-                    | c when c < '\u0020' -> sprintf "\\u%04X" (int c)
+                    | c when c < '\u0020' -> 
+                        let hex = (int c).ToString("X4", CultureInfo.InvariantCulture)
+                        "\\u" + hex
                     | c -> string c
                 escaped.Append(appendStr) |> ignore
             escaped.Append('"').ToString()
