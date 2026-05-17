@@ -27,25 +27,25 @@ safe-outputs:
     max: 10
     target: "*"
     hide-older-comments: true
-  create-pull-request:
+  create_pull_request:
     draft: true
     title-prefix: "[Repo Assist] "
     labels: [automation, repo-assist]
-  push-to-pull-request-branch:
+  push_to_pull_request_branch:
     target: "*"                 # "triggering" (default), "*", or number
     title-prefix: "[Repo Assist] "
-  create-issue:
+  create_issue:
     title-prefix: "[Repo Assist] "
     labels: [automation, repo-assist]
     max: 3
-  update-issue:
+  update_issue:
      target: "*"
      #title-prefix: "[Repo Assist] "
-  add-labels:
+  add_labels:
     allowed: [bug, enhancement, "help wanted", "good first issue", "spam", "off topic"]
     max: 3                       # max labels (default: 3)
     target: "*"                  # "triggering" (default), "*", or number
-  remove-labels:
+  remove_labels:
     allowed: [bug, enhancement, "help wanted", "good first issue", "spam", "off topic"]
     max: 3                       # max labels (default: 3)
     target: "*"                  # "triggering" (default), "*", or number
@@ -69,8 +69,7 @@ steps:
     with:
       global-json-file: global.json
       dotnet-version: |
-        9.x
-        8.x
+        10.x
 
 engine: copilot
 source: githubnext/agentics/workflows/repo-assist.md@6c79ed2cf36b9cfa0f5b499d00a0afc4a5d8f0c0
@@ -135,7 +134,7 @@ Note: In issue comments and PR descriptions, identify yourself as "Repo Assist".
       - Restatements of what the issue author already said
       - Follow-ups to your own previous comments
    g. **AI Disclosure**: Begin every comment with a brief disclosure, e.g.:
-      > ?? *This is an automated response from RepoAssist, the repository's AI assistant.*
+      > ?? *This is an automated response from Repo Assist, the repository's AI assistant.*
 3. Update your memory to note which issues you commented on. **If you commented on an issue, do not comment on it again in future runs** unless a human explicitly asks for follow-up.
 
 ### Task 2: Fix Issues via Pull Requests
@@ -145,7 +144,7 @@ Note: In issue comments and PR descriptions, identify yourself as "Repo Assist".
 1. Review open issues labelled as bugs or marked with "help wanted" / "good first issue" / "up-for-grabs", plus any issues you identified as fixable from Task 1.
 2. For each fixable issue:
    a. Check your memory: have you already tried to fix this issue? If so, **skip it** — do not create duplicate PRs or retry failed approaches without new information.
-   b. **Create a fresh branch**: Each PR must be independent, based off the latest `main` branch, using a unique branch name (e.g., `repo-assist/fix-issue-123-<short-description>`).
+   b. **Create a fresh branch**: Each PR must be independent, based off the latest `dev` branch, using a unique branch name (e.g., `repo-assist/fix-issue-123-<short-description>`).
    c. Study the relevant code carefully before making changes.
    d. Implement a minimal, surgical fix. Do **not** refactor unrelated code.
    e. **Build and test (MANDATORY)**:
@@ -192,7 +191,7 @@ Note: In issue comments and PR descriptions, identify yourself as "Repo Assist".
    - Documentation gaps (missing doc comments, README improvements)
    - Test coverage gaps
    - Code clarity and maintainability improvements
-3. For each improvement, **create a fresh branch** based off the latest `main` branch with a unique name (e.g., `repo-assist/improve-<short-description>`).
+3. For each improvement, **create a fresh branch** based off the latest `dev` branch with a unique name (e.g., `repo-assist/improve-<short-description>`).
 4. Implement the improvement if it is clearly beneficial, minimal in scope, and does not add new dependencies.
 5. **Build and test (MANDATORY)** — same requirements as Task 2:
    - Do not create a PR if any build fails or if any tests fail due to your changes
@@ -208,7 +207,7 @@ Keep the project's dependencies and build tooling current. This reduces technica
 1. **Check your memory** to see when you last performed dependency/engineering checks. Do this **at most once per week** to avoid churn.
 2. **Dependency updates**: Check whether dependencies are outdated. If updates are available:
    a. Prefer minor and patch updates. Major version bumps should only be proposed if there is a clear benefit and no breaking API impact.
-   b. **Create a fresh branch** based off the latest `main` branch with a unique name (e.g., `repo-assist/deps-update-<date>`).
+   b. **Create a fresh branch** based off the latest `dev` branch with a unique name (e.g., `repo-assist/deps-update-<date>`).
    c. Update the relevant dependency file(s).
    d. **Build and test (MANDATORY)** — same requirements as Task 2.
    e. Create a draft PR describing which packages were updated and why. Include the **Test Status section**.
@@ -275,7 +274,7 @@ Help maintainers prepare releases by keeping changelogs up to date and proposing
       - **Patch** (e.g., 1.2.3 > 1.2.4): Bug fixes, docs, internal improvements
       - **Minor** (e.g., 1.2.3 > 1.3.0): New features, backwards-compatible additions
       - **Major** (e.g., 1.2.3 > 2.0.0): Breaking changes — **never propose without maintainer approval**
-   b. **Create a fresh branch** based off the latest `main` branch (e.g., `repo-assist/release-vX.Y.Z`).
+   b. **Create a fresh branch** based off the latest `dev` branch (e.g., `repo-assist/release-vX.Y.Z`).
    c. Update the changelog file with entries for each merged PR, following the existing format.
    d. Create a draft PR with:
       - Title: `[Repo Assist] Prepare release vX.Y.Z`
@@ -371,9 +370,9 @@ Maintain a single open issue titled `[Repo Assist] Monthly Activity {YYYY}-{MM}`
 
 ## Project-Specific Notes
 
-This is an **F# project** targeting **.NET 8 and .NET 9**. Key details:
+This is an **F# project** targeting **.NET 10**. Key details:
 
-- **Language**: F# 9 (prefer latest F# 9 features over old syntax)
+- **Language**: F# 10 (prefer latest F# 10 features over old syntax)
 - **Build**: `dotnet build FSharp.Data.GraphQL.slnx`
 - **Test**: `dotnet test FSharp.Data.GraphQL.slnx`
 - **Code style**: Refer to `.github/copilot-instructions.md` for detailed F# coding conventions
