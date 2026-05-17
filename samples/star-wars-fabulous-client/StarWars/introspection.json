@@ -1,5 +1,5 @@
 {
-  "documentId": 986164407,
+  "documentId": 195530235,
   "data": {
     "__schema": {
       "queryType": {
@@ -8,7 +8,9 @@
       "mutationType": {
         "name": "Mutation"
       },
-      "subscriptionType": null,
+      "subscriptionType": {
+        "name": "Subscription"
+      },
       "types": [
         {
           "kind": "SCALAR",
@@ -941,431 +943,12 @@
         {
           "kind": "OBJECT",
           "name": "Query",
-          "description": "The query type.",
-          "fields": [
-            {
-              "name": "alwaysError",
-              "description": "Always produces an execution error for integration tests.",
-              "args": [],
-              "type": {
-                "kind": "SCALAR",
-                "name": "String",
-                "ofType": null
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "echo",
-              "description": "Enters an input type and get it back.",
-              "args": [
-                {
-                  "name": "input",
-                  "description": "The input to be echoed as an output.",
-                  "type": {
-                    "kind": "INPUT_OBJECT",
-                    "name": "Input",
-                    "ofType": null
-                  },
-                  "defaultValue": null
-                }
-              ],
-              "type": {
-                "kind": "OBJECT",
-                "name": "Output",
-                "ofType": null
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            }
-          ],
-          "inputFields": null,
-          "interfaces": [],
-          "enumValues": null,
-          "possibleTypes": null
-        },
-        {
-          "kind": "OBJECT",
-          "name": "Output",
-          "description": "The output for an input.",
-          "fields": [
-            {
-              "name": "list",
-              "description": "A list of output fields.",
-              "args": [],
-              "type": {
-                "kind": "LIST",
-                "name": null,
-                "ofType": {
-                  "kind": "NON_NULL",
-                  "name": null,
-                  "ofType": {
-                    "kind": "OBJECT",
-                    "name": "OutputField",
-                    "ofType": null
-                  }
-                }
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "single",
-              "description": "A single output field.",
-              "args": [],
-              "type": {
-                "kind": "OBJECT",
-                "name": "OutputField",
-                "ofType": null
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            }
-          ],
-          "inputFields": null,
-          "interfaces": [],
-          "enumValues": null,
-          "possibleTypes": null
-        },
-        {
-          "kind": "OBJECT",
-          "name": "OutputField",
-          "description": "The output for a field input.",
-          "fields": [
-            {
-              "name": "deprecated",
-              "description": "A string value through a deprecated field.",
-              "args": [],
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "String",
-                  "ofType": null
-                }
-              },
-              "isDeprecated": true,
-              "deprecationReason": "This field is deprecated."
-            },
-            {
-              "name": "guid",
-              "description": "A Guid value.",
-              "args": [],
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "Guid",
-                  "ofType": null
-                }
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "guidId",
-              "description": "A Guid Id value.",
-              "args": [],
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "ID",
-                  "ofType": null
-                }
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "guidIdOption",
-              "description": "A Guid Id value.",
-              "args": [],
-              "type": {
-                "kind": "SCALAR",
-                "name": "ID",
-                "ofType": null
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "int",
-              "description": "An integer value.",
-              "args": [],
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "Int",
-                  "ofType": null
-                }
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "intOption",
-              "description": "An integer option value.",
-              "args": [],
-              "type": {
-                "kind": "SCALAR",
-                "name": "Int",
-                "ofType": null
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "string",
-              "description": "A string value.",
-              "args": [],
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "String",
-                  "ofType": null
-                }
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "stringId",
-              "description": "A String Id value.",
-              "args": [],
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "ID",
-                  "ofType": null
-                }
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "stringIdOption",
-              "description": "A String Id value.",
-              "args": [],
-              "type": {
-                "kind": "SCALAR",
-                "name": "ID",
-                "ofType": null
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "stringOption",
-              "description": "A string option value.",
-              "args": [],
-              "type": {
-                "kind": "SCALAR",
-                "name": "String",
-                "ofType": null
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "uri",
-              "description": "An URI value.",
-              "args": [],
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "URI",
-                  "ofType": null
-                }
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            }
-          ],
-          "inputFields": null,
-          "interfaces": [],
-          "enumValues": null,
-          "possibleTypes": null
-        },
-        {
-          "kind": "SCALAR",
-          "name": "Guid",
-          "description": "The \u0060Guid\u0060 scalar type represents a Globally Unique Identifier value. It\u0027s a 128-bit long byte key, that can be serialized to string.",
-          "fields": null,
-          "inputFields": null,
-          "interfaces": null,
-          "enumValues": null,
-          "possibleTypes": null
-        },
-        {
-          "kind": "INPUT_OBJECT",
-          "name": "Input",
-          "description": "Input object type.",
-          "fields": null,
-          "inputFields": [
-            {
-              "name": "single",
-              "description": "A single input field.",
-              "type": {
-                "kind": "INPUT_OBJECT",
-                "name": "InputField",
-                "ofType": null
-              },
-              "defaultValue": null
-            },
-            {
-              "name": "list",
-              "description": "A list of input fields.",
-              "type": {
-                "kind": "LIST",
-                "name": null,
-                "ofType": {
-                  "kind": "NON_NULL",
-                  "name": null,
-                  "ofType": {
-                    "kind": "INPUT_OBJECT",
-                    "name": "InputField",
-                    "ofType": null
-                  }
-                }
-              },
-              "defaultValue": null
-            }
-          ],
-          "interfaces": null,
-          "enumValues": null,
-          "possibleTypes": null
-        },
-        {
-          "kind": "INPUT_OBJECT",
-          "name": "InputField",
-          "description": null,
-          "fields": null,
-          "inputFields": [
-            {
-              "name": "string",
-              "description": "A string value.",
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "String",
-                  "ofType": null
-                }
-              },
-              "defaultValue": null
-            },
-            {
-              "name": "int",
-              "description": "An integer value.",
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "Int",
-                  "ofType": null
-                }
-              },
-              "defaultValue": null
-            },
-            {
-              "name": "stringOption",
-              "description": "A string option value.",
-              "type": {
-                "kind": "SCALAR",
-                "name": "String",
-                "ofType": null
-              },
-              "defaultValue": null
-            },
-            {
-              "name": "intOption",
-              "description": "An integer option value.",
-              "type": {
-                "kind": "SCALAR",
-                "name": "Int",
-                "ofType": null
-              },
-              "defaultValue": null
-            },
-            {
-              "name": "uri",
-              "description": "An URI value.",
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "URI",
-                  "ofType": null
-                }
-              },
-              "defaultValue": null
-            },
-            {
-              "name": "guid",
-              "description": "A Guid value.",
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "Guid",
-                  "ofType": null
-                }
-              },
-              "defaultValue": null
-            }
-          ],
-          "interfaces": null,
-          "enumValues": null,
-          "possibleTypes": null
-        },
-        {
-          "kind": "OBJECT",
-          "name": "Mutation",
           "description": null,
           "fields": [
             {
-              "name": "multipleUpload",
-              "description": "Uploads a list of files to the server and get them back.",
-              "args": [
-                {
-                  "name": "files",
-                  "description": "The files to upload.",
-                  "type": {
-                    "kind": "NON_NULL",
-                    "name": null,
-                    "ofType": {
-                      "kind": "LIST",
-                      "name": null,
-                      "ofType": {
-                        "kind": "NON_NULL",
-                        "name": null,
-                        "ofType": {
-                          "kind": "INPUT_OBJECT",
-                          "name": "File",
-                          "ofType": null
-                        }
-                      }
-                    }
-                  },
-                  "defaultValue": null
-                }
-              ],
+              "name": "characters",
+              "description": "Gets characters",
+              "args": [],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -1376,8 +959,8 @@
                     "kind": "NON_NULL",
                     "name": null,
                     "ofType": {
-                      "kind": "OBJECT",
-                      "name": "UploadedFile",
+                      "kind": "UNION",
+                      "name": "Character",
                       "ofType": null
                     }
                   }
@@ -1387,142 +970,45 @@
               "deprecationReason": null
             },
             {
-              "name": "nullableMultipleNullableUpload",
-              "description": "Uploads (maybe) a list of files (maybe) to the server and get them back (maybe).",
+              "name": "droid",
+              "description": "Gets droid",
               "args": [
                 {
-                  "name": "files",
-                  "description": "The files to upload.",
+                  "name": "id",
+                  "description": null,
                   "type": {
-                    "kind": "LIST",
+                    "kind": "NON_NULL",
                     "name": null,
                     "ofType": {
-                      "kind": "INPUT_OBJECT",
-                      "name": "File",
+                      "kind": "SCALAR",
+                      "name": "String",
                       "ofType": null
                     }
-                  },
-                  "defaultValue": null
-                }
-              ],
-              "type": {
-                "kind": "LIST",
-                "name": null,
-                "ofType": {
-                  "kind": "OBJECT",
-                  "name": "UploadedFile",
-                  "ofType": null
-                }
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "nullableMultipleUpload",
-              "description": "Uploads (maybe) a list of files to the server and get them back (maybe).",
-              "args": [
-                {
-                  "name": "files",
-                  "description": "The files to upload.",
-                  "type": {
-                    "kind": "LIST",
-                    "name": null,
-                    "ofType": {
-                      "kind": "NON_NULL",
-                      "name": null,
-                      "ofType": {
-                        "kind": "INPUT_OBJECT",
-                        "name": "File",
-                        "ofType": null
-                      }
-                    }
-                  },
-                  "defaultValue": null
-                }
-              ],
-              "type": {
-                "kind": "LIST",
-                "name": null,
-                "ofType": {
-                  "kind": "NON_NULL",
-                  "name": null,
-                  "ofType": {
-                    "kind": "OBJECT",
-                    "name": "UploadedFile",
-                    "ofType": null
-                  }
-                }
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "nullableSingleUpload",
-              "description": "Uploads (maybe) a single file to the server and get it back (maybe).",
-              "args": [
-                {
-                  "name": "file",
-                  "description": "The file to be uploaded.",
-                  "type": {
-                    "kind": "INPUT_OBJECT",
-                    "name": "File",
-                    "ofType": null
                   },
                   "defaultValue": null
                 }
               ],
               "type": {
                 "kind": "OBJECT",
-                "name": "UploadedFile",
+                "name": "Droid",
                 "ofType": null
               },
               "isDeprecated": false,
               "deprecationReason": null
             },
             {
-              "name": "singleUpload",
-              "description": "Uploads a single file to the server and get it back.",
+              "name": "hero",
+              "description": "Gets human hero",
               "args": [
                 {
-                  "name": "file",
-                  "description": "The file to be uploaded.",
-                  "type": {
-                    "kind": "NON_NULL",
-                    "name": null,
-                    "ofType": {
-                      "kind": "INPUT_OBJECT",
-                      "name": "File",
-                      "ofType": null
-                    }
-                  },
-                  "defaultValue": null
-                }
-              ],
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "OBJECT",
-                  "name": "UploadedFile",
-                  "ofType": null
-                }
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "uploadComplex",
-              "description": "",
-              "args": [
-                {
-                  "name": "input",
+                  "name": "id",
                   "description": null,
                   "type": {
                     "kind": "NON_NULL",
                     "name": null,
                     "ofType": {
-                      "kind": "INPUT_OBJECT",
-                      "name": "InputFile",
+                      "kind": "SCALAR",
+                      "name": "String",
                       "ofType": null
                     }
                   },
@@ -1530,30 +1016,26 @@
                 }
               ],
               "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "String",
-                  "ofType": null
-                }
+                "kind": "OBJECT",
+                "name": "Human",
+                "ofType": null
               },
               "isDeprecated": false,
               "deprecationReason": null
             },
             {
-              "name": "uploadRequest",
-              "description": "Upload several files in different forms.",
+              "name": "planet",
+              "description": "Gets planet",
               "args": [
                 {
-                  "name": "request",
-                  "description": "The request for uploading several files in different forms.",
+                  "name": "id",
+                  "description": null,
                   "type": {
                     "kind": "NON_NULL",
                     "name": null,
                     "ofType": {
-                      "kind": "INPUT_OBJECT",
-                      "name": "UploadRequest",
+                      "kind": "SCALAR",
+                      "name": "String",
                       "ofType": null
                     }
                   },
@@ -1561,13 +1043,9 @@
                 }
               ],
               "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "OBJECT",
-                  "name": "UploadResponse",
-                  "ofType": null
-                }
+                "kind": "OBJECT",
+                "name": "Planet",
+                "ofType": null
               },
               "isDeprecated": false,
               "deprecationReason": null
@@ -1579,20 +1057,106 @@
           "possibleTypes": null
         },
         {
+          "kind": "UNION",
+          "name": "Character",
+          "description": "A character in the Star Wars Trilogy.",
+          "fields": null,
+          "inputFields": null,
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": [
+            {
+              "kind": "OBJECT",
+              "name": "Human",
+              "ofType": null
+            },
+            {
+              "kind": "OBJECT",
+              "name": "Droid",
+              "ofType": null
+            }
+          ]
+        },
+        {
           "kind": "OBJECT",
-          "name": "UploadedFile",
-          "description": "Contains data of an uploaded file.",
+          "name": "Human",
+          "description": "A humanoid creature in the Star Wars universe.",
           "fields": [
             {
-              "name": "contentAsText",
-              "description": "The content of the file as text.",
+              "name": "appearsIn",
+              "description": "Which movies they appear in.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
                 "ofType": {
-                  "kind": "SCALAR",
-                  "name": "String",
+                  "kind": "LIST",
+                  "name": null,
+                  "ofType": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "ENUM",
+                      "name": "Episode",
+                      "ofType": null
+                    }
+                  }
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "friends",
+              "description": "The friends of the human, or an empty list if they have none.",
+              "args": [
+                {
+                  "name": "first",
+                  "description": null,
+                  "type": {
+                    "kind": "SCALAR",
+                    "name": "Int",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                },
+                {
+                  "name": "after",
+                  "description": null,
+                  "type": {
+                    "kind": "SCALAR",
+                    "name": "String",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                },
+                {
+                  "name": "last",
+                  "description": null,
+                  "type": {
+                    "kind": "SCALAR",
+                    "name": "Int",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                },
+                {
+                  "name": "before",
+                  "description": null,
+                  "type": {
+                    "kind": "SCALAR",
+                    "name": "String",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "OBJECT",
+                  "name": "CharacterConnection",
                   "ofType": null
                 }
               },
@@ -1600,8 +1164,20 @@
               "deprecationReason": null
             },
             {
-              "name": "contentType",
-              "description": "The content type of the file.",
+              "name": "homePlanet",
+              "description": "The home planet of the human, or null if unknown.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "id",
+              "description": "The id of the human.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1617,16 +1193,12 @@
             },
             {
               "name": "name",
-              "description": "The name of the file.",
+              "description": "The name of the human.",
               "args": [],
               "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "String",
-                  "ofType": null
-                }
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
               },
               "isDeprecated": false,
               "deprecationReason": null
@@ -1638,48 +1210,42 @@
           "possibleTypes": null
         },
         {
-          "kind": "INPUT_OBJECT",
-          "name": "File",
-          "description": "The \u0060File\u0060 type represents a file on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query.",
+          "kind": "ENUM",
+          "name": "Episode",
+          "description": "One of the films in the Star Wars Trilogy.",
           "fields": null,
-          "inputFields": [],
+          "inputFields": null,
           "interfaces": null,
-          "enumValues": null,
-          "possibleTypes": null
-        },
-        {
-          "kind": "INPUT_OBJECT",
-          "name": "InputFile",
-          "description": null,
-          "fields": null,
-          "inputFields": [
+          "enumValues": [
             {
-              "name": "file",
-              "description": null,
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "INPUT_OBJECT",
-                  "name": "File",
-                  "ofType": null
-                }
-              },
-              "defaultValue": null
+              "name": "NewHope",
+              "description": "Released in 1977.",
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "Empire",
+              "description": "Released in 1980.",
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "Jedi",
+              "description": "Released in 1983.",
+              "isDeprecated": false,
+              "deprecationReason": null
             }
           ],
-          "interfaces": null,
-          "enumValues": null,
           "possibleTypes": null
         },
         {
           "kind": "OBJECT",
-          "name": "UploadResponse",
-          "description": "Contains uploaded files of an upload files request.",
+          "name": "CharacterConnection",
+          "description": "A connection from an object to a list of objects of type Character",
           "fields": [
             {
-              "name": "multiple",
-              "description": "Multiple file uploads.",
+              "name": "edges",
+              "description": "Information to aid in pagination.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1692,7 +1258,7 @@
                     "name": null,
                     "ofType": {
                       "kind": "OBJECT",
-                      "name": "UploadedFile",
+                      "name": "CharacterEdge",
                       "ofType": null
                     }
                   }
@@ -1702,35 +1268,15 @@
               "deprecationReason": null
             },
             {
-              "name": "nullableMultiple",
-              "description": "Optional list of multiple file uploads.",
+              "name": "pageInfo",
+              "description": "Information to aid in pagination.",
               "args": [],
               "type": {
-                "kind": "LIST",
-                "name": null,
-                "ofType": {
-                  "kind": "NON_NULL",
-                  "name": null,
-                  "ofType": {
-                    "kind": "OBJECT",
-                    "name": "UploadedFile",
-                    "ofType": null
-                  }
-                }
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
-              "name": "nullableMultipleNullable",
-              "description": "Optional list of multiple optional file uploads.",
-              "args": [],
-              "type": {
-                "kind": "LIST",
+                "kind": "NON_NULL",
                 "name": null,
                 "ofType": {
                   "kind": "OBJECT",
-                  "name": "UploadedFile",
+                  "name": "PageInfo",
                   "ofType": null
                 }
               },
@@ -1738,15 +1284,54 @@
               "deprecationReason": null
             },
             {
-              "name": "single",
-              "description": "A single file upload.",
+              "name": "totalCount",
+              "description": "A count of the total number of objects in this connection, ignoring pagination. This allows a client to fetch the first five objects by passing \\\u00225\\\u0022 as the argument to \u0060first\u0060, then fetch the total count so it could display \\\u00225 of 83\\\u0022, for example. In cases where we employ infinite scrolling or don\u0027t have an exact count of entries, this field will return \u0060null\u0060.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "Int",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "OBJECT",
+          "name": "CharacterEdge",
+          "description": "An edge in a connection from an object to another object of type Character",
+          "fields": [
+            {
+              "name": "cursor",
+              "description": "A cursor for use in pagination",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
                 "ofType": {
-                  "kind": "OBJECT",
-                  "name": "UploadedFile",
+                  "kind": "SCALAR",
+                  "name": "String",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "node",
+              "description": "The item at the end of the edge. Must NOT be an enumerable collection.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "UNION",
+                  "name": "Character",
                   "ofType": null
                 }
               },
@@ -1760,28 +1345,81 @@
           "possibleTypes": null
         },
         {
-          "kind": "INPUT_OBJECT",
-          "name": "UploadRequest",
-          "description": "Request for uploading files in several different forms.",
-          "fields": null,
-          "inputFields": [
+          "kind": "OBJECT",
+          "name": "PageInfo",
+          "description": "Information about pagination in a connection.",
+          "fields": [
             {
-              "name": "single",
-              "description": "A single file upload.",
+              "name": "endCursor",
+              "description": "When paginating forwards, the cursor to continue.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "hasNextPage",
+              "description": "When paginating forwards, are there more items?",
+              "args": [],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
                 "ofType": {
-                  "kind": "INPUT_OBJECT",
-                  "name": "File",
+                  "kind": "SCALAR",
+                  "name": "Boolean",
                   "ofType": null
                 }
               },
-              "defaultValue": null
+              "isDeprecated": false,
+              "deprecationReason": null
             },
             {
-              "name": "multiple",
-              "description": "Multiple file uploads.",
+              "name": "hasPreviousPage",
+              "description": "When paginating backwards, are there more items?",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "Boolean",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "startCursor",
+              "description": "When paginating backwards, the cursor to continue.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "OBJECT",
+          "name": "Droid",
+          "description": "A mechanical creature in the Star Wars universe.",
+          "fields": [
+            {
+              "name": "appearsIn",
+              "description": "Which movies they appear in.",
+              "args": [],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -1792,48 +1430,346 @@
                     "kind": "NON_NULL",
                     "name": null,
                     "ofType": {
-                      "kind": "INPUT_OBJECT",
-                      "name": "File",
+                      "kind": "ENUM",
+                      "name": "Episode",
                       "ofType": null
                     }
                   }
                 }
               },
-              "defaultValue": null
+              "isDeprecated": false,
+              "deprecationReason": null
             },
             {
-              "name": "nullableMultiple",
-              "description": "Optional list of multiple file uploads.",
+              "name": "friends",
+              "description": "The friends of the Droid, or an empty list if they have none.",
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "ObjectListFilter",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
-                "kind": "LIST",
+                "kind": "NON_NULL",
                 "name": null,
                 "ofType": {
-                  "kind": "NON_NULL",
+                  "kind": "LIST",
                   "name": null,
                   "ofType": {
-                    "kind": "INPUT_OBJECT",
-                    "name": "File",
+                    "kind": "UNION",
+                    "name": "Character",
                     "ofType": null
                   }
                 }
               },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "id",
+              "description": "The id of the droid.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "String",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "name",
+              "description": "The name of the Droid.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "primaryFunction",
+              "description": "The primary function of the droid.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "OBJECT",
+          "name": "Planet",
+          "description": "A planet in the Star Wars universe.",
+          "fields": [
+            {
+              "name": "id",
+              "description": "The id of the planet",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "String",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "isMoon",
+              "description": "Is that a moon?",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "Boolean",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "name",
+              "description": "The name of the planet.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "satelitesCount",
+              "description": "The number of satelites of the planet.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "Int",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "OBJECT",
+          "name": "Subscription",
+          "description": null,
+          "fields": [
+            {
+              "name": "watchMoon",
+              "description": "Watches to see if a planet is a moon.",
+              "args": [
+                {
+                  "name": "id",
+                  "description": null,
+                  "type": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "SCALAR",
+                      "name": "String",
+                      "ofType": null
+                    }
+                  },
+                  "defaultValue": null
+                }
+              ],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "OBJECT",
+                  "name": "Planet",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "OBJECT",
+          "name": "Mutation",
+          "description": null,
+          "fields": [
+            {
+              "name": "patchPlanet",
+              "description": null,
+              "args": [
+                {
+                  "name": "id",
+                  "description": null,
+                  "type": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "SCALAR",
+                      "name": "String",
+                      "ofType": null
+                    }
+                  },
+                  "defaultValue": null
+                },
+                {
+                  "name": "planet",
+                  "description": null,
+                  "type": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "INPUT_OBJECT",
+                      "name": "InputPatchPlanet",
+                      "ofType": null
+                    }
+                  },
+                  "defaultValue": null
+                }
+              ],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "OBJECT",
+                  "name": "Planet",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "setMoon",
+              "description": "Defines if a planet is actually a moon or not.",
+              "args": [
+                {
+                  "name": "id",
+                  "description": null,
+                  "type": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "SCALAR",
+                      "name": "String",
+                      "ofType": null
+                    }
+                  },
+                  "defaultValue": null
+                },
+                {
+                  "name": "isMoon",
+                  "description": null,
+                  "type": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "SCALAR",
+                      "name": "Boolean",
+                      "ofType": null
+                    }
+                  },
+                  "defaultValue": null
+                }
+              ],
+              "type": {
+                "kind": "OBJECT",
+                "name": "Planet",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "INPUT_OBJECT",
+          "name": "InputPatchPlanet",
+          "description": "A planet in the Star Wars universe.",
+          "fields": null,
+          "inputFields": [
+            {
+              "name": "name",
+              "description": null,
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
               "defaultValue": null
             },
             {
-              "name": "nullableMultipleNullable",
-              "description": "Optional list of multiple optional file uploads.",
+              "name": "satelitesCount",
+              "description": null,
               "type": {
-                "kind": "LIST",
-                "name": null,
-                "ofType": {
-                  "kind": "INPUT_OBJECT",
-                  "name": "File",
-                  "ofType": null
-                }
+                "kind": "SCALAR",
+                "name": "Int",
+                "ofType": null
+              },
+              "defaultValue": null
+            },
+            {
+              "name": "isMoon",
+              "description": null,
+              "type": {
+                "kind": "SCALAR",
+                "name": "Boolean",
+                "ofType": null
               },
               "defaultValue": null
             }
           ],
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "INPUT_OBJECT",
+          "name": "ObjectListFilter",
+          "description": "The \u0060Filter\u0060 scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query.",
+          "fields": null,
+          "inputFields": [],
           "interfaces": null,
           "enumValues": null,
           "possibleTypes": null

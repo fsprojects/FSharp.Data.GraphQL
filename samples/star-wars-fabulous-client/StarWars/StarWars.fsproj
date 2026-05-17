@@ -17,6 +17,7 @@
     <Compile Include="Helpers.fs" />
     <Compile Include="Style.fs" />
     <Compile Include="Common.fs" />
+    <Content Include="introspection.json" />
     <None Include="queries\FetchCharacters.graphql" />
     <PackageReference Include="Xamarin.Forms" VersionOverride="4.0.0.425677" />
     <PackageReference Include="Xamarin.Essentials" VersionOverride="1.0.0" />
