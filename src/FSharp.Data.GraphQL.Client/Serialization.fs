@@ -283,8 +283,7 @@ module Serialization =
     let buildRequestJson (operationName : string option) (query : string) (variables : (string * obj) []) =
         Tracer.runAndMeasureExecutionTime "Built GraphQL request JSON" (fun _ ->
             use stream = new MemoryStream ()
-            let writerOptions = JsonWriterOptions (Indented = false)
-            use writer = new Utf8JsonWriter (stream, writerOptions)
+            use writer = new Utf8JsonWriter (stream, JsonWriterOptions (Indented = false))
             let write = writeValue writer
             writer.WriteStartObject ()
             writer.WritePropertyName "operationName"
@@ -310,8 +309,7 @@ module Serialization =
     let buildMapJson (files : (string * Upload) []) =
         Tracer.runAndMeasureExecutionTime "Built GraphQL map JSON" (fun _ ->
             use stream = new MemoryStream ()
-            let writerOptions = JsonWriterOptions (Indented = false)
-            use writer = new Utf8JsonWriter (stream, writerOptions)
+            use writer = new Utf8JsonWriter (stream, JsonWriterOptions (Indented = false))
             writer.WriteStartObject ()
             files
             |> Array.iteri (fun ix (name, _) ->

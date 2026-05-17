@@ -565,7 +565,9 @@ module internal JsonValueHelper =
 /// The base type for all GraphQLProvider operation result provided types.
 type OperationResultBase
     (rawResponse : HttpResponseMessage, responseJson : string, operationFields : SchemaFieldInfo[], operationTypeName : string) =
-    let parsedJson = System.Text.Json.JsonDocument.Parse responseJson
+    let parsedJson =
+        try System.Text.Json.JsonDocument.Parse responseJson
+        with ex -> raise (System.InvalidOperationException ($"Failed to parse GraphQL response JSON: {ex.Message}", ex))
     let rootElement = parsedJson.RootElement
 
     let rawData =
@@ -619,7 +621,7 @@ type OperationResultBase
     interface IDisposable with
         member _.Dispose () = parsedJson.Dispose ()
 
-/// The base type for al GraphQLProvider operation provided types.
+/// The base type for all GraphQLProvider operation provided types.
 type OperationBase (query : string) =
     /// Gets the query string of the operation.
     member _.Query = query
