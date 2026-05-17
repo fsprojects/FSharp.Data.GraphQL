@@ -15,13 +15,14 @@ open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Types.Introspection
 
 /// Contains information about a field on the query.
-type SchemaFieldInfo =
-    { /// Gets the alias or the name of the field.
-      AliasOrName : string
-      /// Gets the introspection type information of the field.
-      SchemaTypeRef : IntrospectionTypeRef
-      /// Gets information about fields of this field, if it is an object type.
-      Fields : SchemaFieldInfo [] }
+type SchemaFieldInfo = {
+    /// Gets the alias or the name of the field.
+    AliasOrName : string
+    /// Gets the introspection type information of the field.
+    SchemaTypeRef : IntrospectionTypeRef
+    /// Gets information about fields of this field, if it is an object type.
+    Fields : SchemaFieldInfo[]
+}
 
 /// A type alias to represent a Type name.
 type TypeName = string
@@ -29,24 +30,26 @@ type TypeName = string
 /// Contains source location information for a single GraphQL error location entry in the response.
 /// See GraphQL specification sections <see href="https://spec.graphql.org/October2021/#sec-Errors"/> and
 /// <see href="https://spec.graphql.org/October2021/#sec-Response-Format"/>.
-type OperationErrorLocation =
-    { /// The source line of the GraphQL operation document where the error occurred.
-      Line : int
-      /// The source column of the GraphQL operation document where the error occurred.
-      Column : int }
+type OperationErrorLocation = {
+    /// The source line of the GraphQL operation document where the error occurred.
+    Line : int
+    /// The source column of the GraphQL operation document where the error occurred.
+    Column : int
+}
 
 /// Contains data about a GraphQL operation error as defined by the GraphQL response format.
 /// See GraphQL specification sections <see href="https://spec.graphql.org/October2021/#sec-Errors"/> and
 /// <see href="https://spec.graphql.org/October2021/#sec-Response-Format"/>.
-type OperationError =
-    { /// The description of the error that happened in the operation.
-      Message : string
-      /// The source locations in the GraphQL operation document where the error occurred.
-      Locations : OperationErrorLocation []
-      /// The path to the field that produced the error while resolving its value.
-      Path : obj []
-      /// Extension data attached to the error.
-      Extensions : Map<string, obj> }
+type OperationError = {
+    /// The description of the error that happened in the operation.
+    Message : string
+    /// The source locations in the GraphQL operation document where the error occurred.
+    Locations : OperationErrorLocation[]
+    /// The path to the field that produced the error while resolving its value.
+    Path : obj[]
+    /// Extension data attached to the error.
+    Extensions : Map<string, obj>
+}
 
 /// Contains helpers to build HTTP header sequences to be used in GraphQLProvider Run methods.
 module HttpHeaders =
@@ -54,138 +57,155 @@ module HttpHeaders =
     /// The input headers string should be a string containing headers in the same way they are
     /// organized in a HTTP request (each header in a line, names and values separated by commas).
     let ofString (headers : string) : seq<string * string> =
-        upcast (headers.Replace("\r\n", "\n").Split('\n')
-                |> Array.map (fun header ->
-                    let separatorIndex = header.IndexOf(':')
-                    if separatorIndex = -1
-                    then failwithf "Header \"%s\" has an invalid header format. Must provide a name and a value, both separated by a comma." header
-                    else
-                        let name = header.Substring(0, separatorIndex).Trim()
-                        let value = header.Substring(separatorIndex + 1).Trim()
-                        (name, value)))
+        upcast
+            (headers.Replace("\r\n", "\n").Split ('\n')
+             |> Array.map (fun header ->
+                 let separatorIndex = header.IndexOf (':')
+                 if separatorIndex = -1 then
+                     failwithf "Header \"%s\" has an invalid header format. Must provide a name and a value, both separated by a comma." header
+                 else
+                     let name = header.Substring(0, separatorIndex).Trim ()
+                     let value = header.Substring(separatorIndex + 1).Trim ()
+                     (name, value)))
 
     /// Builds a sequence of HTTP headers as a sequence from a header file.
     /// The input file should be a file containing headers in the same way they are
     /// organized in a HTTP request (each header in a line, names and values separated by commas).
-    let ofFile (path : string) =
-        System.IO.File.ReadAllText path |> ofString
+    let ofFile (path : string) = System.IO.File.ReadAllText path |> ofString
 
     let internal load (location : StringLocation) : seq<string * string> =
         let headersString =
             match location with
             | String headers -> headers
             | File path -> System.IO.File.ReadAllText path
-        if headersString = "" then upcast [||]
-        else headersString |> ofString
+        if headersString = "" then
+            upcast [||]
+        else
+            headersString |> ofString
 
 /// The base type for all GraphQLProvider provided enum types.
 type EnumBase (name : string, value : string) =
     /// Gets the name of the provided enum type.
-    member _.GetName() = name
+    member _.GetName () = name
 
     /// Gets the value of the provided enum type.
-    member _.GetValue() = value
+    member _.GetValue () = value
 
-    override x.ToString() = x.GetValue()
+    override x.ToString () = x.GetValue ()
 
-    member x.Equals(other : EnumBase) =
-        x.GetName() = other.GetName() && x.GetValue() = other.GetValue()
+    member x.Equals (other : EnumBase) =
+        x.GetName () = other.GetName ()
+        && x.GetValue () = other.GetValue ()
 
-    override x.Equals(other : obj) =
+    override x.Equals (other : obj) =
         match other with
-        | :? EnumBase as other -> x.Equals(other)
+        | :? EnumBase as other -> x.Equals (other)
         | _ -> false
 
-    override x.GetHashCode() = x.GetName().GetHashCode() ^^^ x.GetValue().GetHashCode()
+    override x.GetHashCode () = x.GetName().GetHashCode () ^^^ x.GetValue().GetHashCode ()
 
     interface IEquatable<EnumBase> with
-        member x.Equals(other) = x.Equals(other)
+        member x.Equals (other) = x.Equals (other)
 
 /// Contains information about a GraphQLProvider record property.
-type RecordProperty =
-    { /// Gets the name of the record property.
-      Name : string
-      /// Gets the value of the record property.
-      Value : obj }
+type RecordProperty = {
+    /// Gets the name of the record property.
+    Name : string
+    /// Gets the value of the record property.
+    Value : obj
+}
 
 /// The base type for all GraphQLProvider provided record types.
 type RecordBase (name : string, properties : RecordProperty seq) =
     do
-        if not (isNull properties)
-        then
-            let distinctCount = properties |> Seq.map (fun p -> p.Name) |> Seq.distinct |> Seq.length
-            if distinctCount <> Seq.length properties
-            then failwith "Duplicated property names were found. Record can not be created, because each property name must be distinct."
+        if not (isNull properties) then
+            let distinctCount =
+                properties
+                |> Seq.map (fun p -> p.Name)
+                |> Seq.distinct
+                |> Seq.length
+            if distinctCount <> Seq.length properties then
+                failwith "Duplicated property names were found. Record can not be created, because each property name must be distinct."
 
     let properties =
-        if not (isNull properties)
-        then properties |> Seq.sortBy _.Name |> List.ofSeq
-        else []
+        if not (isNull properties) then
+            properties |> Seq.sortBy _.Name |> List.ofSeq
+        else
+            []
 
     /// Gets the name of this provided record type.
-    member _.GetName() = name
+    member _.GetName () = name
 
     /// Gets a list of this provided record properties.
-    member _.GetProperties() = properties
+    member _.GetProperties () = properties
 
     /// Produces a dictionary containing all the properties of this provided record type.
-    member x.ToDictionary() =
+    member x.ToDictionary () =
         let rec mapDictionaryValue (v : obj) =
             match v with
             | null -> null
             | :? string -> v // We need this because strings are enumerables, and we don't want to enumerate them recursively as an object
-            | :? EnumBase as v -> v.GetValue() |> box
-            | :? RecordBase as v -> box (v.ToDictionary())
+            | :? EnumBase as v -> v.GetValue () |> box
+            | :? RecordBase as v -> box (v.ToDictionary ())
             | OptionValue v -> v |> Option.map mapDictionaryValue |> Option.toObj
             | EnumerableValue v -> v |> Array.map mapDictionaryValue |> box
             | _ -> v
-        x.GetProperties()
+        x.GetProperties ()
         |> Seq.choose (fun p ->
-            if not (isNull p.Value)
-            then Some (p.Name, mapDictionaryValue p.Value)
-            else None)
+            if not (isNull p.Value) then
+                Some (p.Name, mapDictionaryValue p.Value)
+            else
+                None)
         |> dict
 
-    override x.ToString() =
+    override x.ToString () =
         let getPropValue (prop : RecordProperty) = sprintf "%A" prop.Value
-        let sb = StringBuilder()
-        sb.Append("{") |> ignore
+        let sb = StringBuilder ()
+        sb.Append ("{") |> ignore
         let rec printProperties (properties : RecordProperty list) =
             match properties with
             | [] -> ()
-            | [prop] -> sb.Append(sprintf "%s = %s;" prop.Name (getPropValue prop)) |> ignore
-            | prop :: tail -> sb.AppendLine(sprintf "%s = %s;" prop.Name (getPropValue prop)) |> ignore; printProperties tail
-        printProperties (x.GetProperties())
-        sb.Append("}") |> ignore
-        sb.ToString()
+            | [ prop ] ->
+                sb.Append (sprintf "%s = %s;" prop.Name (getPropValue prop))
+                |> ignore
+            | prop :: tail ->
+                sb.AppendLine (sprintf "%s = %s;" prop.Name (getPropValue prop))
+                |> ignore
+                printProperties tail
+        printProperties (x.GetProperties ())
+        sb.Append ("}") |> ignore
+        sb.ToString ()
 
-    member x.Equals(other : RecordBase) =
-        x.GetName() = other.GetName() && x.GetProperties() = other.GetProperties()
+    member x.Equals (other : RecordBase) =
+        x.GetName () = other.GetName ()
+        && x.GetProperties () = other.GetProperties ()
 
-    override x.Equals(other : obj) =
+    override x.Equals (other : obj) =
         match other with
-        | :? RecordBase as other -> x.Equals(other)
+        | :? RecordBase as other -> x.Equals (other)
         | _ -> false
 
-    override x.GetHashCode() =
-        x.GetName().GetHashCode() ^^^ x.GetProperties().GetHashCode()
+    override x.GetHashCode () =
+        x.GetName().GetHashCode ()
+        ^^^ x.GetProperties().GetHashCode ()
 
     interface IEquatable<RecordBase> with
-        member x.Equals(other) = x.Equals(other)
+        member x.Equals (other) = x.Equals (other)
 
 module internal TypeMapping =
     let scalar =
-        [| "Int", typeof<int>
-           "Boolean", typeof<bool>
-           "Date", typeof<DateTime>
-           "Float", typeof<float>
-           "ID", typeof<string>
-           "String", typeof<string>
-           "URI", typeof<Uri> |]
+        [|
+            "Int", typeof<int>
+            "Boolean", typeof<bool>
+            "Date", typeof<DateTime>
+            "Float", typeof<float>
+            "ID", typeof<string>
+            "String", typeof<string>
+            "URI", typeof<Uri>
+        |]
         |> Map.ofArray
 
-    let isBuiltInScalarTypeName (name : string) =
-        scalar |> Map.containsKey name
+    let isBuiltInScalarTypeName (name : string) = scalar |> Map.containsKey name
 
     let isScalarTypeName (schemaTypes : Map<TypeName, IntrospectionType>) (name : string) =
         match schemaTypes.TryFind name with
@@ -193,27 +213,32 @@ module internal TypeMapping =
         | None -> isBuiltInScalarTypeName name
 
     let tryFindScalarType (schemaTypes : Map<TypeName, IntrospectionType>) (name : string) =
-        if isScalarTypeName schemaTypes name
-        then scalar |> Map.tryFind name
-        else None
+        if isScalarTypeName schemaTypes name then
+            scalar |> Map.tryFind name
+        else
+            None
 
     let getSchemaTypes (introspection : IntrospectionSchema) =
-        let schemaTypeNames =
-            [| "__TypeKind"
-               "__DirectiveLocation"
-               "__Type"
-               "__InputValue"
-               "__Field"
-               "__EnumValue"
-               "__Directive"
-               "__Schema" |]
-        let isIntrospectionType (name : string) =
-            schemaTypeNames |> Array.contains name
+        let schemaTypeNames = [|
+            "__TypeKind"
+            "__DirectiveLocation"
+            "__Type"
+            "__InputValue"
+            "__Field"
+            "__EnumValue"
+            "__Directive"
+            "__Schema"
+        |]
+        let isIntrospectionType (name : string) = schemaTypeNames |> Array.contains name
         introspection.Types
         |> Array.choose (fun t ->
-            if not (isIntrospectionType t.Name) && not (t.Kind = TypeKind.SCALAR && isBuiltInScalarTypeName t.Name)
-            then Some(t.Name, t)
-            else None)
+            if
+                not (isIntrospectionType t.Name)
+                && not (t.Kind = TypeKind.SCALAR && isBuiltInScalarTypeName t.Name)
+            then
+                Some (t.Name, t)
+            else
+                None)
         |> Map.ofArray
 
     let mapScalarType uploadInputTypeName tname =
@@ -221,20 +246,25 @@ module internal TypeMapping =
         | Some uploadInputTypeName when uploadInputTypeName = tname -> typeof<Upload>
         | _ ->
             // Unknown scalar types will be mapped to a string type.
-            if scalar.ContainsKey(tname)
-            then scalar.[tname]
-            else typeof<string>
+            if scalar.ContainsKey (tname) then
+                scalar.[tname]
+            else
+                typeof<string>
 
-    let makeOption (t : Type) = typedefof<_ option>.MakeGenericType(t)
+    let makeOption (t : Type) = typedefof<_ option>.MakeGenericType (t)
 
-    let makeArray (t : Type) = t.MakeArrayType()
+    let makeArray (t : Type) = t.MakeArrayType ()
 
     let unwrapOption (t : Type) =
-        if t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ option>
-        then t.GetGenericArguments().[0]
-        else failwithf "Expected type to be an Option type, but it is %s." t.Name
+        if
+            t.IsGenericType
+            && t.GetGenericTypeDefinition () = typedefof<_ option>
+        then
+            t.GetGenericArguments().[0]
+        else
+            failwithf "Expected type to be an Option type, but it is %s." t.Name
 
-    let makeAsync (t : Type) = typedefof<Async<_>>.MakeGenericType(t)
+    let makeAsync (t : Type) = typedefof<Async<_>>.MakeGenericType (t)
 
 module internal JsonValueHelper =
     let getResponseFields (responseJson : JsonValue) =
@@ -243,7 +273,10 @@ module internal JsonValueHelper =
         | _ -> failwithf "Expected root type to be a Record type, but type is %A." responseJson
 
     let getResponseDataFields (responseJson : JsonValue) =
-        match getResponseFields responseJson |> Array.tryFind (fun (name, _) -> name = "data") with
+        match
+            getResponseFields responseJson
+            |> Array.tryFind (fun (name, _) -> name = "data")
+        with
         | Some (_, data) ->
             match data with
             | JsonValue.Record fields -> Some fields
@@ -252,10 +285,14 @@ module internal JsonValueHelper =
         | None -> None
 
     let getResponseErrors (responseJson : JsonValue) =
-        match getResponseFields responseJson |> Array.tryFind (fun (name, _) -> name = "errors") with
+        match
+            getResponseFields responseJson
+            |> Array.tryFind (fun (name, _) -> name = "errors")
+        with
         | Some (_, errors) ->
             match errors with
-            | JsonValue.Array [||] | JsonValue.Null -> None
+            | JsonValue.Array [||]
+            | JsonValue.Null -> None
             | JsonValue.Array items -> Some items
             | _ -> failwithf "Expected error field of root type to be an Array type, but type is %A." errors
         | None -> None
@@ -264,11 +301,11 @@ module internal JsonValueHelper =
         getResponseFields responseJson
         |> Array.filter (fun (name, _) -> name <> "data" && name <> "errors")
 
-    let private removeTypeNameField (fields : (string * JsonValue) []) =
-        fields |> Array.filter (fun (name, _) -> name <> "__typename")
+    let private removeTypeNameField (fields : (string * JsonValue)[]) =
+        fields
+        |> Array.filter (fun (name, _) -> name <> "__typename")
 
-    let firstUpper (name : string, value) =
-        name.FirstCharUpper(), value
+    let firstUpper (name : string, value) = name.FirstCharUpper (), value
 
     let getTypeName (fields : (string * JsonValue) seq) =
         fields
@@ -308,7 +345,10 @@ module internal JsonValueHelper =
                             | TypeKind.NON_NULL ->
                                 match schemaField.SchemaTypeRef.OfType with
                                 | Some t when t.Kind = TypeKind.LIST -> t.OfType
-                                | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." schemaField.SchemaTypeRef.OfType
+                                | _ ->
+                                    failwithf
+                                        "Expected field to be a list type with an underlying item, but it is %A."
+                                        schemaField.SchemaTypeRef.OfType
                             | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." schemaField.SchemaTypeRef
                         match tref with
                         | Some t -> t
@@ -322,12 +362,16 @@ module internal JsonValueHelper =
                         | Some itemType ->
                             match itemType.Kind with
                             | TypeKind.NON_NULL -> failwith "Schema definition is not supported: a non null type of a non null type was specified."
-                            | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION -> makeArray typeof<RecordBase> items
+                            | TypeKind.OBJECT
+                            | TypeKind.INTERFACE
+                            | TypeKind.UNION -> makeArray typeof<RecordBase> items
                             | TypeKind.ENUM -> makeArray typeof<EnumBase> items
                             | TypeKind.SCALAR -> makeArray (getScalarType itemType) items
                             | kind -> failwithf "Unsupported type kind \"%A\"." kind
                         | None -> failwith "Item type is a non null type, but no underlying type exists on the schema definition of the type."
-                    | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION -> makeOptionArray typeof<RecordBase> items
+                    | TypeKind.OBJECT
+                    | TypeKind.INTERFACE
+                    | TypeKind.UNION -> makeOptionArray typeof<RecordBase> items
                     | TypeKind.ENUM -> makeOptionArray typeof<EnumBase> items
                     | TypeKind.SCALAR -> makeOptionArray (getScalarType itemType) items
                     | kind -> failwithf "Unsupported type kind \"%A\"." kind
@@ -339,22 +383,31 @@ module internal JsonValueHelper =
                     | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
                 let mapRecordProperty (aliasOrName : string, value : JsonValue) =
                     let schemaField =
-                        match schemaField.Fields |> Array.tryFind (fun f -> f.AliasOrName = aliasOrName) with
+                        match
+                            schemaField.Fields
+                            |> Array.tryFind (fun f -> f.AliasOrName = aliasOrName)
+                        with
                         | Some f -> f
-                        | None -> failwithf "Expected to find field information for field with alias or name \"%s\" of type \"%s\" but it was not found." aliasOrName typeName
+                        | None ->
+                            failwithf
+                                "Expected to find field information for field with alias or name \"%s\" of type \"%s\" but it was not found."
+                                aliasOrName
+                                typeName
                     let value = helper true schemaField value
                     { Name = aliasOrName; Value = value }
                 let props =
                     props
                     |> removeTypeNameField
                     |> Array.map (firstUpper >> mapRecordProperty)
-                RecordBase(typeName, props) |> makeSomeIfNeeded
+                RecordBase (typeName, props) |> makeSomeIfNeeded
             | JsonValue.Boolean b -> makeSomeIfNeeded b
             | JsonValue.Float f -> makeSomeIfNeeded f
             | JsonValue.Null ->
                 match schemaField.SchemaTypeRef.Kind with
                 | TypeKind.NON_NULL -> failwith "Expected a non null item from the schema definition, but a null item was found in the response."
-                | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION -> makeNoneIfNeeded typeof<RecordBase>
+                | TypeKind.OBJECT
+                | TypeKind.INTERFACE
+                | TypeKind.UNION -> makeNoneIfNeeded typeof<RecordBase>
                 | TypeKind.ENUM -> makeNoneIfNeeded typeof<EnumBase>
                 | TypeKind.SCALAR -> getScalarType schemaField.SchemaTypeRef |> makeNoneIfNeeded
                 | TypeKind.LIST -> null
@@ -369,98 +422,129 @@ module internal JsonValueHelper =
                         | TypeKind.NON_NULL -> failwith "Schema definition is not supported: a non null type of a non null type was specified."
                         | TypeKind.SCALAR ->
                             match itemType.Name with
-                            | Some "URI" ->
-                                System.Uri(s) |> box
+                            | Some "URI" -> System.Uri (s) |> box
                             | Some "Date" ->
-                                match DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+                                match DateTime.TryParse (s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
                                 | (true, d) -> box d
-                                | _ -> failwith "A string was received in the query response, and the schema recognizes it as a date and time string, but the conversion failed."
-                            | Some _ ->
-                                box s
-                            | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
-                        | TypeKind.ENUM when itemType.Name.IsSome -> EnumBase(itemType.Name.Value, s) |> box
-                        | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string or an enum type."
+                                | _ ->
+                                    failwith
+                                        "A string was received in the query response, and the schema recognizes it as a date and time string, but the conversion failed."
+                            | Some _ -> box s
+                            | _ ->
+                                failwith
+                                    "A string type was received in the query response item, but the matching schema field is not a string based type."
+                        | TypeKind.ENUM when itemType.Name.IsSome -> EnumBase (itemType.Name.Value, s) |> box
+                        | _ ->
+                            failwith
+                                "A string type was received in the query response item, but the matching schema field is not a string or an enum type."
                     | None -> failwith "Item type is a non null type, but no underlying type exists on the schema definition of the type."
                 | TypeKind.SCALAR ->
                     match schemaField.SchemaTypeRef.Name with
-                    | Some "String" | Some "ID" ->
-                        s |> makeSomeIfNeeded
-                    | Some "URI" ->
-                        s |> System.Uri |> makeSomeIfNeeded
+                    | Some "String"
+                    | Some "ID" -> s |> makeSomeIfNeeded
+                    | Some "URI" -> s |> System.Uri |> makeSomeIfNeeded
                     | Some "Date" ->
-                        match DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+                        match DateTime.TryParse (s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
                         | (true, d) -> makeSomeIfNeeded d
-                        | _ -> failwith "A string was received in the query response, and the schema recognizes it as a date and time string, but the conversion failed."
-                    | Some _ ->
-                        s |> makeSomeIfNeeded
+                        | _ ->
+                            failwith
+                                "A string was received in the query response, and the schema recognizes it as a date and time string, but the conversion failed."
+                    | Some _ -> s |> makeSomeIfNeeded
                     | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
-                | TypeKind.ENUM when schemaField.SchemaTypeRef.Name.IsSome -> EnumBase(schemaField.SchemaTypeRef.Name.Value, s) |> makeSomeIfNeeded
-                | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type or an enum type."
+                | TypeKind.ENUM when schemaField.SchemaTypeRef.Name.IsSome ->
+                    EnumBase (schemaField.SchemaTypeRef.Name.Value, s)
+                    |> makeSomeIfNeeded
+                | _ ->
+                    failwith
+                        "A string type was received in the query response item, but the matching schema field is not a string based type or an enum type."
         fieldName, (helper true schemaField fieldValue)
 
-    let getFieldValues (schemaTypeName : string) (schemaFields : SchemaFieldInfo []) (dataFields : (string * JsonValue) []) =
+    let getFieldValues (schemaTypeName : string) (schemaFields : SchemaFieldInfo[]) (dataFields : (string * JsonValue)[]) =
         let mapFieldValue (aliasOrName : string, value : JsonValue) =
             let schemaField =
-                match schemaFields |> Array.tryFind (fun f -> f.AliasOrName = aliasOrName) with
+                match
+                    schemaFields
+                    |> Array.tryFind (fun f -> f.AliasOrName = aliasOrName)
+                with
                 | Some f -> f
-                | None -> failwithf "Expected to find field information for field with alias or name \"%s\" of type \"%s\" but it was not found." aliasOrName schemaTypeName
+                | None ->
+                    failwithf
+                        "Expected to find field information for field with alias or name \"%s\" of type \"%s\" but it was not found."
+                        aliasOrName
+                        schemaTypeName
             getFieldValue schemaField (aliasOrName, value)
         removeTypeNameField dataFields
         |> Array.map (firstUpper >> mapFieldValue)
 
-    let getErrors (errors : JsonValue []) =
-        let tryFindField fieldName (fields : (string * JsonValue) []) =
-            fields |> Array.tryFind (fun (name, _) -> name = fieldName) |> Option.map snd
+    let getErrors (errors : JsonValue[]) =
+        let tryFindField fieldName (fields : (string * JsonValue)[]) =
+            fields
+            |> Array.tryFind (fun (name, _) -> name = fieldName)
+            |> Option.map snd
 
-        let parsePath = function
+        let parsePath =
+            function
             | Some (JsonValue.Array path) ->
-                let pathMapper = function
+                let pathMapper =
+                    function
                     | JsonValue.String x -> box x
                     | JsonValue.Integer x -> box x
                     | _ -> failwith "Error parsing response errors. An item in the path is neither a String nor an Integer."
                 path |> Array.map pathMapper
-            | Some JsonValue.Null | None -> [||]
+            | Some JsonValue.Null
+            | None -> [||]
             | _ -> failwith "Error parsing response errors. Path field must be an Array."
 
-        let parseLocations = function
+        let parseLocations =
+            function
             | Some (JsonValue.Array locations) ->
-                let parseLocation = function
+                let parseLocation =
+                    function
                     | JsonValue.Record locationFields ->
                         match tryFindField "line" locationFields, tryFindField "column" locationFields with
                         | Some (JsonValue.Integer line), Some (JsonValue.Integer column) -> { Line = line; Column = column }
                         | _ -> failwith "Error parsing response errors. A location item must contain Integer fields named \"line\" and \"column\"."
                     | _ -> failwith "Error parsing response errors. A location item is not a Record."
                 locations |> Array.map parseLocation
-            | Some JsonValue.Null | None -> [||]
+            | Some JsonValue.Null
+            | None -> [||]
             | _ -> failwith "Error parsing response errors. Locations field must be an Array."
 
-        let parseExtensions = function
+        let parseExtensions =
+            function
             | Some (JsonValue.Record fields) -> Serialization.deserializeMap fields
-            | Some JsonValue.Null | None -> Map.empty
+            | Some JsonValue.Null
+            | None -> Map.empty
             | _ -> failwith "Error parsing response errors. Extensions field must be a Record."
 
-        let errorMapper = function
+        let errorMapper =
+            function
             | JsonValue.Record fields ->
                 match tryFindField "message" fields with
-                | Some (JsonValue.String message) ->
-                    { Message = message
-                      Locations = tryFindField "locations" fields |> parseLocations
-                      Path = tryFindField "path" fields |> parsePath
-                      Extensions = tryFindField "extensions" fields |> parseExtensions }
+                | Some (JsonValue.String message) -> {
+                    Message = message
+                    Locations = tryFindField "locations" fields |> parseLocations
+                    Path = tryFindField "path" fields |> parsePath
+                    Extensions = tryFindField "extensions" fields |> parseExtensions
+                  }
                 | _ -> failwith "Error parsing response errors. Unsupported errors field format."
-            | other -> failwithf "Error parsing response errors. Expected error to be a Record type, but it is %s." (other.ToString())
+            | other -> failwithf "Error parsing response errors. Expected error to be a Record type, but it is %s." (other.ToString ())
         Array.map errorMapper errors
 
 /// The base type for all GraphQLProvider operation result provided types.
-type OperationResultBase (rawResponse: HttpResponseMessage, responseJson : JsonValue, operationFields : SchemaFieldInfo [], operationTypeName : string) =
+type OperationResultBase
+    (rawResponse : HttpResponseMessage, responseJson : JsonValue, operationFields : SchemaFieldInfo[], operationTypeName : string) =
     let rawData =
         let data = JsonValueHelper.getResponseDataFields responseJson
         match data with
-        | Some [||] | None -> None
+        | Some [||]
+        | None -> None
         | Some dataFields ->
             let fieldValues = JsonValueHelper.getFieldValues operationTypeName operationFields dataFields
-            let props = fieldValues |> Array.map (fun (name, value) -> { Name = name; Value = value })
-            Some (RecordBase(operationTypeName, props))
+            let props =
+                fieldValues
+                |> Array.map (fun (name, value) -> { Name = name; Value = value })
+            Some (RecordBase (operationTypeName, props))
 
     let errors =
         let errors = JsonValueHelper.getResponseErrors responseJson
@@ -476,7 +560,7 @@ type OperationResultBase (rawResponse: HttpResponseMessage, responseJson : JsonV
 
     ///  <exclude />
     [<EditorBrowsableAttribute(EditorBrowsableState.Never)>]
-    [<CompilerMessageAttribute("This property is intended for use in generated code only.", 10001, IsHidden=true, IsError=false)>]
+    [<CompilerMessageAttribute("This property is intended for use in generated code only.", 10001, IsHidden = true, IsError = false)>]
     member _.RawData = rawData
 
     /// Gets all GraphQL errors returned by the server.
@@ -489,15 +573,14 @@ type OperationResultBase (rawResponse: HttpResponseMessage, responseJson : JsonV
 
     member _.Headers = rawResponse.Headers
 
-    member x.Equals(other : OperationResultBase) =
-        x.ResponseJson = other.ResponseJson
+    member x.Equals (other : OperationResultBase) = x.ResponseJson = other.ResponseJson
 
-    override x.Equals(other : obj) =
+    override x.Equals (other : obj) =
         match other with
-        | :? OperationResultBase as other -> x.Equals(other)
+        | :? OperationResultBase as other -> x.Equals (other)
         | _ -> false
 
-    override x.GetHashCode() = x.ResponseJson.GetHashCode()
+    override x.GetHashCode () = x.ResponseJson.GetHashCode ()
 
 /// The base type for al GraphQLProvider operation provided types.
 type OperationBase (query : string) =
@@ -512,8 +595,8 @@ module VariableMapping =
         match value with
         | null -> null
         | :? string -> value
-        | :? EnumBase as v -> v.GetValue() |> box
-        | :? RecordBase as v -> v.ToDictionary() |> box
+        | :? EnumBase as v -> v.GetValue () |> box
+        | :? RecordBase as v -> v.ToDictionary () |> box
         | OptionValue v -> v |> Option.map mapVariableValue |> box
         | EnumerableValue v -> v |> Array.map mapVariableValue |> box
         | v -> v
