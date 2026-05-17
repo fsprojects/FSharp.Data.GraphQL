@@ -14,7 +14,7 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Shared
 
-let InputArrayOf (innerDef : #TypeDef<'Val>) : ListOfDef<'Val, 'Val array> = ListOf innerDef
+let InputArrayOf (innerDef : #InputDef<'Val>) : InputDef<'Val array> = ListOf (innerDef :> InputDef<'Val>)
 
 let TestInputObject = InputComplexTests.TestInputObject
 

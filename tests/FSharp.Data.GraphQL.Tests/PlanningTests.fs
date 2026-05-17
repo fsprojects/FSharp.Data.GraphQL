@@ -139,7 +139,7 @@ let ``Planning must retain correct types for lists``() =
             }
         }
     }"""
-    let PersonList : ListOfDef<Person, Person list> = ListOf Person
+    let PersonList : OutputDef<Person list> = ListOf Person
     let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     equals 1 plan.Fields.Length
     let listInfo = plan.Fields.Head
@@ -178,7 +178,7 @@ let ``Planning must work with interfaces``() =
     }"""
     let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     equals 1 plan.Fields.Length
-    let INamedList : ListOfDef<obj, obj list> = ListOf INamed
+    let INamedList : OutputDef<obj list> = ListOf INamed
     let listInfo = plan.Fields.Head
     listInfo.Identifier |> equals "names"
     listInfo.ReturnDef |> equals (upcast INamedList)
@@ -215,7 +215,7 @@ let ``Planning must work with unions``() =
     let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     equals 1 plan.Fields.Length
     let listInfo = plan.Fields.Head
-    let UNamedList : ListOfDef<Named, Named list> = ListOf UNamed
+    let UNamedList : OutputDef<Named list> = ListOf UNamed
     listInfo.Identifier |> equals "names"
     listInfo.ReturnDef |> equals (upcast UNamedList)
     let (ResolveCollection(info)) = listInfo.Kind
@@ -309,7 +309,7 @@ let ``Planning must handle inline fragment with non-matching type condition in u
     // Verify the execution plan structure
     equals 1 plan.Fields.Length
     let listInfo = plan.Fields.Head
-    let UNamedList : ListOfDef<Named, Named list> = ListOf UNamed
+    let UNamedList : OutputDef<Named list> = ListOf UNamed
     listInfo.Identifier |> equals "names"
     listInfo.ReturnDef |> equals (upcast UNamedList)
     let (ResolveCollection(info)) = listInfo.Kind
