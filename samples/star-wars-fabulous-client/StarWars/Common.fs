@@ -6,7 +6,7 @@ open FSharp.Data.GraphQL
 module Commands =
 
     [<Literal>]
-    let IntrospectionPath = "introspection.json"
+    let IntrospectionPath = "../../../tests/FSharp.Data.GraphQL.IntegrationTests/introspection.json"
 
     type GraphQLApi = GraphQLProvider<IntrospectionPath>
     let GetCharactersData = GraphQLApi.Operation<"queries/FetchCharacters.graphql">()
