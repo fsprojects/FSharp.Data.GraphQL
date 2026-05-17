@@ -83,6 +83,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     let middlewaresList = Seq.toList middlewares
 
     /// Generates a deterministic document identifier from the canonical query string.
+    /// The SHA-256 hash is truncated to 32 bits to preserve the existing int32 documentId contract.
     let getDocumentId (document : Document) =
         let canonicalQuery = document.ToQueryString()
         let queryBytes = Encoding.UTF8.GetBytes canonicalQuery

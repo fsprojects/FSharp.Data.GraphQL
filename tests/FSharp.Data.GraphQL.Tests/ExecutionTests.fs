@@ -384,7 +384,8 @@ let ``Execution when querying returns unique document id with response`` () =
                     Define.Field("b", IntType, fun _ x -> x.B)
                 ]))
     let query = "query Example { a, b, a }"
-    // Deterministic SHA-256-based documentId for the canonical AST query string above.
+    // Deterministic SHA-256-based documentId for canonical `query Example { a b a }`,
+    // using the first 4 bytes of the hash as a big-endian int32.
     let expectedDocumentId = -2063861555
     let result1 = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, { A = "aa"; B = 2 })
     let result2 = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, { A = "aa"; B = 2 })
