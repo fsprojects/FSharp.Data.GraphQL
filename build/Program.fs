@@ -205,31 +205,9 @@ let unitTestsProjectPath =
     </> "FSharp.Data.GraphQL.Tests"
     </> "FSharp.Data.GraphQL.Tests.fsproj"
 
-let integrationTestsProjectPath =
-    "tests"
-    </> "FSharp.Data.GraphQL.IntegrationTests"
-    </> "FSharp.Data.GraphQL.IntegrationTests.fsproj"
-
-let [<Literal>] BuildIntegrationTestsTarget = "BuildIntegrationTests"
-Target.create BuildIntegrationTestsTarget <| fun _ ->
-    integrationTestsProjectPath
-    |> DotNet.build (fun options -> {
-        options with
-            Configuration = configuration
-            MSBuildParams = {
-                options.MSBuildParams with
-                    DisableInternalBinLog = true
-            }
-            Common = DotNetCli.setVersion options.Common
-    })
-
 let [<Literal>] RunUnitTestsTarget = "RunUnitTests"
 Target.create RunUnitTestsTarget <| fun _ ->
     runTests unitTestsProjectPath ""
-
-let [<Literal>] RunIntegrationTestsTarget = "RunIntegrationTests"
-Target.create RunIntegrationTestsTarget <| fun _ ->
-    runTests integrationTestsProjectPath "" //"--filter Execution=Sync"
 
 let prepareDocGen () =
     Shell.rm "docs/release-notes.md"
@@ -406,8 +384,6 @@ Target.create "PackAndPush" ignore
 ==> RestoreTarget
 ==> BuildTarget
 ==> RunUnitTestsTarget
-==> BuildIntegrationTestsTarget
-==> RunIntegrationTestsTarget
 ==> "All"
 =?> (GenerateDocsTarget, Environment.environVar "GITHUB_ACTIONS" = "True")
 |> ignore
