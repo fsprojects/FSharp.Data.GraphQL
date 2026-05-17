@@ -82,6 +82,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     let middlewaresList = Seq.toList middlewares
 
+    /// Generates a deterministic document identifier from the canonical query string.
     let getDocumentId (document : Document) =
         let canonicalQuery = document.ToQueryString()
         let queryBytes = Encoding.UTF8.GetBytes canonicalQuery

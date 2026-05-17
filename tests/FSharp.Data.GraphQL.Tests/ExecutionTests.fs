@@ -5,9 +5,6 @@ module FSharp.Data.GraphQL.Tests.ExecutionTests
 
 open Xunit
 open System
-open System.Buffers.Binary
-open System.Security.Cryptography
-open System.Text
 open System.Text.Json
 open System.Text.Json.Serialization
 open System.Collections.Immutable
@@ -20,7 +17,6 @@ open FSharp.Data.GraphQL.Shared
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
-open FSharp.Data.GraphQL.Ast.Extensions
 
 type TestSubject = {
     a: string
@@ -388,12 +384,7 @@ let ``Execution when querying returns unique document id with response`` () =
                     Define.Field("b", IntType, fun _ x -> x.B)
                 ]))
     let query = "query Example { a, b, a }"
-    let expectedDocumentId =
-        let canonicalQuery =
-            let ast = parse query
-            ast.ToQueryString()
-        let hash = SHA256.HashData(Encoding.UTF8.GetBytes canonicalQuery)
-        BinaryPrimitives.ReadInt32BigEndian(ReadOnlySpan<byte>(hash, 0, 4))
+    let expectedDocumentId = -2063861555
     let result1 = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, { A = "aa"; B = 2 })
     let result2 = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, { A = "aa"; B = 2 })
     result1.DocumentId |> notEquals Unchecked.defaultof<int>
