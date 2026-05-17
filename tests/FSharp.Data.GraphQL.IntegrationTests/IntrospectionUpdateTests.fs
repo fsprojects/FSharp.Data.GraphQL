@@ -82,5 +82,9 @@ let ``Update integration introspection file when schema changes`` () =
         let! sourceStream = httpClient.GetStreamAsync("/")
         let! wasUpdated = updateIntrospectionFileAsync CancellationToken.None sourceStream
         Assert.True(File.Exists introspectionFilePath)
-        wasUpdated |> ignore
+        if wasUpdated then
+            let! sourceStreamSecondRun = httpClient.GetStreamAsync("/")
+            use sourceStreamSecondRun = sourceStreamSecondRun
+            let! wasUpdatedSecondRun = updateIntrospectionFileAsync CancellationToken.None sourceStreamSecondRun
+            Assert.False wasUpdatedSecondRun
     }
