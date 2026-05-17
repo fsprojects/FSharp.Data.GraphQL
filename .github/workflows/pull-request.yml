@@ -15,6 +15,17 @@ env:
   DOTNET_NOLOGO: true
 
 jobs:
+  event_file:
+    if: github.event_name == 'pull_request'
+    name: Publish event file
+    runs-on: ubuntu-latest
+    steps:
+    - name: Upload event file
+      uses: actions/upload-artifact@v4
+      with:
+        name: EventFile
+        path: ${{ github.event_path }}
+
   build:
 
     strategy:
@@ -50,3 +61,10 @@ jobs:
 
     - name: Build and run integration tests
       run: dotnet run --project build/Build.fsproj --launch-profile BuildAndTest
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.os }}
+        path: test-results

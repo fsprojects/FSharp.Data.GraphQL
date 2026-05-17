@@ -98,12 +98,17 @@ let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
 
     System.Threading.Thread.Sleep (2000)
 
-let runTests (project : string) (args : string) =
+let runTests (project : string) =
+    let projectName = Path.GetFileNameWithoutExtension project
+    let resultsFileName = $"{projectName}.trx"
+
     DotNet.test
         (fun options ->
             {
                 options with
                     NoBuild = true
+                    Logger = Some $"trx;LogFileName={resultsFileName}"
+                    ResultsDirectory = Some "test-results"
                     Framework = Some DotNetMoniker
                     Configuration = configuration
                     MSBuildParams = {
@@ -184,7 +189,7 @@ let unitTestsProjectPath =
 
 let [<Literal>] RunUnitTestsTarget = "RunUnitTests"
 Target.create RunUnitTestsTarget <| fun _ ->
-    runTests unitTestsProjectPath ""
+    runTests unitTestsProjectPath
 
 let prepareDocGen () =
     Shell.rm "docs/release-notes.md"
