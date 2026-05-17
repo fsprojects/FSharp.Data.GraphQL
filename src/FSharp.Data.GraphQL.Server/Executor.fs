@@ -88,7 +88,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         let canonicalQuery = document.ToQueryString()
         let queryBytes = Encoding.UTF8.GetBytes canonicalQuery
         let hash = SHA256.HashData queryBytes
-        BinaryPrimitives.ReadInt32BigEndian(ReadOnlySpan<byte>(hash, 0, 4))
+        BinaryPrimitives.ReadInt32BigEndian(hash.AsSpan(0, 4))
 
     let rec runMiddlewares (phaseSel : IExecutorMiddleware -> ('ctx -> ('ctx -> 'res) -> 'res) option)
                            (initialCtx : 'ctx)
