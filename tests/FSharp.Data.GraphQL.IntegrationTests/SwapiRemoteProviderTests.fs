@@ -51,7 +51,18 @@ hero (id: "1000") {
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
         let friends = result.Data.Value.Hero.Value.Friends.Edges |> Array.map (fun e -> e.Node)
-        friends |> hasItems
+        friends.Length |> equals 4
+        friends[0].IsHuman() |> equals true
+        friends[0].AsHuman().Name |> equals (Some "Han Solo")
+        friends[1].IsHuman() |> equals true
+        friends[1].AsHuman().Name |> equals (Some "Leia Organa")
+        friends[1].AsHuman().HomePlanet |> equals (Some "Alderaan")
+        friends[2].IsDroid() |> equals true
+        friends[2].AsDroid().Name |> equals (Some "C-3PO")
+        friends[2].AsDroid().PrimaryFunction |> equals (Some "Protocol")
+        friends[3].IsDroid() |> equals true
+        friends[3].AsDroid().Name |> equals (Some "R2-D2")
+        friends[3].AsDroid().PrimaryFunction |> equals (Some "Astromech")
         result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
         let actual = normalize <| sprintf "%A" result.Data
         let expected = normalize <| """Some
@@ -168,7 +179,18 @@ module FileOperation =
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
         let friends = result.Data.Value.Hero.Value.Friends.Edges |> Array.map _.Node
-        friends |> hasItems
+        friends.Length |> equals 4
+        friends[0].IsHuman() |> equals true
+        friends[0].AsHuman().Name |> equals (Some "Han Solo")
+        friends[1].IsHuman() |> equals true
+        friends[1].AsHuman().Name |> equals (Some "Leia Organa")
+        friends[1].AsHuman().HomePlanet |> equals (Some "Alderaan")
+        friends[2].IsDroid() |> equals true
+        friends[2].AsDroid().Name |> equals (Some "C-3PO")
+        friends[2].AsDroid().PrimaryFunction |> equals (Some "Protocol")
+        friends[3].IsDroid() |> equals true
+        friends[3].AsDroid().Name |> equals (Some "R2-D2")
+        friends[3].AsDroid().PrimaryFunction |> equals (Some "Astromech")
         result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
         let actual = normalize <| sprintf "%A" result.Data
         let expected = normalize <| """Some

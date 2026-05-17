@@ -35,7 +35,7 @@ let readDestinationDocumentAsync ct (stream : FileStream) =
         try
             let! document = JsonDocument.ParseAsync (stream, cancellationToken = ct)
             return ValueSome document
-        with _ ->
+        with :? JsonException ->
             return ValueNone
     }
 
