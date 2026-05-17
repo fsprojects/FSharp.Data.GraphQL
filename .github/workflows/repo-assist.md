@@ -375,6 +375,12 @@ This is an **F# project** targeting **.NET 10**. Key details:
 - **Language**: F# 10 (prefer latest F# 10 features over old syntax)
 - **Build**: `dotnet build FSharp.Data.GraphQL.slnx`
 - **Test**: `dotnet test FSharp.Data.GraphQL.slnx`
+- **Code formatting**: After making any code changes, always run Fantomas **twice** on the modified files before committing:
+  ```
+  dotnet fantomas <changed files>
+  dotnet fantomas <changed files>
+  ```
+  Running twice ensures idempotency. If the second run produces any changes, the output is not stable — fix the code until both runs produce identical results.
 - **Code style**: Refer to `.github/copilot-instructions.md` for detailed F# coding conventions
 - **Preferences**: Prefer `voption` over `option`, prefer `task` CE over `async` CE
 - **Class construction**: Always use F# class initializers instead of property assignment

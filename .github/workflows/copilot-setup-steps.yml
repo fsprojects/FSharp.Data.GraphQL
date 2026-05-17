@@ -36,5 +36,6 @@ jobs:
 
       - name: Restore dependencies
         run: |
+          dotnet tool restore
           dotnet restore FSharp.Data.GraphQL.slnx
           dotnet restore FSharp.Data.GraphQL.Integration.slnx
