@@ -203,7 +203,7 @@ module Serialization =
 
     /// The default JSON serializer options used for request serialization when no custom options are provided.
     let defaultSerializerOptions =
-        lazy (FSharp.Data.GraphQL.Shared.Json.getSerializerOptions Seq.empty)
+        lazy FSharp.Data.GraphQL.Shared.Json.getSerializerOptions Seq.empty
 
     /// Converts special types (Uri, Upload, etc.) that System.Text.Json cannot handle natively
     /// into their JSON-serializable representations. Applied recursively to variable values.
