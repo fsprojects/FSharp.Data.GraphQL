@@ -21,6 +21,8 @@ module SchemaId =
     let private formatByteAsLowerHex (value : byte) =
         value.ToString("x2", System.Globalization.CultureInfo.InvariantCulture)
     
+    // Note: UnsafeRelaxedJsonEscaping is used here only for deterministic hashing,
+    // not for output to untrusted contexts. The JSON is never exposed externally.
     let private jsonOptions = JsonSerializerOptions(
         WriteIndented = false,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never,
@@ -36,6 +38,8 @@ module SchemaId =
     let fromIntrospectionSchema (introspectionSchema : IntrospectionSchema) =
         let json = JsonSerializer.Serialize(introspectionSchema, jsonOptions)
         let jsonBytes = Encoding.UTF8.GetBytes json
+        // Note: Creating SHA256 instance per call is acceptable since schema ID computation
+        // happens infrequently (typically once per schema during validation cache key creation)
         use sha256 = SHA256.Create()
         let hash = sha256.ComputeHash jsonBytes
         hash
