@@ -76,6 +76,7 @@
     <PackageReference Update="GraphQL.Server.Ui.Voyager" Version="8.*"  />
     <PackageReference Update="HotChocolate.AspNetCore" Version="15.*" />
     <PackageReference Update="Iced" Version="1.17.*" />
+    <PackageReference Update="Microsoft.AspNetCore.Mvc.Testing" Version="$(AspNetCoreVersion)" />
     <PackageReference Update="Microsoft.Azure.Cosmos" Version="3.*" />
     <PackageReference Update="Microsoft.CodeCoverage" Version="17.3.*" />
     <PackageReference Update="Microsoft.Data.Sqlite" Version="$(MicrosoftExtensionsVersion)" />

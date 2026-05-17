@@ -5,12 +5,13 @@ open System.Threading.Tasks
 open FSharp.Data.GraphQL
 open Helpers
 
-let [<Literal>] ServerUrl = "http://localhost:8085"
+let [<Literal>] IntrospectionPath = "integration-introspection.json"
 let [<Literal>] EmptyGuidAsString = "00000000-0000-0000-0000-000000000000"
 
-type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName = "File", explicitOptionalParameters = true>
+type Provider = GraphQLProvider<IntrospectionPath, uploadInputTypeName = "File", explicitOptionalParameters = true>
 
-let context = Provider.GetContext(ServerUrl)
+let connection = TestHosts.createIntegrationConnection ()
+let context = Provider.GetContext(serverUrl = TestHosts.integrationServerUrl, connectionFactory = fun () -> connection)
 
 type Input = Provider.Types.Input
 type InputField = Provider.Types.InputField
@@ -58,7 +59,7 @@ module SimpleOperation =
 
 [<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to execute a query without sending input field``() =
-    SimpleOperation.operation.Run()
+    SimpleOperation.operation.Run(context)
     |> SimpleOperation.validateResult None
 
 [<Fact; Trait("Execution", "Sync")>]
@@ -68,7 +69,7 @@ let ``Should be able to execute a query using context, without sending input fie
 
 [<Fact; Trait("Execution", "Async")>]
 let ``Should be able to execute a query without sending input field asynchronously``() =
-    SimpleOperation.operation.AsyncRun()
+    SimpleOperation.operation.AsyncRun(context)
     |> Async.RunSynchronously
     |> SimpleOperation.validateResult None
 
@@ -81,7 +82,7 @@ let ``Should be able to execute a query using context, without sending input fie
 [<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to execute a query sending an empty input field``() =
     let input = Input()
-    SimpleOperation.operation.Run(Some input)
+    SimpleOperation.operation.Run(context, Some input)
     |> SimpleOperation.validateResult (Some input)
 
 [<Fact; Trait("Execution", "Sync")>]
@@ -93,7 +94,7 @@ let ``Should be able to execute a query using context, sending an empty input fi
 [<Fact; Trait("Execution", "Async")>]
 let ``Should be able to execute a query without sending an empty input field asynchronously``() : Task = task {
     let input = Input()
-    let! result = SimpleOperation.operation.AsyncRun(Some input)
+    let! result = SimpleOperation.operation.AsyncRun(context, Some input)
     result |> SimpleOperation.validateResult (Some input)
 }
 
@@ -108,7 +109,7 @@ let ``Should be able to execute a query using context, sending an empty input fi
 let ``Should be able to execute a query sending an input field with single field``() =
     let single = InputField("A", 2, System.Uri("http://localhost:1234"), EmptyGuidAsString)
     let input = Input(Some single)
-    SimpleOperation.operation.Run(Some input)
+    SimpleOperation.operation.Run(context, Some input)
     |> SimpleOperation.validateResult (Some input)
 
 [<Fact; Trait("Execution", "Sync")>]
@@ -122,7 +123,7 @@ let ``Should be able to execute a query using context, sending an input field wi
 let ``Should be able to execute a query without sending an input field with single field asynchronously``() : Task = task {
     let single = InputField("A", 2, System.Uri("http://localhost:1234"),  EmptyGuidAsString)
     let input = Input(Some single)
-    let! result = SimpleOperation.operation.AsyncRun(Some input)
+    let! result = SimpleOperation.operation.AsyncRun(context, Some input)
     result |> SimpleOperation.validateResult (Some input)
 }
 
@@ -138,7 +139,7 @@ let ``Should be able to execute a query using context, sending an input field wi
 let ``Should be able to execute a query sending an input field with list field``() =
     let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), EmptyGuidAsString)|]
     let input = Input(list = Some list)
-    SimpleOperation.operation.Run(Some input)
+    SimpleOperation.operation.Run(context, Some input)
     |> SimpleOperation.validateResult (Some input)
 
 [<Fact; Trait("Execution", "Sync")>]
@@ -152,7 +153,7 @@ let ``Should be able to execute a query using context, sending an input field wi
 let ``Should be able to execute a query without sending an input field with list field asynchronously``() : Task = task {
     let list = [|InputField("A", 2, System.Uri("http://localhost:4321"),  EmptyGuidAsString)|]
     let input = Input(list = Some list)
-    let! result = SimpleOperation.operation.AsyncRun(Some input)
+    let! result = SimpleOperation.operation.AsyncRun(context, Some input)
     result |> SimpleOperation.validateResult (Some input)
 }
 
@@ -169,7 +170,7 @@ let ``Should be able to execute a query sending an input field with single and l
     let single = InputField("A", 2, System.Uri("http://localhost:1234"), EmptyGuidAsString)
     let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), EmptyGuidAsString)|]
     let input = Input(Some single, Some list)
-    SimpleOperation.operation.Run(Some input)
+    SimpleOperation.operation.Run(context, Some input)
     |> SimpleOperation.validateResult (Some input)
 
 [<Fact; Trait("Execution", "Sync")>]
@@ -185,7 +186,7 @@ let ``Should be able to execute a query without sending an input field with sing
     let single = InputField("A", 2, System.Uri("http://localhost:1234"), EmptyGuidAsString)
     let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), EmptyGuidAsString)|]
     let input = Input(Some single, Some list)
-    let! result = SimpleOperation.operation.AsyncRun(Some input)
+    let! result = SimpleOperation.operation.AsyncRun(context, Some input)
     result |> SimpleOperation.validateResult (Some input)
 }
 
@@ -220,13 +221,13 @@ module SingleRequiredUploadOperation =
 [<Fact>]
 let ``Should be able to execute a single required upload``() =
     let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
-    SingleRequiredUploadOperation.operation.Run(file.MakeUpload(file.Name))
+    SingleRequiredUploadOperation.operation.Run(context, file.MakeUpload(file.Name))
     |> SingleRequiredUploadOperation.validateResult file
 
 [<Fact>]
 let ``Should be able to execute a single required upload asynchronously``() : Task = task {
     let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
-    let! result = SingleRequiredUploadOperation.operation.AsyncRun(file.MakeUpload())
+    let! result = SingleRequiredUploadOperation.operation.AsyncRun(context, file.MakeUpload())
     result |> SingleRequiredUploadOperation.validateResult file
 }
 
@@ -254,24 +255,24 @@ module SingleOptionalUploadOperation =
 [<Fact>]
 let ``Should be able to execute a single optional upload by passing a file``() =
     let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
-    SingleOptionalUploadOperation.operation.Run(file.MakeUpload() |> Some)
+    SingleOptionalUploadOperation.operation.Run(context, file.MakeUpload() |> Some)
     |> SingleOptionalUploadOperation.validateResult (Some file)
 
 [<Fact>]
 let ``Should be able to execute a single optional upload by passing a file, asynchronously``() : Task = task {
     let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
-    let! result = SingleOptionalUploadOperation.operation.AsyncRun(file.MakeUpload("test") |> Some)
+    let! result = SingleOptionalUploadOperation.operation.AsyncRun(context, file.MakeUpload("test") |> Some)
     result |> SingleOptionalUploadOperation.validateResult (Some file)
 }
 
 [<Fact>]
 let ``Should be able to execute a single optional upload by not passing a file``() =
-    SingleOptionalUploadOperation.operation.Run()
+    SingleOptionalUploadOperation.operation.Run(context)
     |> SingleOptionalUploadOperation.validateResult None
 
 [<Fact>]
 let ``Should be able to execute a single optional upload by not passing a file asynchronously``() : Task = task {
-    let! result = SingleOptionalUploadOperation.operation.AsyncRun()
+    let! result = SingleOptionalUploadOperation.operation.AsyncRun(context)
     result |> SingleOptionalUploadOperation.validateResult None
 }
 
@@ -300,7 +301,7 @@ let ``Should be able to execute a multiple required upload``() =
     let files =
         [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
-    RequiredMultipleUploadOperation.operation.Run(files |> Array.map (fun f -> f.MakeUpload()))
+    RequiredMultipleUploadOperation.operation.Run(context, files |> Array.map (fun f -> f.MakeUpload()))
     |> RequiredMultipleUploadOperation.validateResult files
 
 [<Fact>]
@@ -308,7 +309,7 @@ let ``Should be able to execute a multiple required upload asynchronously``() : 
     let files =
         [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
-    let! result = RequiredMultipleUploadOperation.operation.AsyncRun(files |> Array.map (fun f -> f.MakeUpload()))
+    let! result = RequiredMultipleUploadOperation.operation.AsyncRun(context, files |> Array.map (fun f -> f.MakeUpload()))
     result |> RequiredMultipleUploadOperation.validateResult files
 }
 
@@ -337,7 +338,7 @@ let ``Should be able to execute a multiple upload``() =
     let files =
         [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
-    OptionalMultipleUploadOperation.operation.Run(files |> Array.map (fun f -> f.MakeUpload()) |> Some)
+    OptionalMultipleUploadOperation.operation.Run(context, files |> Array.map (fun f -> f.MakeUpload()) |> Some)
     |> OptionalMultipleUploadOperation.validateResult (Some files)
 
 [<Fact>]
@@ -345,18 +346,18 @@ let ``Should be able to execute a multiple upload asynchronously``() : Task = ta
     let files =
         [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
-    let! result = OptionalMultipleUploadOperation.operation.AsyncRun((files |> Array.map _.MakeUpload()) |> Some)
+    let! result = OptionalMultipleUploadOperation.operation.AsyncRun(context, (files |> Array.map _.MakeUpload()) |> Some)
     result |> OptionalMultipleUploadOperation.validateResult (Some files)
 }
 
 [<Fact>]
 let ``Should be able to execute a multiple upload by sending no uploads``() =
-    OptionalMultipleUploadOperation.operation.Run()
+    OptionalMultipleUploadOperation.operation.Run(context)
     |> OptionalMultipleUploadOperation.validateResult None
 
 [<Fact>]
 let ``Should be able to execute a multiple upload asynchronously by sending no uploads``() : Task = task {
-    let! result = OptionalMultipleUploadOperation.operation.AsyncRun()
+    let! result = OptionalMultipleUploadOperation.operation.AsyncRun(context)
     result |> OptionalMultipleUploadOperation.validateResult None
 }
 
@@ -385,7 +386,7 @@ let ``Should be able to execute a multiple optional upload``() =
     let files =
         [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
-    OptionalMultipleOptionalUploadOperation.operation.Run((files |> Array.map (Option.map _.MakeUpload())) |> Some)
+    OptionalMultipleOptionalUploadOperation.operation.Run(context, (files |> Array.map (Option.map _.MakeUpload())) |> Some)
     |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
 
 [<Fact>]
@@ -393,18 +394,18 @@ let ``Should be able to execute a multiple optional upload asynchronously``() : 
     let files =
         [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
-    let! result = OptionalMultipleOptionalUploadOperation.operation.AsyncRun((files |> Array.map (Option.map _.MakeUpload())) |> Some)
+    let! result = OptionalMultipleOptionalUploadOperation.operation.AsyncRun(context, (files |> Array.map (Option.map _.MakeUpload())) |> Some)
     result |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
 }
 
 [<Fact>]
 let ``Should be able to execute a multiple optional upload by sending no uploads``() =
-    OptionalMultipleOptionalUploadOperation.operation.Run()
+    OptionalMultipleOptionalUploadOperation.operation.Run(context)
     |> OptionalMultipleOptionalUploadOperation.validateResult None
 
 [<Fact>]
 let ``Should be able to execute a multiple optional upload asynchronously by sending no uploads``() : Task = task {
-    let! result = OptionalMultipleOptionalUploadOperation.operation.AsyncRun()
+    let! result = OptionalMultipleOptionalUploadOperation.operation.AsyncRun(context)
     result |> OptionalMultipleOptionalUploadOperation.validateResult None
 }
 
@@ -415,7 +416,7 @@ let ``Should be able to execute a multiple optional upload by sending some uploa
            None
            Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" }
            None |]
-    OptionalMultipleOptionalUploadOperation.operation.Run(files |> Array.map (Option.map _.MakeUpload()) |> Some)
+    OptionalMultipleOptionalUploadOperation.operation.Run(context, files |> Array.map (Option.map _.MakeUpload()) |> Some)
     |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
 
 [<Fact>]
@@ -425,7 +426,7 @@ let ``Should be able to execute a multiple optional upload asynchronously by sen
            None
            Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" }
            None |]
-    let! result = OptionalMultipleOptionalUploadOperation.operation.AsyncRun(files |> Array.map (Option.map _.MakeUpload()) |> Some)
+    let! result = OptionalMultipleOptionalUploadOperation.operation.AsyncRun(context, files |> Array.map (Option.map _.MakeUpload()) |> Some)
     result |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
 }
 
@@ -482,7 +483,7 @@ let ``Should be able to upload files inside another input type``() =
                                        multiple = Array.map makeUpload request.Multiple,
                                        nullableMultiple = Some (Array.map makeUpload request.NullableMultiple.Value),
                                        nullableMultipleNullable = Some (Array.map (Option.map makeUpload) request.NullableMultipleNullable.Value))
-    UploadRequestOperation.operation.Run(input)
+    UploadRequestOperation.operation.Run(context, input)
     |> UploadRequestOperation.validateResult request
 
 module UploadComplexOperation =
@@ -503,7 +504,7 @@ module UploadComplexOperation =
 let ``Should be able to upload file using complex input object`` () =
     let file = { Name = "complex.txt"; ContentType = "text/plain"; Content = "Complex input object file content" }
     let input = UploadComplexOperation.InputFile(file = file.MakeUpload())
-    UploadComplexOperation.operation.Run(input)
+    UploadComplexOperation.operation.Run(context, input)
     |> UploadComplexOperation.validateResult file
 
 [<Fact>]
@@ -517,7 +518,7 @@ let ``Should be able to upload file using complex input object with context`` ()
 let ``Should be able to upload file using complex input object asynchronously`` () : Task = task {
     let file = { Name = "complex_async.txt"; ContentType = "text/plain"; Content = "Complex input object async file content" }
     let input = UploadComplexOperation.InputFile(file = file.MakeUpload())
-    let! result = UploadComplexOperation.operation.AsyncRun(input)
+    let! result = UploadComplexOperation.operation.AsyncRun(context, input)
     result |> UploadComplexOperation.validateResult file
 }
 

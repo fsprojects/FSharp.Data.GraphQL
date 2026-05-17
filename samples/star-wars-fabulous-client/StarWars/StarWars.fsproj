@@ -4,7 +4,7 @@
     <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="4.5.2" />
+    <PackageReference Update="FSharp.Core" VersionOverride="4.5.2" />
     <!-- workaround for VSMac bug https://github.com/mono/monodevelop/pull/5137 -->
   </ItemGroup>
   <ItemGroup>
@@ -18,14 +18,14 @@
     <Compile Include="Style.fs" />
     <Compile Include="Common.fs" />
     <None Include="queries\FetchCharacters.graphql" />
-    <PackageReference Include="Xamarin.Forms" Version="4.0.0.425677" />
-    <PackageReference Include="Xamarin.Essentials" Version="1.0.0" />
-    <PackageReference Include="Fabulous.Core" Version="0.35.0" />
-    <PackageReference Include="Fabulous.CustomControls" Version="0.35.0" />
-    <PackageReference Include="Fabulous.LiveUpdate" Version="0.35.0" />
-    <PackageReference Include="FSharp.Core" Version="4.6.2" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-    <PackageReference Include="FSharp.Data.GraphQL.Client" Version="1.0.1" />
+    <PackageReference Include="Xamarin.Forms" VersionOverride="4.0.0.425677" />
+    <PackageReference Include="Xamarin.Essentials" VersionOverride="1.0.0" />
+    <PackageReference Include="Fabulous.Core" VersionOverride="0.35.0" />
+    <PackageReference Include="Fabulous.CustomControls" VersionOverride="0.35.0" />
+    <PackageReference Include="Fabulous.LiveUpdate" VersionOverride="0.35.0" />
+    <PackageReference Include="FSharp.Core" VersionOverride="4.6.2" />
+    <PackageReference Include="Newtonsoft.Json" VersionOverride="13.0.1" />
+    <PackageReference Include="FSharp.Data.GraphQL.Client" VersionOverride="1.0.1" />
     <Compile Include="CharacterDetailPage.fs" />
     <Compile Include="MainPage.fs" />
     <Compile Include="StarWars.fs" />

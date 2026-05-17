@@ -2,8 +2,6 @@ module Program
 
 open System
 open System.IO
-open System.Net.Http
-open System.Text.Json
 
 open Fake.Core
 open Fake.Core.TargetOperators
@@ -123,26 +121,6 @@ let runTests (project : string) (args : string) =
             |> _.WithCommon(DotNetCli.setVersion))
         project
 
-let starWarsServerStream = StreamRef.Empty
-
-let [<Literal>] StartStarWarsServerTarget = "StartStarWarsServer"
-Target.create StartStarWarsServerTarget <| fun _ ->
-    Target.activateFinal "StopStarWarsServer"
-
-    let project =
-        "samples"
-        </> "star-wars-api"
-        </> "star-wars-api.fsproj"
-
-    startGraphQLServer project 8086 starWarsServerStream
-
-let [<Literal>] StopStarWarsServerTarget = "StopStarWarsServer"
-Target.createFinal StopStarWarsServerTarget <| fun _ ->
-    try
-        starWarsServerStream.Value.Write ([| 0uy |], 0, 1)
-    with e ->
-        printfn "%s" e.Message
-
 let integrationTestServerProjectPath =
     "tests"
     </> "FSharp.Data.GraphQL.IntegrationTests.Server"
@@ -179,57 +157,34 @@ Target.createFinal StopIntegrationServerTarget <| fun _ ->
     with e ->
         printfn "%s" e.Message
 
+let integrationTestsProjectPath =
+    "tests"
+    </> "FSharp.Data.GraphQL.IntegrationTests"
+    </> "FSharp.Data.GraphQL.IntegrationTests.fsproj"
+
 let [<Literal>] UpdateIntrospectionFileTarget = "UpdateIntrospectionFile"
 Target.create UpdateIntrospectionFileTarget <| fun _ ->
-    let client = new HttpClient ()
-    (task {
-        let! result = client.GetAsync ("http://localhost:8086")
-        let! contentStream = result.Content.ReadAsStreamAsync ()
-        let! jsonDocument = JsonDocument.ParseAsync contentStream
-        let file =
-            new FileStream ("tests/FSharp.Data.GraphQL.IntegrationTests/introspection.json", FileMode.Create, FileAccess.Write, FileShare.None)
-        let encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-        let jsonWriterOptions = JsonWriterOptions (Indented = true, Encoder = encoder)
-        let writer = new Utf8JsonWriter (file, jsonWriterOptions)
-        jsonDocument.WriteTo writer
-        do! writer.FlushAsync ()
-        do! writer.DisposeAsync ()
-        do! file.DisposeAsync ()
-        result.Dispose ()
+    integrationTestsProjectPath
+    |> DotNet.test (fun options -> {
+        options with
+            Framework = Some DotNetMoniker
+            Configuration = configuration
+            Common = { DotNetCli.setVersion options.Common with CustomParams = Some "--filter FullyQualifiedName~IntrospectionUpdateTests" }
+            MSBuildParams = {
+                options.MSBuildParams with
+                    DisableInternalBinLog = true
+                    Verbosity = Some Normal
+            }
     })
-        .Wait ()
-    client.Dispose ()
 
 let unitTestsProjectPath =
     "tests"
     </> "FSharp.Data.GraphQL.Tests"
     </> "FSharp.Data.GraphQL.Tests.fsproj"
 
-let integrationTestsProjectPath =
-    "tests"
-    </> "FSharp.Data.GraphQL.IntegrationTests"
-    </> "FSharp.Data.GraphQL.IntegrationTests.fsproj"
-
-let [<Literal>] BuildIntegrationTestsTarget = "BuildIntegrationTests"
-Target.create BuildIntegrationTestsTarget <| fun _ ->
-    integrationTestsProjectPath
-    |> DotNet.build (fun options -> {
-        options with
-            Configuration = configuration
-            MSBuildParams = {
-                options.MSBuildParams with
-                    DisableInternalBinLog = true
-            }
-            Common = DotNetCli.setVersion options.Common
-    })
-
 let [<Literal>] RunUnitTestsTarget = "RunUnitTests"
 Target.create RunUnitTestsTarget <| fun _ ->
     runTests unitTestsProjectPath ""
-
-let [<Literal>] RunIntegrationTestsTarget = "RunIntegrationTests"
-Target.create RunIntegrationTestsTarget <| fun _ ->
-    runTests integrationTestsProjectPath "" //"--filter Execution=Sync"
 
 let prepareDocGen () =
     Shell.rm "docs/release-notes.md"
@@ -406,12 +361,7 @@ Target.create "PackAndPush" ignore
 ==> RestoreTarget
 ==> BuildTarget
 ==> RunUnitTestsTarget
-==> StartStarWarsServerTarget
-==> BuildIntegrationTestServerTarget
-==> StartIntegrationServerTarget
 ==> UpdateIntrospectionFileTarget
-==> BuildIntegrationTestsTarget
-==> RunIntegrationTestsTarget
 ==> "All"
 =?> (GenerateDocsTarget, Environment.environVar "GITHUB_ACTIONS" = "True")
 |> ignore
