@@ -2,6 +2,7 @@ namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open System
 open System.Text
+open System.Collections.Generic
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 
@@ -135,7 +136,19 @@ module Schema =
                     typedef = StructNullable OutputType,
                     description = "Enters an input type and get it back.",
                     args = [ Define.Input("input", Nullable InputType, description = "The input to be echoed as an output.") ],
-                    resolve = fun ctx _ -> ctx.TryArg("input")) ])
+                    resolve = fun ctx _ -> ctx.TryArg("input"))
+                  Define.Field(
+                      name = "alwaysError",
+                      typedef = Nullable StringType,
+                      description = "Always produces an execution error for integration tests.",
+                      args = [],
+                      resolve =
+                          fun _ _ ->
+                              let extensions = Dictionary<string, obj> 2
+                              extensions["code"] <- box "OPERATION_ERROR_TEST"
+                              extensions["severity"] <- box 7
+                              raise (GQLMessageException("Always fails for tests", extensions))
+                  ) ])
 
     let InputFileObject = Define.InputObject<InputFile>(
         name = "InputFile",

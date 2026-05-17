@@ -22,6 +22,7 @@
     </None>
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="Helpers.fs" />
+    <Compile Include="OperationErrorTests.fs" />
     <Compile Include="ReservedScalarNameProviderTests.fs" />
     <Compile Include="LocalProviderTests.fs" />
     <Compile Include="LocalProviderWithOptionalParametersOnlyTests.fs" />
