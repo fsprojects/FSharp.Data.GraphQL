@@ -8,6 +8,7 @@ open System.Collections
 open System.Collections.Generic
 open System.Net.Http
 open System.Reflection
+open System.Text.Json
 open System.Text.Json.Serialization
 open FSharp.Core
 open FSharp.Data.GraphQL
@@ -333,7 +334,7 @@ module internal ProvidedOperation =
                     let serverUrl = info.ServerUrl
                     let headerNames = info.HttpHeaders |> Seq.map fst |> Array.ofSeq
                     let headerValues = info.HttpHeaders |> Seq.map snd |> Array.ofSeq
-                    <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues; Connection = new GraphQLClientConnection() } @@>
+                    <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues; Connection = new GraphQLClientConnection(); JsonSerializerOptions = Serialization.defaultSerializerOptions.Value } @@>
                 | None -> <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
             // We need to use the combination strategy to generate overloads for variables in the Run/AsyncRun methods.
             // The strategy follows the same principle with ProvidedRecord constructor overloads,
@@ -403,7 +404,8 @@ module internal ProvidedOperation =
                                   HttpHeaders = context.HttpHeaders
                                   OperationName = Option.ofObj operationName
                                   Query = actualQuery
-                                  Variables = %%variables }
+                                  Variables = %%variables
+                                  JsonSerializerOptions = context.JsonSerializerOptions }
                             let response =
                                 if shouldUseMultipartRequest
                                 then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
@@ -448,7 +450,8 @@ module internal ProvidedOperation =
                                   HttpHeaders = context.HttpHeaders
                                   OperationName = Option.ofObj operationName
                                   Query = actualQuery
-                                  Variables = %%variables }
+                                  Variables = %%variables
+                                  JsonSerializerOptions = context.JsonSerializerOptions }
                             async {
                                 let! ct = Async.CancellationToken
                                 let! response =
@@ -751,7 +754,8 @@ module internal Provider =
                                     | _ -> ProvidedParameter("serverUrl", typeof<string>)
                                 let httpHeaders = ProvidedParameter("httpHeaders", typeof<seq<string * string>>, optionalValue = null)
                                 let connectionFactory = ProvidedParameter("connectionFactory", typeof<unit -> GraphQLClientConnection>, optionalValue = null)
-                                [serverUrl; httpHeaders; connectionFactory]
+                                let jsonSerializerOptions = ProvidedParameter("jsonSerializerOptions", typeof<JsonSerializerOptions>, optionalValue = null)
+                                [serverUrl; httpHeaders; connectionFactory; jsonSerializerOptions]
                             let defaultHttpHeadersExpr =
                                 let names = httpHeaders |> Seq.map fst |> Array.ofSeq
                                 let values = httpHeaders |> Seq.map snd |> Array.ofSeq
@@ -766,7 +770,11 @@ module internal Provider =
                                         match %%args.[2] : unit -> GraphQLClientConnection with
                                         | argHeaders when obj.Equals(argHeaders, null) -> fun () -> new GraphQLClientConnection()
                                         | argHeaders -> argHeaders
-                                    { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders; Connection = connectionFactory() } @@>
+                                    let jsonOptions =
+                                        match %%args.[3] : JsonSerializerOptions with
+                                        | null -> Serialization.defaultSerializerOptions.Value
+                                        | opts -> opts
+                                    { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders; Connection = connectionFactory(); JsonSerializerOptions = jsonOptions } @@>
                             ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
                         let operationMethodDef =
                             let staticParams =
