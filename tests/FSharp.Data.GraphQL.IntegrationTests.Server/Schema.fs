@@ -144,9 +144,11 @@ module Schema =
                       args = [],
                       resolve =
                           fun _ _ ->
-                              let extensions = Dictionary<string, obj> 2
-                              extensions["code"] <- box "OPERATION_ERROR_TEST"
-                              extensions["severity"] <- box 7
+                              let extensions =
+                                  Dictionary<string, obj>(
+                                      [ KeyValuePair("code", box "OPERATION_ERROR_TEST")
+                                        KeyValuePair("severity", box 7) ]
+                                  )
                               raise (GQLMessageException("Always fails for tests", extensions))
                   ) ])
 
