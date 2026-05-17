@@ -603,3 +603,75 @@ let ``Execution handles errors: additional error added and when null returned fr
     ensureRequestError result <| fun errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         errors |> equals expectedErrors
+
+type PersonWithGuidId =
+    { Id: Guid
+      Name: string }
+
+type PersonWithInt64Id =
+    { Id: int64
+      Name: string }
+
+[<Fact>]
+let ``Execution handles ID scalar: serializes Guid field via AutoField`` () =
+    let id1 = Guid.Parse "d6c684d9-aaaa-4e88-bbb2-0bb584f1661d"
+    let id2 = Guid.Parse "d6c684d9-bbbb-4e88-bbb2-0bb584f1661d"
+    let people =
+        [ { PersonWithGuidId.Id = id1; Name = "Person A" }
+          { PersonWithGuidId.Id = id2; Name = "Person B" } ]
+
+    let PersonType =
+        Define.Object<PersonWithGuidId>(
+            "Person",
+            [ Define.AutoField("id", IDType)
+              Define.AutoField("name", StringType) ])
+
+    let QueryRoot =
+        Define.Object("Query",
+            [ Define.Field("people", ListOf PersonType, fun _ () -> people) ])
+
+    let schema = Schema(query = QueryRoot)
+    let executor = Executor(schema)
+
+    let result = sync <| executor.AsyncExecute("{people{id name}}", getMockInputContext)
+    let expected =
+        NameValueLookup.ofList [
+            "people", upcast [
+                box <| NameValueLookup.ofList [ "id", box (string id1); "name", box "Person A" ]
+                box <| NameValueLookup.ofList [ "id", box (string id2); "name", box "Person B" ]
+            ]
+        ]
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+
+[<Fact>]
+let ``Execution handles ID scalar: serializes int64 field via AutoField`` () =
+    let people =
+        [ { PersonWithInt64Id.Id = 1L; Name = "Person A" }
+          { PersonWithInt64Id.Id = 2L; Name = "Person B" } ]
+
+    let PersonType =
+        Define.Object<PersonWithInt64Id>(
+            "Person2",
+            [ Define.AutoField("id", IDType)
+              Define.AutoField("name", StringType) ])
+
+    let QueryRoot =
+        Define.Object("Query",
+            [ Define.Field("people", ListOf PersonType, fun _ () -> people) ])
+
+    let schema = Schema(query = QueryRoot)
+    let executor = Executor(schema)
+
+    let result = sync <| executor.AsyncExecute("{people{id name}}", getMockInputContext)
+    let expected =
+        NameValueLookup.ofList [
+            "people", upcast [
+                box <| NameValueLookup.ofList [ "id", box "1"; "name", box "Person A" ]
+                box <| NameValueLookup.ofList [ "id", box "2"; "name", box "Person B" ]
+            ]
+        ]
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
