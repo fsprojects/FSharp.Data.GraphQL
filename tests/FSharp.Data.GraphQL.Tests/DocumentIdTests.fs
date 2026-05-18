@@ -7,6 +7,30 @@ open Xunit
 open FSharp.Data.GraphQL
 
 [<Fact>]
+let ``DocumentId.fromCanonicalQueryUnsafe produces deterministic hash`` () =
+    let query = "query Example { a b }"
+    let hash1 = DocumentId.fromCanonicalQueryUnsafe query
+    let hash2 = DocumentId.fromCanonicalQueryUnsafe query
+    equals hash1 hash2
+    equals 64 hash1.Length // SHA-256 hex string is 64 chars
+
+[<Fact>]
+let ``DocumentId.fromCanonicalQueryUnsafe produces different hashes for different queries`` () =
+    let query1 = "query Example1 { a }"
+    let query2 = "query Example2 { b }"
+    let hash1 = DocumentId.fromCanonicalQueryUnsafe query1
+    let hash2 = DocumentId.fromCanonicalQueryUnsafe query2
+    notEquals hash1 hash2
+
+[<Fact>]
+let ``DocumentId.fromCanonicalQueryUnsafe handles empty string`` () =
+    let query = ""
+    let hash = DocumentId.fromCanonicalQueryUnsafe query
+    equals 64 hash.Length
+    // SHA-256 of empty string
+    equals "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" hash
+
+[<Fact>]
 let ``DocumentId.fromCanonicalQuery produces deterministic hash`` () =
     let query = "query Example { a b }"
     let hash1 = DocumentId.fromCanonicalQuery query

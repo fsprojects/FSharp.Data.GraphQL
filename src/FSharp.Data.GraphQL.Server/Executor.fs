@@ -142,7 +142,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         eval (executionPlan, data, variables, getInputContext)
 
     let createExecutionPlan (ast: Document, operationName: string option, meta : Metadata) =
-        let documentId = DocumentId.fromCanonicalQuery (ast.ToQueryString())
+        let documentId = DocumentId.fromCanonicalQueryUnsafe (ast.ToQueryString())
         result {
             match findOperation ast operationName with
             | Some operation ->
