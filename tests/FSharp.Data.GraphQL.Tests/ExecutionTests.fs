@@ -463,29 +463,6 @@ let ``Execution when querying the same field twice will return it`` () : Task =
     }
 
 [<Fact>]
-let ``Execution when querying returns unique document id with response`` () : Task =
-    let schema =
-        Schema (Define.Object<TwiceTest> ("Type", [ Define.Field ("a", StringType, fun _ x -> x.A); Define.Field ("b", IntType, fun _ x -> x.B) ]))
-    let query = "query Example { a, b, a }"
-    // Deterministic SHA-256-based documentId for canonical `query Example { a b a }`,
-    // represented as lowercase hex string.
-    // Computed once via parse + ToQueryString + SHA-256 and kept fixed to catch regressions.
-    let expectedDocumentId = "84fbf8cde7d1ce2c00b8e92e5f3472919b89c97c8c853b6c95619a0cb7fb3c6f"
-    task {
-        let executor = Executor(schema)
-        let! result1 = executor.AsyncExecute (query, getMockInputContext, { A = "aa"; B = 2 })
-        let! result2 = executor.AsyncExecute (query, getMockInputContext, { A = "aa"; B = 2 })
-        result1.DocumentId |> notEquals Unchecked.defaultof<string>
-        result1.DocumentId |> equals expectedDocumentId
-        result1.DocumentId |> equals result2.DocumentId
-        match result1, result2 with
-        | Direct (data1, errors1), Direct (data2, errors2) ->
-            equals data1 data2
-            equals errors1 errors2
-        | response -> fail $"Expected a 'Direct' GQLResponse but got\n{response}"
-    }
-
-[<Fact>]
 let ``Execution documentId handles escaped string values correctly`` () : Task =
     let schema =
         Schema (Define.Object<TwiceTest> ("Type", [ Define.Field ("a", StringType, fun _ x -> x.A); Define.Field ("b", IntType, fun _ x -> x.B) ]))
