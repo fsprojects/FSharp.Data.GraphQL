@@ -328,7 +328,7 @@ type Document with
             | None -> failwithf "Can not get information about fragment \"%s\". Fragment spread definition was not found in the query." name
         let operations =
             this.Definitions
-            |> List_choose (function
+            |> List.choose (function
                 | FragmentDefinition _ -> None
                 | OperationDefinition def -> Some def)
             |> List.map (fun operation -> operation.Name, operation)

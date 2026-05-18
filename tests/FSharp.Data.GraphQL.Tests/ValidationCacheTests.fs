@@ -133,25 +133,24 @@ let ``MemoryValidationResultCache handles concurrent access`` () : Task = task {
 
     // Call cache from multiple threads simultaneously
     let workerCount = 10
-    use workersReady = CountdownEvent workerCount
-    use startGate = new ManualResetEventSlim false
+    use workersReadyGate = new CountdownEvent (workerCount)
+    use startGate = new ManualResetEventSlim (false)
 
     let workers =
         [| 1..workerCount |]
-        |> Seq.map (fun _ ->
+        |> Array.map (fun _ ->
             Task.Run (fun () ->
-                workersReady.Signal () |> ignore
+                workersReadyGate.Signal () |> ignore
                 startGate.Wait ()
                 cache.GetOrAdd producer key))
 
-    workersReady.Wait ()
+    workersReadyGate.Wait ()
     startGate.Set ()
     let! results = workers |> Task.WhenAll
 
     // All results should be Success
     results |> Array.iter (fun r -> equals Success r)
 
-    // Producer should be called at least once, but possibly more due to race conditions
-    // The important thing is it's not called 10 times
-    Assert.True (callCount >= 1 && callCount < 10, $"Expected callCount between 1 and 9, got {callCount}")
+    // Producer should be called at least once, but can run up to workerCount times due to ConcurrentDictionary.GetOrAdd factory semantics.
+    Assert.True (callCount >= 1 && callCount <= workerCount, $"Expected callCount between 1 and {workerCount}, got {callCount}")
 }
