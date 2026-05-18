@@ -108,7 +108,7 @@ type Document with
     member x.ToQueryString ([<Optional; DefaultParameterValue(QueryStringPrintingOptions.None)>] options : QueryStringPrintingOptions) =
         let sb = PaddedStringBuilder ()
         let escapeGraphQLString (s : string) =
-            let escaped = StringBuilder (s.Length + 2)
+            let escaped = StringBuilder (s.Length + s.Length / 4 + 2)
             escaped.Append ('"') |> ignore
             for c in s do
                 let appendStr =
@@ -328,7 +328,7 @@ type Document with
             | None -> failwithf "Can not get information about fragment \"%s\". Fragment spread definition was not found in the query." name
         let operations =
             this.Definitions
-            |> List.choose (function
+            |> List_choose (function
                 | FragmentDefinition _ -> None
                 | OperationDefinition def -> Some def)
             |> List.map (fun operation -> operation.Name, operation)
