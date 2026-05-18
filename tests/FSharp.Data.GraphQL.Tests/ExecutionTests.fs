@@ -19,23 +19,23 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 
 type TestSubject = {
-    a: string
-    b: string
-    c: string
-    d: string
-    e: string
-    f: string
-    deep: DeepTestSubject
-    pic: int voption -> string
-    promise: Async<TestSubject>
+    a : string
+    b : string
+    c : string
+    d : string
+    e : string
+    f : string
+    deep : DeepTestSubject
+    pic : int voption -> string
+    promise : Async<TestSubject>
 }
 
 and DeepTestSubject = {
-    a: string
-    b: string
-    c: string option
-    d: string voption
-    l: string option list
+    a : string
+    b : string
+    c : string option
+    d : string voption
+    l : string option list
 }
 
 and DUArg =
