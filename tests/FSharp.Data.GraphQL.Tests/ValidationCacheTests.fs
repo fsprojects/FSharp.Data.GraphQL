@@ -133,18 +133,18 @@ let ``MemoryValidationResultCache handles concurrent access`` () : Task = task {
 
     // Call cache from multiple threads simultaneously
     let workerCount = 10
-    use ready = CountdownEvent workerCount
+    use workersReady = CountdownEvent workerCount
     use startGate = new ManualResetEventSlim false
 
     let workers =
         [| 1..workerCount |]
         |> Seq.map (fun _ ->
             Task.Run (fun () ->
-                ready.Signal () |> ignore
+                workersReady.Signal () |> ignore
                 startGate.Wait ()
                 cache.GetOrAdd producer key))
 
-    ready.Wait ()
+    workersReady.Wait ()
     startGate.Set ()
     let! results = workers |> Task.WhenAll
 
