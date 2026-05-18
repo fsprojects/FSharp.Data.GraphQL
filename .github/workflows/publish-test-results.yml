@@ -32,7 +32,8 @@ jobs:
       with:
         run_id: ${{ github.event.workflow_run.id }}
         path: test-results
-        pattern: test-results-*
+        name: ^test-results-.*
+        name_is_regexp: true
         if_no_artifact_found: warn
 
     - name: Resolve event file path
@@ -54,6 +55,7 @@ jobs:
       uses: EnricoMi/publish-unit-test-result-action@v2
       with:
         commit: ${{ github.event.workflow_run.head_sha }}
+        comment_mode: always
         event_file: ${{ steps.event_file.outputs.path }}
         event_name: ${{ github.event.workflow_run.event }}
         files: "test-results/**/*.trx"
