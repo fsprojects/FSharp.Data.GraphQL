@@ -344,12 +344,7 @@ let ``Should generate information map correctly`` () =
                          Name = "friends"
                          Alias = ValueNone
                          Fields = [
-                             FragmentField {
-                                 Name = "primaryFunction"
-                                 Alias = ValueNone
-                                 TypeCondition = "Droid"
-                                 Fields = []
-                             }
+                             FragmentField { Name = "primaryFunction"; Alias = ValueNone; TypeCondition = "Droid"; Fields = [] }
                              FragmentField { Name = "id"; Alias = ValueNone; TypeCondition = "Droid"; Fields = [] }
                              FragmentField { Name = "homePlanet"; Alias = ValueNone; TypeCondition = "Human"; Fields = [] }
                              FragmentField { Name = "id"; Alias = ValueNone; TypeCondition = "Human"; Fields = [] }

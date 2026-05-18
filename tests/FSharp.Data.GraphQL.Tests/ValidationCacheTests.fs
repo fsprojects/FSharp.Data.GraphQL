@@ -3,10 +3,11 @@
 
 module FSharp.Data.GraphQL.Tests.ValidationCacheTests
 
+open System.Threading
+open System.Threading.Tasks
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Validation
-open System.Threading
 
 [<Fact>]
 let ``MemoryValidationResultCache caches results for same key`` () =
@@ -120,7 +121,7 @@ let ``MemoryValidationResultCache caches error results`` () =
     | Success -> fail "Expected ValidationError"
 
 [<Fact>]
-let ``MemoryValidationResultCache handles concurrent access`` () =
+let ``MemoryValidationResultCache handles concurrent access`` () : Task = task {
     let cache = MemoryValidationResultCache () :> IValidationResultCache
     let mutable callCount = 0
     let producer () =
@@ -131,11 +132,10 @@ let ``MemoryValidationResultCache handles concurrent access`` () =
     let key = { DocumentId = "doc1"; SchemaId = 1 }
 
     // Call cache from multiple threads simultaneously
-    let tasks =
-        [ 1..10 ]
-        |> List.map (fun _ -> async { return cache.GetOrAdd producer key })
-
-    let results = tasks |> Async.Parallel |> Async.RunSynchronously
+    let! results =
+        [| 1..10 |]
+        |> Seq.map (fun _ -> task { return cache.GetOrAdd producer key })
+        |> Task.WhenAll
 
     // All results should be Success
     results |> Array.iter (fun r -> equals Success r)
@@ -143,3 +143,4 @@ let ``MemoryValidationResultCache handles concurrent access`` () =
     // Producer should be called at least once, but possibly more due to race conditions
     // The important thing is it's not called 10 times
     Assert.True (callCount >= 1 && callCount < 10, $"Expected callCount between 1 and 9, got {callCount}")
+}
