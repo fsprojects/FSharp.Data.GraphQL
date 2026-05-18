@@ -121,7 +121,7 @@ let ``MemoryValidationResultCache caches error results`` () =
     | Success -> fail "Expected ValidationError"
 
 [<Fact>]
-let ``MemoryValidationResultCache handles concurrent access`` () : Task = task {
+let ``MemoryValidationResultCache handles concurrent access`` () =
     let cache = MemoryValidationResultCache () :> IValidationResultCache
     let mutable callCount = 0
     let producer () =
@@ -131,26 +131,15 @@ let ``MemoryValidationResultCache handles concurrent access`` () : Task = task {
 
     let key = { DocumentId = "doc1"; SchemaId = 1 }
 
-    // Call cache from multiple threads simultaneously
     let workerCount = 10
-    use workersReadyGate = new CountdownEvent (workerCount)
-    use startGate = new ManualResetEventSlim (false)
+    let results = Array.zeroCreate workerCount
 
-    let workers =
-        [| 1..workerCount |]
-        |> Array.map (fun _ ->
-            Task.Run (fun () ->
-                workersReadyGate.Signal () |> ignore
-                startGate.Wait ()
-                cache.GetOrAdd producer key))
-
-    workersReadyGate.Wait ()
-    startGate.Set ()
-    let! results = workers |> Task.WhenAll
+    Parallel.For (0, workerCount, fun i ->
+        results.[i] <- cache.GetOrAdd producer key
+    ) |> ignore
 
     // All results should be Success
     results |> Array.iter (fun r -> equals Success r)
 
     // Producer should be called at least once, but can run up to workerCount times due to ConcurrentDictionary.GetOrAdd factory semantics.
     Assert.True (callCount >= 1 && callCount <= workerCount, $"Expected callCount between 1 and {workerCount}, got {callCount}")
-}
