@@ -132,10 +132,21 @@ let ``MemoryValidationResultCache handles concurrent access`` () : Task = task {
     let key = { DocumentId = "doc1"; SchemaId = 1 }
 
     // Call cache from multiple threads simultaneously
-    let! results =
-        [| 1..10 |]
-        |> Seq.map (fun _ -> task { return cache.GetOrAdd producer key })
-        |> Task.WhenAll
+    let workerCount = 10
+    use ready = CountdownEvent workerCount
+    use startGate = new ManualResetEventSlim false
+
+    let workers =
+        [| 1..workerCount |]
+        |> Seq.map (fun _ ->
+            Task.Run (fun () ->
+                ready.Signal () |> ignore
+                startGate.Wait ()
+                cache.GetOrAdd producer key))
+
+    ready.Wait ()
+    startGate.Set ()
+    let! results = workers |> Task.WhenAll
 
     // All results should be Success
     results |> Array.iter (fun r -> equals Success r)
