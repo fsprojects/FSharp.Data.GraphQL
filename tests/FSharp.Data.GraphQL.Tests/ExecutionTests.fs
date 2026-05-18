@@ -465,7 +465,24 @@ let ``Execution when querying the same field twice will return it`` () : Task =
 [<Fact>]
 let ``Execution documentId handles escaped string values correctly`` () : Task =
     let schema =
-        Schema (Define.Object<TwiceTest> ("Type", [ Define.Field ("a", StringType, fun _ x -> x.A); Define.Field ("b", IntType, fun _ x -> x.B) ]))
+        Schema (
+            Define.Object<TwiceTest> (
+                "Type",
+                [
+                    Define.Field (
+                        "a",
+                        StringType,
+                        "",
+                        [ Define.Input ("arg", StringType) ],
+                        fun ctx x ->
+                            match ctx.TryArg ("arg") with
+                            | ValueSome arg -> arg
+                            | ValueNone -> x.A
+                    )
+                    Define.Field ("b", IntType, fun _ x -> x.B)
+                ]
+            )
+        )
     // Query with string containing special characters that need escaping
     let query = """query Example { a(arg: "test\"quote\nline\ttab\\backslash") }"""
     task {
@@ -482,7 +499,7 @@ let ``Execution documentId is different for different queries`` () : Task =
     let query1 = "query Example1 { a }"
     let query2 = "query Example2 { b }"
     task {
-        let executor = Executor(schema)
+        let executor = Executor (schema)
         let! result1 = executor.AsyncExecute (query1, getMockInputContext, { A = "aa"; B = 2 })
         let! result2 = executor.AsyncExecute (query2, getMockInputContext, { A = "aa"; B = 2 })
         result1.DocumentId |> notEquals result2.DocumentId
@@ -497,7 +514,7 @@ let ``Execution documentId is same for semantically identical queries`` () : Tas
     let query2 = "query Example{a b}"
     let query3 = "query Example { a, b }"
     task {
-        let executor = Executor(schema)
+        let executor = Executor (schema)
         let! result1 = executor.AsyncExecute (query1, getMockInputContext, { A = "aa"; B = 2 })
         let! result2 = executor.AsyncExecute (query2, getMockInputContext, { A = "aa"; B = 2 })
         let! result3 = executor.AsyncExecute (query3, getMockInputContext, { A = "aa"; B = 2 })
