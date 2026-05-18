@@ -457,6 +457,24 @@ let ``ToQueryString escapes control characters as unicode in string values`` () 
     equals (document.ToQueryString ()) (reparsed.ToQueryString ())
 
 [<Fact>]
+let ``ToQueryString escapes unicode line separator in string values`` () =
+    let query = """query q { hero(text: "\u2028") }"""
+    let document = parse query
+    let printed = document.ToQueryString ()
+    Assert.Contains ("\\u2028", printed)
+    let reparsed = parse printed
+    equals (document.ToQueryString ()) (reparsed.ToQueryString ())
+
+[<Fact>]
+let ``ToQueryString escapes unicode paragraph separator in string values`` () =
+    let query = """query q { hero(text: "\u2029") }"""
+    let document = parse query
+    let printed = document.ToQueryString ()
+    Assert.Contains ("\\u2029", printed)
+    let reparsed = parse printed
+    equals (document.ToQueryString ()) (reparsed.ToQueryString ())
+
+[<Fact>]
 let ``ToQueryString escapes multiple special characters correctly`` () =
     let query = """query q { hero(text: "quote:\"newline:\nslash:\\tab:\t") }"""
     let document = parse query
