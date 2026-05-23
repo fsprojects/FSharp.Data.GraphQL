@@ -22,6 +22,10 @@ type ObjectListFilter =
     | Contains of FieldFilter<System.IComparable>
     | OfTypes of Type list
     | FilterField of FieldFilter<ObjectListFilter>
+    | EqualsCI of FieldFilter<string>
+    | StartsWithCI of FieldFilter<string>
+    | EndsWithCI of FieldFilter<string>
+    | ContainsCI of FieldFilter<string>
 
 open System.Linq
 open System.Linq.Expressions
@@ -124,8 +128,20 @@ module ObjectListFilter =
         /// Creates a new ObjectListFilter representing a field sub comparison.
         let ( --> ) fname filter = FilterField { FieldName = fname; Value = filter }
 
-        /// Creates a new ObjectListFilter representing a NOT opreation for the existing one.
+        /// Creates a new ObjectListFilter representing a NOT operation for the existing one.
         let ( !!! ) filter = Not filter
+
+        /// Creates a new ObjectListFilter representing a case-insensitive EQUALS operation on a string value.
+        let ( ===~ ) fname value = EqualsCI { FieldName = fname; Value = value }
+
+        /// Creates a new ObjectListFilter representing a case-insensitive STARTS WITH operation on a string value.
+        let ( =@@~ ) fname value = StartsWithCI { FieldName = fname; Value = value }
+
+        /// Creates a new ObjectListFilter representing a case-insensitive ENDS WITH operation on a string value.
+        let ( @@=~ ) fname value = EndsWithCI { FieldName = fname; Value = value }
+
+        /// Creates a new ObjectListFilter representing a case-insensitive CONTAINS operation on a string value.
+        let ( @=@~ ) fname value = ContainsCI { FieldName = fname; Value = value }
 
     let private genericWhereMethod =
         typeof<Queryable>.GetMethods ()
@@ -147,6 +163,12 @@ module ObjectListFilter =
     let private StringStartsWithMethod = stringType.GetMethod ("StartsWith", [| stringType |])
     let private StringEndsWithMethod = stringType.GetMethod ("EndsWith", [| stringType |])
     let private StringContainsMethod = stringType.GetMethod ("Contains", [| stringType |])
+    let private stringComparisonType = typeof<StringComparison>
+    let private StringEqualsCIMethod = stringType.GetMethod ("Equals", [| stringType; stringComparisonType |])
+    let private StringStartsWithCIMethod = stringType.GetMethod ("StartsWith", [| stringType; stringComparisonType |])
+    let private StringEndsWithCIMethod = stringType.GetMethod ("EndsWith", [| stringType; stringComparisonType |])
+    let private StringContainsCIMethod = stringType.GetMethod ("Contains", [| stringType; stringComparisonType |])
+    let private OrdinalIgnoreCase = Expression.Constant (StringComparison.OrdinalIgnoreCase)
     let private unwrapOptionMethod =
         FSharp.Data.GraphQL.Helpers.moduleType.GetMethod (nameof Helpers.unwrap)
 
@@ -329,6 +351,18 @@ module ObjectListFilter =
         | FilterField f ->
             let paramExpr = Expression.PropertyOrField (param, f.FieldName)
             buildFilterExpr isEnumerableQuery (SourceExpression paramExpr) buildTypeDiscriminatorCheck f.Value
+        | EqualsCI f ->
+            let ``member`` = Expression.PropertyOrField (param, f.FieldName)
+            Expression.Call (normalizeStringMemberExpr ``member``, StringEqualsCIMethod, Expression.Constant f.Value, OrdinalIgnoreCase)
+        | StartsWithCI f ->
+            let ``member`` = Expression.PropertyOrField (param, f.FieldName)
+            Expression.Call (normalizeStringMemberExpr ``member``, StringStartsWithCIMethod, Expression.Constant f.Value, OrdinalIgnoreCase)
+        | EndsWithCI f ->
+            let ``member`` = Expression.PropertyOrField (param, f.FieldName)
+            Expression.Call (normalizeStringMemberExpr ``member``, StringEndsWithCIMethod, Expression.Constant f.Value, OrdinalIgnoreCase)
+        | ContainsCI f ->
+            let ``member`` = Expression.PropertyOrField (param, f.FieldName)
+            Expression.Call (normalizeStringMemberExpr ``member``, StringContainsCIMethod, Expression.Constant f.Value, OrdinalIgnoreCase)
 
     type private CompareDiscriminatorExpressionVisitor<'T, 'D>
         (compareDiscriminator : CompareDiscriminatorExpression<'T, 'D>, param : SourceExpression, value : obj) =

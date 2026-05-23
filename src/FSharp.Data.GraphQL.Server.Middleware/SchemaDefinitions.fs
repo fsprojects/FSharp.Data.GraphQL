@@ -18,6 +18,10 @@ type private ComparisonOperator =
     | LessThan of string
     | LessThanOrEqual of string
     | In of string
+    | EqualsCI of string
+    | StartsWithCI of string
+    | EndsWithCI of string
+    | ContainsCI of string
 
 let rec private coerceObjectListFilterInput (variables : Variables) inputValue : Result<ObjectListFilter voption, IGQLError list> =
 
@@ -25,6 +29,14 @@ let rec private coerceObjectListFilterInput (variables : Variables) inputValue :
         let s = s.ToLowerInvariant ()
         let prefix (suffix : string) (s : string) = s.Substring (0, s.Length - suffix.Length)
         match s with
+        | s when s.EndsWith ("_ends_with_ci") && s.Length > "_ends_with_ci".Length -> EndsWithCI (prefix "_ends_with_ci" s)
+        | s when s.EndsWith ("_ewci") && s.Length > "_ewci".Length -> EndsWithCI (prefix "_ewci" s)
+        | s when s.EndsWith ("_starts_with_ci") && s.Length > "_starts_with_ci".Length -> StartsWithCI (prefix "_starts_with_ci" s)
+        | s when s.EndsWith ("_swci") && s.Length > "_swci".Length -> StartsWithCI (prefix "_swci" s)
+        | s when s.EndsWith ("_contains_ci") && s.Length > "_contains_ci".Length -> ContainsCI (prefix "_contains_ci" s)
+        | s when s.EndsWith ("_cci") && s.Length > "_cci".Length -> ContainsCI (prefix "_cci" s)
+        | s when s.EndsWith ("_equals_ci") && s.Length > "_equals_ci".Length -> EqualsCI (prefix "_equals_ci" s)
+        | s when s.EndsWith ("_eqi") && s.Length > "_eqi".Length -> EqualsCI (prefix "_eqi" s)
         | s when s.EndsWith ("_ends_with") && s.Length > "_ends_with".Length -> EndsWith (prefix "_ends_with" s)
         | s when s.EndsWith ("_ew") && s.Length > "_ew".Length -> EndsWith (prefix "_ew" s)
         | s when s.EndsWith ("_starts_with") && s.Length > "_starts_with".Length -> StartsWith (prefix "_starts_with" s)
@@ -99,6 +111,10 @@ let rec private coerceObjectListFilterInput (variables : Variables) inputValue :
         | EndsWith fname, StringValue value -> Ok (ValueSome (ObjectListFilter.EndsWith { FieldName = fname; Value = value }))
         | StartsWith fname, StringValue value -> Ok (ValueSome (ObjectListFilter.StartsWith { FieldName = fname; Value = value }))
         | Contains fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.Contains { FieldName = fname; Value = value }))
+        | EndsWithCI fname, StringValue value -> Ok (ValueSome (ObjectListFilter.EndsWithCI { FieldName = fname; Value = value }))
+        | StartsWithCI fname, StringValue value -> Ok (ValueSome (ObjectListFilter.StartsWithCI { FieldName = fname; Value = value }))
+        | ContainsCI fname, StringValue value -> Ok (ValueSome (ObjectListFilter.ContainsCI { FieldName = fname; Value = value }))
+        | EqualsCI fname, StringValue value -> Ok (ValueSome (ObjectListFilter.EqualsCI { FieldName = fname; Value = value }))
         | Equals fname, ObjectValue value ->
             match mapInput value with
             | Error errs -> Error errs

@@ -526,3 +526,68 @@ let ``ObjectListFilter OfTypes works with two or more types`` () =
         let animal = List.last filteredData
         animal.ID |> equals 4
         animal.Name |> equals "Horse D"
+
+[<Fact>]
+let ``ObjectListFilter works with EqualsCI operator`` () =
+    let filter = EqualsCI { FieldName = "firstName"; Value = "jonathan" }
+    let queryable = data.AsQueryable ()
+    let filteredData = queryable.Apply (filter) |> Seq.toList
+    List.length filteredData |> equals 1
+    let result = List.head filteredData
+    result.ID |> equals 2
+    result.FirstName |> equals "Jonathan"
+    result.LastName |> equals "Abrams"
+
+[<Fact>]
+let ``ObjectListFilter works with EqualsCI operator upper case`` () =
+    let filter = EqualsCI { FieldName = "firstName"; Value = "JONATHAN" }
+    let queryable = data.AsQueryable ()
+    let filteredData = queryable.Apply (filter) |> Seq.toList
+    List.length filteredData |> equals 1
+    let result = List.head filteredData
+    result.ID |> equals 2
+    result.FirstName |> equals "Jonathan"
+
+[<Fact>]
+let ``ObjectListFilter works with StartsWithCI operator`` () =
+    let filter = StartsWithCI { FieldName = "firstName"; Value = "j" }
+    let queryable = data.AsQueryable ()
+    let filteredData = queryable.Apply (filter) |> Seq.toList
+    List.length filteredData |> equals 2
+    let result = List.head filteredData
+    result.ID |> equals 2
+    result.FirstName |> equals "Jonathan"
+
+[<Fact>]
+let ``ObjectListFilter works with EndsWithCI operator`` () =
+    let filter = EndsWithCI { FieldName = "lastName"; Value = "AMS" }
+    let queryable = data.AsQueryable ()
+    let filteredData = queryable.Apply (filter) |> Seq.toList
+    List.length filteredData |> equals 2
+    let result = List.head filteredData
+    result.ID |> equals 4
+    result.LastName |> equals "Adams"
+    let result = List.last filteredData
+    result.ID |> equals 2
+    result.LastName |> equals "Abrams"
+
+[<Fact>]
+let ``ObjectListFilter works with ContainsCI operator`` () =
+    let filter = ContainsCI { FieldName = "firstName"; Value = "EN" }
+    let queryable = data.AsQueryable ()
+    let filteredData = queryable.Apply (filter) |> Seq.toList
+    List.length filteredData |> equals 2
+    let result = List.head filteredData
+    result.ID |> equals 4
+    result.FirstName |> equals "Ben"
+    let result = List.last filteredData
+    result.ID |> equals 7
+    result.FirstName |> equals "Jeneffer"
+
+[<Fact>]
+let ``ObjectListFilter case-insensitive operators do not match with case-sensitive filters`` () =
+    // Exact case-sensitive StartsWith "j" (lowercase) should match nothing in the data
+    let filter = StartsWith { FieldName = "firstName"; Value = "j" }
+    let queryable = data.AsQueryable ()
+    let filteredData = queryable.Apply (filter) |> Seq.toList
+    List.length filteredData |> equals 0
