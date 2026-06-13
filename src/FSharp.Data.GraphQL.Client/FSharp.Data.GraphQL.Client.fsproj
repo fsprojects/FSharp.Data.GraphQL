@@ -16,13 +16,13 @@
       <PrivateAssets>all</PrivateAssets>
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
+    <PackageReference Include="FSharp.SystemTextJson" />
     <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="System.Text.Json" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="MimeTypes.fs" />
-    <Compile Include="TextConversions.fs" />
-    <Compile Include="JsonValue.fs" />
     <Compile Include="Extensions.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="ReflectionPatterns.fs" />

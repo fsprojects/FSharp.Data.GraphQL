@@ -5,9 +5,9 @@ namespace FSharp.Data.GraphQL
 
 open System
 open System.Collections.Generic
-open System.Collections.Immutable
 open System.Net.Http
 open System.Text
+open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
 
@@ -15,7 +15,7 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
 open ReflectionPatterns
 
-/// A requrest object for making GraphQL calls using the GraphQL client module.
+/// A request object for making GraphQL calls using the GraphQL client module.
 type GraphQLRequest = {
     /// Gets the URL of the GraphQL server which will be called.
     ServerUrl : string
@@ -27,6 +27,8 @@ type GraphQLRequest = {
     Query : string
     /// Gets variables to be sent with the query.
     Variables : (string * obj)[]
+    /// Gets the JSON serializer options used for serializing request variables.
+    JsonSerializerOptions : JsonSerializerOptions
 }
 
 /// Executes calls to GraphQL servers and return their responses.
@@ -57,22 +59,8 @@ module GraphQLClient =
     /// Sends a request to a GraphQL server asynchronously.
     let sendRequestAsync ct (connection : GraphQLClientConnection) (request : GraphQLRequest) = task {
         let invoker = connection.Invoker
-        let variables =
-            match request.Variables with
-            | null | [||] -> JsonValue.Null
-            | _ -> Map.ofArray request.Variables |> Serialization.toJsonValue
-        let operationName =
-            match request.OperationName with
-            | Some x -> JsonValue.String x
-            | None -> JsonValue.Null
-        let requestJson =
-            [|
-                "operationName", operationName
-                "query", JsonValue.String request.Query
-                "variables", variables
-            |]
-            |> JsonValue.Record
-        let content = new StringContent (requestJson.ToString (), Encoding.UTF8, "application/json")
+        let json = Serialization.buildRequestJson request.JsonSerializerOptions request.OperationName request.Query request.Variables
+        let content = new StringContent (json, Encoding.UTF8, "application/json")
         return! postAsync ct invoker request.ServerUrl request.HttpHeaders content
     }
 
@@ -103,6 +91,7 @@ module GraphQLClient =
                     OperationName = None
                     Query = IntrospectionQuery.Definition
                     Variables = [||]
+                    JsonSerializerOptions = Serialization.defaultSerializerOptions.Value
                 }
                 try
                     return! sendRequestAsync ct connection request
@@ -145,35 +134,14 @@ module GraphQLClient =
             |> Array.collect (tryMapFileVariable >> (Option.defaultValue [||]))
 
         let operationContent =
-            let variables =
-                match request.Variables with
-                | null
-                | [||] -> JsonValue.Null
-                | _ ->
-                    request.Variables
-                    |> Map.ofArray
-                    |> Serialization.toJsonValue
-            let operationName =
-                match request.OperationName with
-                | Some x -> JsonValue.String x
-                | None -> JsonValue.Null
-            let json =
-                [|
-                    "operationName", operationName
-                    "query", JsonValue.String request.Query
-                    "variables", variables
-                |]
-                |> JsonValue.Record
-            let content = new StringContent (json.ToString (JsonSaveOptions.DisableFormatting))
+            let json = Serialization.buildRequestJson request.JsonSerializerOptions request.OperationName request.Query request.Variables
+            let content = new StringContent (json)
             content.Headers.Add ("Content-Disposition", "form-data; name=\"operations\"")
             content
         content.Add (operationContent)
         let mapContent =
-            let files =
-                files
-                |> Array.mapi (fun ix (name, _) -> ix.ToString (), JsonValue.Array [| JsonValue.String ("variables." + name) |])
-                |> JsonValue.Record
-            let content = new StringContent (files.ToString (JsonSaveOptions.DisableFormatting))
+            let json = Serialization.buildMapJson files
+            let content = new StringContent (json)
             content.Headers.Add ("Content-Disposition", "form-data; name=\"map\"")
             content
         content.Add (mapContent)
