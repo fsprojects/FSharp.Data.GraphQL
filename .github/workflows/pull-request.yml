@@ -74,29 +74,3 @@ jobs:
       with:
         name: test-results-${{ matrix.os }}
         path: test-results
-
-  publish_test_results_preview:
-    if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.number == 570 }}
-    name: Publish test results preview
-    runs-on: ubuntu-latest
-    needs:
-    - build
-    permissions:
-      actions: read
-      checks: write
-      pull-requests: write
-    steps:
-    - name: Download test results
-      uses: actions/download-artifact@v5
-      with:
-        name: test-results-ubuntu-22.04
-        path: test-results
-
-    - name: Publish test results
-      if: ${{ hashFiles('test-results/**/*.trx') != '' }}
-      uses: EnricoMi/publish-unit-test-result-action@v2
-      with:
-        check_name: "Test Results (Preview)"
-        comment_mode: always
-        commit: ${{ github.event.pull_request.head.sha }}
-        files: "test-results/**/*.trx"
