@@ -89,9 +89,8 @@ jobs:
     - name: Download test results
       uses: actions/download-artifact@v5
       with:
-        pattern: test-results-*
+        name: test-results-ubuntu-22.04
         path: test-results
-        merge-multiple: true
 
     - name: Publish test results
       if: ${{ hashFiles('test-results/**/*.trx') != '' }}
