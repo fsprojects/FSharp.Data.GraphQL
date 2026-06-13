@@ -62,14 +62,14 @@ type TypeWrappersKindSafetyFixture () =
     interface IAsyncLifetime with
 
         member this.InitializeAsync () : Task = task {
-            IO.Directory.CreateDirectory (scriptsDir) |> ignore
-            IO.Directory.CreateDirectory (sourceScriptsDir) |> ignore
+                IO.Directory.CreateDirectory (scriptsDir) |> ignore
+                IO.Directory.CreateDirectory (sourceScriptsDir) |> ignore
 
-            let content = this.ReferencesContent
+                let content = this.ReferencesContent
 
-            do! ensureFileContentAsync referencesPath content
-            do! ensureFileContentAsync sourceReferencesPath content
-        }
+                do! ensureFileContentAsync referencesPath content
+                do! ensureFileContentAsync sourceReferencesPath content
+            }
 
         member _.DisposeAsync () = Task.CompletedTask
 
@@ -78,63 +78,63 @@ type TypeWrappersKindSafetyTests (fixture : TypeWrappersKindSafetyFixture) =
 
     [<Fact>]
     member _.``ListOf keeps input-output direction`` () : Task = task {
-        let inputList : InputDef<InputOnly list> = ListOf InputOnlyType
-        let outputList : OutputDef<OutputOnly list> = ListOf OutputOnlyType
-        Assert.Equal ("[InputOnlyType!]!", inputList.ToString ())
-        Assert.Equal ("[OutputOnlyType!]!", outputList.ToString ())
-    }
+            let inputList : InputDef<InputOnly list> = ListOf InputOnlyType
+            let outputList : OutputDef<OutputOnly list> = ListOf OutputOnlyType
+            Assert.Equal ("[InputOnlyType!]!", inputList.ToString ())
+            Assert.Equal ("[OutputOnlyType!]!", outputList.ToString ())
+        }
 
     [<Fact>]
     member _.``Nullable keeps input-output direction`` () : Task = task {
-        let nullableInput : InputDef<InputOnly option> = Nullable InputOnlyType
-        let nullableOutput : OutputDef<OutputOnly option> = Nullable OutputOnlyType
-        Assert.Equal ("InputOnlyType", nullableInput.ToString ())
-        Assert.Equal ("OutputOnlyType", nullableOutput.ToString ())
-    }
+            let nullableInput : InputDef<InputOnly option> = Nullable InputOnlyType
+            let nullableOutput : OutputDef<OutputOnly option> = Nullable OutputOnlyType
+            Assert.Equal ("InputOnlyType", nullableInput.ToString ())
+            Assert.Equal ("OutputOnlyType", nullableOutput.ToString ())
+        }
 
     [<Fact>]
     member _.``StructNullable keeps input-output direction`` () : Task = task {
-        let nullableInput : InputDef<InputOnly voption> = StructNullable InputOnlyType
-        let nullableOutput : OutputDef<OutputOnly voption> = StructNullable OutputOnlyType
-        Assert.Equal ("InputOnlyType", nullableInput.ToString ())
-        Assert.Equal ("OutputOnlyType", nullableOutput.ToString ())
-    }
+            let nullableInput : InputDef<InputOnly voption> = StructNullable InputOnlyType
+            let nullableOutput : OutputDef<OutputOnly voption> = StructNullable OutputOnlyType
+            Assert.Equal ("InputOnlyType", nullableInput.ToString ())
+            Assert.Equal ("OutputOnlyType", nullableOutput.ToString ())
+        }
 
     [<Fact>]
     member _.``Valid script compiles successfully`` () : Task = task {
-        let! exitCode = fixture.RunFsiCheckAsync (fixture.ScriptPath ("Valid.fsx"))
-        Assert.Equal (0, exitCode)
-    }
+            let! exitCode = fixture.RunFsiCheckAsync (fixture.ScriptPath ("Valid.fsx"))
+            Assert.Equal (0, exitCode)
+        }
 
     [<Fact>]
     member _.``ListOf rejects output type as input at compile time`` () : Task = task {
-        let! exitCode = fixture.RunFsiCheckAsync (fixture.ScriptPath ("ListOf.OutputAsInput.fsx"))
-        Assert.NotEqual (0, exitCode)
-    }
+            let! exitCode = fixture.RunFsiCheckAsync (fixture.ScriptPath ("ListOf.OutputAsInput.fsx"))
+            Assert.NotEqual (0, exitCode)
+        }
 
     [<Fact>]
     member _.``ListOf rejects input type as output at compile time`` () : Task = task {
-        let! exitCode = fixture.RunFsiCheckAsync (fixture.ScriptPath ("ListOf.InputAsOutput.fsx"))
-        Assert.NotEqual (0, exitCode)
-    }
+            let! exitCode = fixture.RunFsiCheckAsync (fixture.ScriptPath ("ListOf.InputAsOutput.fsx"))
+            Assert.NotEqual (0, exitCode)
+        }
 
     [<Fact>]
     member _.``Nullable rejects output type as input at compile time`` () : Task = task {
-        let! exitCode = fixture.RunFsiCheckAsync (fixture.ScriptPath ("Nullable.OutputAsInput.fsx"))
-        Assert.NotEqual (0, exitCode)
-    }
+            let! exitCode = fixture.RunFsiCheckAsync (fixture.ScriptPath ("Nullable.OutputAsInput.fsx"))
+            Assert.NotEqual (0, exitCode)
+        }
 
     [<Fact>]
     member _.``Nullable rejects input type as output at compile time`` () : Task = task {
-        let! exitCode = fixture.RunFsiCheckAsync (fixture.ScriptPath ("Nullable.InputAsOutput.fsx"))
-        Assert.NotEqual (0, exitCode)
-    }
+            let! exitCode = fixture.RunFsiCheckAsync (fixture.ScriptPath ("Nullable.InputAsOutput.fsx"))
+            Assert.NotEqual (0, exitCode)
+        }
 
     [<Fact>]
     member _.``StructNullable rejects output type as input at compile time`` () : Task = task {
-        let! exitCode = fixture.RunFsiCheckAsync (fixture.ScriptPath ("StructNullable.OutputAsInput.fsx"))
-        Assert.NotEqual (0, exitCode)
-    }
+            let! exitCode = fixture.RunFsiCheckAsync (fixture.ScriptPath ("StructNullable.OutputAsInput.fsx"))
+            Assert.NotEqual (0, exitCode)
+        }
 
     [<Fact>]
     member _.``StructNullable rejects input type as output at compile time`` () : Task = task {

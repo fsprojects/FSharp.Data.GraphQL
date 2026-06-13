@@ -1,0 +1,61 @@
+name: Publish Test Results
+
+on:
+  workflow_run:
+    workflows: ["Build and Test"]
+    types:
+      - completed
+
+permissions: {}
+
+jobs:
+  test-results:
+    if: github.event.workflow_run.conclusion != 'skipped' && github.event.workflow_run.event == 'pull_request'
+    name: Test Results
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      checks: write
+      pull-requests: write
+
+    steps:
+    - name: Download event file
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        run_id: ${{ github.event.workflow_run.id }}
+        path: artifacts
+        name: EventFile
+
+    - name: Download test results
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        run_id: ${{ github.event.workflow_run.id }}
+        path: test-results
+        name: ^test-results-.*
+        name_is_regexp: true
+        if_no_artifact_found: warn
+
+    - name: Resolve event file path
+      id: event_file
+      shell: pwsh
+      run: |
+        $eventFilePath =
+          Get-ChildItem -Path artifacts -Filter event.json -Recurse |
+          Select-Object -First 1 -ExpandProperty FullName
+
+        if ($null -eq $eventFilePath) {
+          throw "event.json file was not found in downloaded artifacts"
+        }
+
+        "path=$eventFilePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+    - name: Publish test results
+      if: ${{ hashFiles('test-results/**/*.trx') != '' }}
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      with:
+        commit: ${{ github.event.workflow_run.head_sha }}
+        comment_mode: always
+        event_file: ${{ steps.event_file.outputs.path }}
+        event_name: ${{ github.event.workflow_run.event }}
+        files: "test-results/**/*.trx"

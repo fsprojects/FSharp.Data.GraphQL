@@ -5,10 +5,8 @@ open System.Threading.Tasks
 open FSharp.Data.GraphQL
 open Helpers
 
-[<Literal>]
-let IntrospectionPath = "integration-introspection.json"
-[<Literal>]
-let EmptyGuidAsString = "00000000-0000-0000-0000-000000000000"
+let [<Literal>] IntrospectionPath = "integration-introspection.json"
+let [<Literal>] EmptyGuidAsString = "00000000-0000-0000-0000-000000000000"
 
 type Provider = GraphQLProvider<IntrospectionPath, uploadInputTypeName="File", explicitOptionalParameters=true>
 
@@ -235,22 +233,14 @@ module SingleRequiredUploadOperation =
 
 [<Fact>]
 let ``Should be able to execute a single required upload`` () =
-    let file = {
-        Name = "file.txt"
-        ContentType = "text/plain"
-        Content = "Sample text file contents"
-    }
-    SingleRequiredUploadOperation.operation.Run (context, file.MakeUpload (file.Name))
+    let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
+    SingleRequiredUploadOperation.operation.Run(context, file.MakeUpload(file.Name))
     |> SingleRequiredUploadOperation.validateResult file
 
 [<Fact>]
 let ``Should be able to execute a single required upload asynchronously`` () : Task = task {
-    let file = {
-        Name = "file.txt"
-        ContentType = "text/plain"
-        Content = "Sample text file contents"
-    }
-    let! result = SingleRequiredUploadOperation.operation.AsyncRun (context, file.MakeUpload ())
+    let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
+    let! result = SingleRequiredUploadOperation.operation.AsyncRun(context, file.MakeUpload())
     result |> SingleRequiredUploadOperation.validateResult file
 }
 
@@ -281,24 +271,15 @@ module SingleOptionalUploadOperation =
 
 [<Fact>]
 let ``Should be able to execute a single optional upload by passing a file`` () =
-    let file = {
-        Name = "file.txt"
-        ContentType = "text/plain"
-        Content = "Sample text file contents"
-    }
-    SingleOptionalUploadOperation.operation.Run (context, file.MakeUpload () |> Some)
+    let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
+    SingleOptionalUploadOperation.operation.Run(context, file.MakeUpload() |> Some)
     |> SingleOptionalUploadOperation.validateResult (Some file)
 
 [<Fact>]
 let ``Should be able to execute a single optional upload by passing a file, asynchronously`` () : Task = task {
-    let file = {
-        Name = "file.txt"
-        ContentType = "text/plain"
-        Content = "Sample text file contents"
-    }
-    let! result = SingleOptionalUploadOperation.operation.AsyncRun (context, file.MakeUpload ("test") |> Some)
-    result
-    |> SingleOptionalUploadOperation.validateResult (Some file)
+    let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
+    let! result = SingleOptionalUploadOperation.operation.AsyncRun(context, file.MakeUpload("test") |> Some)
+    result |> SingleOptionalUploadOperation.validateResult (Some file)
 }
 
 [<Fact>]
@@ -338,38 +319,19 @@ module RequiredMultipleUploadOperation =
 
 [<Fact>]
 let ``Should be able to execute a multiple required upload`` () =
-    let files = [|
-        {
-            Name = "file1.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 1"
-        }
-        {
-            Name = "file2.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 2"
-        }
-    |]
-    RequiredMultipleUploadOperation.operation.Run (context, files |> Array.map (fun f -> f.MakeUpload ()))
+    let files =
+        [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
+    RequiredMultipleUploadOperation.operation.Run(context, files |> Array.map (fun f -> f.MakeUpload()))
     |> RequiredMultipleUploadOperation.validateResult files
 
 [<Fact>]
 let ``Should be able to execute a multiple required upload asynchronously`` () : Task = task {
-    let files = [|
-        {
-            Name = "file1.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 1"
-        }
-        {
-            Name = "file2.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 2"
-        }
-    |]
-    let! result = RequiredMultipleUploadOperation.operation.AsyncRun (context, files |> Array.map (fun f -> f.MakeUpload ()))
-    result
-    |> RequiredMultipleUploadOperation.validateResult files
+    let files =
+        [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
+    let! result = RequiredMultipleUploadOperation.operation.AsyncRun(context, files |> Array.map (fun f -> f.MakeUpload()))
+    result |> RequiredMultipleUploadOperation.validateResult files
 }
 
 module OptionalMultipleUploadOperation =
@@ -400,38 +362,19 @@ module OptionalMultipleUploadOperation =
 
 [<Fact>]
 let ``Should be able to execute a multiple upload`` () =
-    let files = [|
-        {
-            Name = "file1.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 1"
-        }
-        {
-            Name = "file2.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 2"
-        }
-    |]
-    OptionalMultipleUploadOperation.operation.Run (context, files |> Array.map (fun f -> f.MakeUpload ()) |> Some)
+    let files =
+        [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
+    OptionalMultipleUploadOperation.operation.Run(context, files |> Array.map (fun f -> f.MakeUpload()) |> Some)
     |> OptionalMultipleUploadOperation.validateResult (Some files)
 
 [<Fact>]
 let ``Should be able to execute a multiple upload asynchronously`` () : Task = task {
-    let files = [|
-        {
-            Name = "file1.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 1"
-        }
-        {
-            Name = "file2.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 2"
-        }
-    |]
-    let! result = OptionalMultipleUploadOperation.operation.AsyncRun (context, (files |> Array.map _.MakeUpload()) |> Some)
-    result
-    |> OptionalMultipleUploadOperation.validateResult (Some files)
+    let files =
+        [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
+    let! result = OptionalMultipleUploadOperation.operation.AsyncRun(context, (files |> Array.map _.MakeUpload()) |> Some)
+    result |> OptionalMultipleUploadOperation.validateResult (Some files)
 }
 
 [<Fact>]
@@ -476,38 +419,19 @@ module OptionalMultipleOptionalUploadOperation =
 
 [<Fact>]
 let ``Should be able to execute a multiple optional upload`` () =
-    let files = [|
-        Some {
-            Name = "file1.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 1"
-        }
-        Some {
-            Name = "file2.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 2"
-        }
-    |]
-    OptionalMultipleOptionalUploadOperation.operation.Run (context, (files |> Array.map (Option.map _.MakeUpload())) |> Some)
+    let files =
+        [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
+    OptionalMultipleOptionalUploadOperation.operation.Run(context, (files |> Array.map (Option.map _.MakeUpload())) |> Some)
     |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
 
 [<Fact>]
 let ``Should be able to execute a multiple optional upload asynchronously`` () : Task = task {
-    let files = [|
-        Some {
-            Name = "file1.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 1"
-        }
-        Some {
-            Name = "file2.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 2"
-        }
-    |]
-    let! result = OptionalMultipleOptionalUploadOperation.operation.AsyncRun (context, (files |> Array.map (Option.map _.MakeUpload())) |> Some)
-    result
-    |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
+    let files =
+        [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
+    let! result = OptionalMultipleOptionalUploadOperation.operation.AsyncRun(context, (files |> Array.map (Option.map _.MakeUpload())) |> Some)
+    result |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
 }
 
 [<Fact>]
@@ -524,42 +448,23 @@ let ``Should be able to execute a multiple optional upload asynchronously by sen
 
 [<Fact>]
 let ``Should be able to execute a multiple optional upload by sending some uploads`` () =
-    let files = [|
-        Some {
-            Name = "file1.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 1"
-        }
-        None
-        Some {
-            Name = "file2.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 2"
-        }
-        None
-    |]
-    OptionalMultipleOptionalUploadOperation.operation.Run (context, files |> Array.map (Option.map _.MakeUpload()) |> Some)
+    let files =
+        [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           None
+           Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" }
+           None |]
+    OptionalMultipleOptionalUploadOperation.operation.Run(context, files |> Array.map (Option.map _.MakeUpload()) |> Some)
     |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
 
 [<Fact>]
 let ``Should be able to execute a multiple optional upload asynchronously by sending some uploads`` () : Task = task {
-    let files = [|
-        Some {
-            Name = "file1.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 1"
-        }
-        None
-        Some {
-            Name = "file2.txt"
-            ContentType = "text/plain"
-            Content = "Sample text file contents 2"
-        }
-        None
-    |]
-    let! result = OptionalMultipleOptionalUploadOperation.operation.AsyncRun (context, files |> Array.map (Option.map _.MakeUpload()) |> Some)
-    result
-    |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
+    let files =
+        [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           None
+           Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" }
+           None |]
+    let! result = OptionalMultipleOptionalUploadOperation.operation.AsyncRun(context, files |> Array.map (Option.map _.MakeUpload()) |> Some)
+    result |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
 }
 
 module UploadRequestOperation =
@@ -672,13 +577,9 @@ module UploadComplexOperation =
 
 [<Fact>]
 let ``Should be able to upload file using complex input object`` () =
-    let file = {
-        Name = "complex.txt"
-        ContentType = "text/plain"
-        Content = "Complex input object file content"
-    }
-    let input = UploadComplexOperation.InputFile (file = file.MakeUpload ())
-    UploadComplexOperation.operation.Run (context, input)
+    let file = { Name = "complex.txt"; ContentType = "text/plain"; Content = "Complex input object file content" }
+    let input = UploadComplexOperation.InputFile(file = file.MakeUpload())
+    UploadComplexOperation.operation.Run(context, input)
     |> UploadComplexOperation.validateResult file
 
 [<Fact>]
@@ -694,13 +595,9 @@ let ``Should be able to upload file using complex input object with context`` ()
 
 [<Fact>]
 let ``Should be able to upload file using complex input object asynchronously`` () : Task = task {
-    let file = {
-        Name = "complex_async.txt"
-        ContentType = "text/plain"
-        Content = "Complex input object async file content"
-    }
-    let input = UploadComplexOperation.InputFile (file = file.MakeUpload ())
-    let! result = UploadComplexOperation.operation.AsyncRun (context, input)
+    let file = { Name = "complex_async.txt"; ContentType = "text/plain"; Content = "Complex input object async file content" }
+    let input = UploadComplexOperation.InputFile(file = file.MakeUpload())
+    let! result = UploadComplexOperation.operation.AsyncRun(context, input)
     result |> UploadComplexOperation.validateResult file
 }
 
