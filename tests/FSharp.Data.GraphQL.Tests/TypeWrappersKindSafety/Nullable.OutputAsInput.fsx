@@ -6,7 +6,10 @@ type InputOnly = { Value : int }
 type OutputOnly = { Value : int }
 
 let outputOnlyType =
-    Define.Object<OutputOnly> (name = "OutputOnlyType", fields = [ Define.Field ("value", IntType, fun _ x -> x.Value) ])
+    Define.Object<OutputOnly>(
+        name = "OutputOnlyType",
+        fields = [ Define.Field("value", IntType, fun _ x -> x.Value) ]
+    )
 
 // This should fail: OutputDef cannot be assigned to InputDef
 let _ : InputDef<OutputOnly option> = Nullable outputOnlyType
