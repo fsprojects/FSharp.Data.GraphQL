@@ -4,12 +4,56 @@
     <OutputType>Library</OutputType>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <FSharpToolsDirectory>typeproviders</FSharpToolsDirectory>
-    <PackagePath>typeproviders</PackagePath>
 
     <Description>FSharp implementation of Facebook GraphQL query language (Client)</Description>
-    <NoWarn>$(NoWarn);NU5100</NoWarn>
   </PropertyGroup>
+
+  <!-- Include the DesignTime DLL into the package alongside the runtime DLL.
+       The F# compiler searches for the DesignTime DLL in the same directory as the runtime DLL.
+
+       The standard SDK mechanism (PackageFSharpDesignTimeTools via IsFSharpDesignTimeProvider) does not
+       work here for the "runtime project references designtime via ProjectReference" pattern.
+
+       Root cause: dotnet pack invokes the project a second time with BuildProjectReferences=false
+       to collect package content (_GetTfmSpecificContentForPackage). This flag prevents MSBuild from
+       running ResolveProjectReferences, so _ResolvedProjectReferencePaths is empty in that inner context.
+       PackageFSharpDesignTimeTools reads _ResolvedProjectReferencePaths to find the DesignTime DLL —
+       and finds nothing.
+
+       This is a known MSBuild/F# SDK limitation. Relevant references:
+         - dotnet/fsharp#18924  PackageFSharpDesignTimeTools target interacts unpredictably with the build
+                                https://github.com/dotnet/fsharp/issues/18924
+         - dotnet/fsharp#18929  Fix early/unconditional execution of PackageFSharpDesignTimeTools (merged
+                                Oct 2025, SDK 10.0.301) — fixes the direct IsFSharpDesignTimeProvider=true
+                                case but explicitly does NOT fix the ProjectReference case due to MSBuild
+                                evaluation-phase constraints
+                                https://github.com/dotnet/fsharp/pull/18929
+         - dotnet/fsharp#12320  NETSDK1085 when packing with `no-build`
+                                https://github.com/dotnet/fsharp/issues/12320
+
+       Workaround: hook into TargetsForTfmSpecificContentInPackage at evaluation time (PropertyGroup),
+       then use GetTargetPath to resolve the DesignTime DLL path without triggering a build, and inject
+       it directly as a TfmSpecificPackageFile. -->
+  <PropertyGroup Condition="'$(IsNuGet)' != ''">
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_IncludeDesignTimeDllInPackage</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <Target Name="_IncludeDesignTimeDllInPackage" Condition="'$(IsNuGet)' != ''">
+    <ItemGroup>
+      <_DesignTimeProjectRef Include="@(ProjectReference)"
+          Condition="'%(ProjectReference.IsFSharpDesignTimeProvider)' == 'true'" />
+    </ItemGroup>
+    <MSBuild Projects="@(_DesignTimeProjectRef)"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="_DesignTimeDllPath" />
+    </MSBuild>
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="@(_DesignTimeDllPath)">
+        <PackagePath>lib\$(TargetFramework)</PackagePath>
+      </TfmSpecificPackageFile>
+    </ItemGroup>
+  </Target>
 
   <ItemGroup>
     <PackageReference Update="FSharp.Core" VersionOverride="$(FSharpCoreVersion)">
@@ -36,25 +80,12 @@
     <Compile Include="GraphQLProvider.Runtime.fs" />
   </ItemGroup>
 
-  <Target Name="RemoveUnnecessaryNuGetPackInput" BeforeTargets="GenerateNuspec">
-    <ItemGroup>
-      <FSharpCoreNuGetPackInput Include="@(NuGetPackInput)" Condition="$([System.String]::Copy( %(FullPath) ).EndsWith('FSharp.Core.resources.dll'))" />
-      <PdbNuGetPackInput Include="@(NuGetPackInput)" Condition="$([System.String]::Copy( %(FullPath) ).Contains('DesignTime')) And ('%(Extension)' == '.pdb' OR '%(Extension)' == '.xml')" />
-    </ItemGroup>
-    <ItemGroup>
-      <NuGetPackInput Remove="@(FSharpCoreNuGetPackInput)" />
-      <NuGetPackInput Remove="@(PdbNuGetPackInput)" />
-      <_PackageFiles Remove="@(FSharpCoreNuGetPackInput)" />
-      <_PackageFiles Remove="@(PdbNuGetPackInput)" />
-    </ItemGroup>
-  </Target>
-
   <ItemGroup>
-    <ProjectReference Condition="$(IsNuGet) != ''" Include="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj">
+    <ProjectReference Condition="'$(IsNuGet)' != ''" Include="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj">
       <IsFSharpDesignTimeProvider>true</IsFSharpDesignTimeProvider>
       <PrivateAssets>all</PrivateAssets>
     </ProjectReference>
-    <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Shared" VersionOverride="$(Version)" />
-    <ProjectReference Condition="$(IsNuGet) == ''" Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+    <PackageReference Condition="'$(IsNuGet)' != ''" Include="FSharp.Data.GraphQL.Shared" VersionOverride="$(Version)" />
+    <ProjectReference Condition="'$(IsNuGet)' == ''" Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
 </Project>
