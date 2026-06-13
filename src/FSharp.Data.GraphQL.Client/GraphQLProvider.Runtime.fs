@@ -6,6 +6,6 @@ namespace FSharp.Data.GraphQL.Client
 
 open FSharp.Core.CompilerServices
 
-[<assembly:TypeProviderAssembly("FSharp.Data.GraphQL.Client.DesignTime.dll")>]
+[<assembly:TypeProviderAssembly("FSharp.Data.GraphQL.Client.DesignTime")>]
 do ()
 #endif
