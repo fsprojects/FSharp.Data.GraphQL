@@ -19,7 +19,7 @@
       <!-- This excludes FSharp.Core.xml and FSharp.Core.resources.dll while referencing the right FSharp.Core.dll version -->
       <ExcludeAssets>contentFiles;runtime</ExcludeAssets>
     </PackageReference>
-    <PackageReference Include="FSharp.TypeProviders.SDK" VersionOverride="8.1.0" />
+    <PackageReference Include="FSharp.TypeProviders.SDK" VersionOverride="8.10.0" />
     <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="FParsec" />
     <PackageReference Include="Microsoft.Extensions.Http">
