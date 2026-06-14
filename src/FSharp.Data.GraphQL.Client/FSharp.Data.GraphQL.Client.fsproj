@@ -36,6 +36,8 @@
        it directly as a TfmSpecificPackageFile. -->
   <PropertyGroup Condition="'$(IsNuGet)' != ''">
     <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_IncludeDesignTimeDllInPackage</TargetsForTfmSpecificContentInPackage>
+    <!-- NU5100: assembly not inside 'lib' — expected for type-provider assemblies in typeproviders/ -->
+    <NoWarn>$(NoWarn);NU5100</NoWarn>
   </PropertyGroup>
 
   <Target Name="_IncludeDesignTimeDllInPackage" Condition="'$(IsNuGet)' != ''">
@@ -46,11 +48,17 @@
     <MSBuild Projects="@(_DesignTimeProjectRef)"
              Targets="GetTargetPath"
              Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
-      <Output TaskParameter="TargetOutputs" ItemName="_DesignTimeDllPath" />
+      <Output TaskParameter="TargetOutputs" ItemName="_DesignTimeDll" />
     </MSBuild>
+    <!-- Collect all DLLs from the DesignTime output directory using CreateItem
+         (avoids globs in PackagePath which NuGet Pack does not support). -->
+    <CreateItem Include="@(_DesignTimeDll -> '%(RootDir)%(Directory)*.dll')">
+      <Output TaskParameter="Include" ItemName="_DesignTimeDeps" />
+    </CreateItem>
     <ItemGroup>
-      <TfmSpecificPackageFile Include="@(_DesignTimeDllPath)">
-        <PackagePath>lib\$(TargetFramework)</PackagePath>
+      <TfmSpecificPackageFile Include="@(_DesignTimeDeps)"
+          Condition="'%(Filename)' != 'FSharp.Core'">
+        <PackagePath>typeproviders\fsharp41\$(TargetFramework)</PackagePath>
       </TfmSpecificPackageFile>
     </ItemGroup>
   </Target>
