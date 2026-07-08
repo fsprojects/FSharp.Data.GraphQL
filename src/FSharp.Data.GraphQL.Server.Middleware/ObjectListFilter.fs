@@ -7,7 +7,16 @@ open FSharp.Data.GraphQL
 /// A filter definition for a field value.
 type FieldFilter<'Val> = { FieldName : string; Value : 'Val }
 
+/// <summary>
 /// A filter definition for an object list.
+/// </summary>
+/// <remarks>
+/// String-based filters can carry a comparer. <see langword="null"/> and
+/// <see cref="StringComparer.Ordinal"/> represent case-sensitive matching, while
+/// <see cref="StringComparer.OrdinalIgnoreCase"/> enables case-insensitive matching.
+/// When filters are provided through GraphQL input, lowercase string suffixes are interpreted
+/// as case-insensitive and capitalized suffixes are interpreted as case-sensitive.
+/// </remarks>
 type ObjectListFilter =
     | And of ObjectListFilter * ObjectListFilter
     | Or of ObjectListFilter * ObjectListFilter

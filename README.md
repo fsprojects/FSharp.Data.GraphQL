@@ -361,6 +361,8 @@ query TestQuery {
 }
 ```
 
+For string filters, lowercase suffixes are case-insensitive (`name_starts_with`, `name_sw`, `name_equals`, `name_eq`), while capitalized suffixes are case-sensitive (`name_Starts_With`, `name_SW`, `name_Equals`, `name_EQ`).
+
 Also you can apply `not` operator like this:
 
 ```graphql
@@ -406,12 +408,16 @@ type ObjectListFilter =
     | And of ObjectListFilter * ObjectListFilter
     | Or of ObjectListFilter * ObjectListFilter
     | Not of ObjectListFilter
-    | Equals of FieldFilter<System.IComparable>
+    | Equals of Filter : FieldFilter<System.IComparable> * Comparer : System.Collections.IComparer
     | GreaterThan of FieldFilter<System.IComparable>
+    | GreaterThanOrEqual of FieldFilter<System.IComparable>
     | LessThan of FieldFilter<System.IComparable>
-    | StartsWith of FieldFilter<string>
-    | EndsWith of FieldFilter<string>
-    | Contains of FieldFilter<string>
+    | LessThanOrEqual of FieldFilter<System.IComparable>
+    | In of FieldFilter<obj list>
+    | StartsWith of Filter : FieldFilter<string> * Comparer : StringComparer
+    | EndsWith of Filter : FieldFilter<string> * Comparer : StringComparer
+    | Contains of Filter : FieldFilter<System.IComparable> * Comparer : System.Collections.IComparer
+    | OfTypes of Type list
     | FilterField of FieldFilter<ObjectListFilter>
 ```
 
