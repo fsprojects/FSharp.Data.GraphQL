@@ -20,7 +20,6 @@ type private ComparisonOperator =
     | LessThanOrEqual of string
     | In of string
 
-
 let rec private coerceObjectListFilterInput (variables : Variables) inputValue : Result<ObjectListFilter voption, IGQLError list> =
 
     let parseFieldCondition (s : string) =
