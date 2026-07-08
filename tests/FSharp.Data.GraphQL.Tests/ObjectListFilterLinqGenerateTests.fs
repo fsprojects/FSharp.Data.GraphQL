@@ -197,6 +197,14 @@ let ``ObjectListFilter works with StartsWith operator for ValidStringStruct`` ()
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE STARTSWITH(root["validStringStruct"], "J")"""
 
 [<Fact>]
+let ``ObjectListFilter works with StartsWith case insensitive operator for ValidStringStruct`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = StartsWith ({ FieldName = "validStringStruct"; Value = "J" }, StringComparer.OrdinalIgnoreCase)
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE STARTSWITH(root["validStringStruct"], "J", true)"""
+
+[<Fact>]
 let ``ObjectListFilter works with EndsWith operator for ValidStringStruct`` () =
     let queryable = container.GetItemLinqQueryable<FakeEntity> ()
     let filter = EndsWith ({ FieldName = "validStringStruct"; Value = "n" }, null)
@@ -205,12 +213,28 @@ let ``ObjectListFilter works with EndsWith operator for ValidStringStruct`` () =
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE ENDSWITH(root["validStringStruct"], "n")"""
 
 [<Fact>]
+let ``ObjectListFilter works with EndsWith case insensitive operator for ValidStringStruct`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = EndsWith ({ FieldName = "validStringStruct"; Value = "n" }, StringComparer.OrdinalIgnoreCase)
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE ENDSWITH(root["validStringStruct"], "n", true)"""
+
+[<Fact>]
 let ``ObjectListFilter works with Contains operator for ValidStringStruct`` () =
     let queryable = container.GetItemLinqQueryable<FakeEntity> ()
     let filter = Contains ({ FieldName = "validStringStruct"; Value = "athan" }, null)
     let filterQuery = queryable.Apply (filter, filterOptions)
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE CONTAINS(root["validStringStruct"], "athan")"""
+
+[<Fact>]
+let ``ObjectListFilter works with Contains case insensitive operator for ValidStringStruct`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Contains ({ FieldName = "validStringStruct"; Value = "athan" }, StringComparer.OrdinalIgnoreCase)
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE CONTAINS(root["validStringStruct"], "athan", true)"""
 
 [<Fact>]
 let ``ObjectListFilter works with Contains operator for ValidStringStruct list`` () =

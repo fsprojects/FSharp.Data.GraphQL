@@ -539,6 +539,13 @@ let ``ObjectListFilter works with Equals case insensitive operator`` () =
     result.LastName |> equals "Abrams"
 
 [<Fact>]
+let ``ObjectListFilter works with Equals case sensitive operator`` () =
+    let filter = Equals ({ FieldName = "firstName"; Value = "jonathan" }, null)
+    let queryable = data.AsQueryable ()
+    let filteredData = queryable.Apply (filter) |> Seq.toList
+    List.length filteredData |> equals 0
+
+[<Fact>]
 let ``ObjectListFilter works with Equals case insensitive operator upper case`` () =
     let filter = Equals ({ FieldName = "firstName"; Value = "JONATHAN" }, StringComparer.OrdinalIgnoreCase)
     let queryable = data.AsQueryable ()
@@ -549,6 +556,13 @@ let ``ObjectListFilter works with Equals case insensitive operator upper case`` 
     result.FirstName |> equals "Jonathan"
 
 [<Fact>]
+let ``ObjectListFilter works with Equals case sensitive operator upper case`` () =
+    let filter = Equals ({ FieldName = "firstName"; Value = "JONATHAN" }, null)
+    let queryable = data.AsQueryable ()
+    let filteredData = queryable.Apply (filter) |> Seq.toList
+    List.length filteredData |> equals 0
+
+[<Fact>]
 let ``ObjectListFilter works with StartsWith case insensitive operator`` () =
     let filter = StartsWith ({ FieldName = "firstName"; Value = "j" }, StringComparer.OrdinalIgnoreCase)
     let queryable = data.AsQueryable ()
@@ -557,6 +571,13 @@ let ``ObjectListFilter works with StartsWith case insensitive operator`` () =
     let result = List.head filteredData
     result.ID |> equals 2
     result.FirstName |> equals "Jonathan"
+
+[<Fact>]
+let ``ObjectListFilter works with StartsWith case sensitive operator`` () =
+    let filter = StartsWith ({ FieldName = "firstName"; Value = "j" }, null)
+    let queryable = data.AsQueryable ()
+    let filteredData = queryable.Apply (filter) |> Seq.toList
+    List.length filteredData |> equals 0
 
 [<Fact>]
 let ``ObjectListFilter works with EndsWith case insensitive operator`` () =
@@ -572,6 +593,13 @@ let ``ObjectListFilter works with EndsWith case insensitive operator`` () =
     result.LastName |> equals "Abrams"
 
 [<Fact>]
+let ``ObjectListFilter works with EndsWith case sensitive operator`` () =
+    let filter = EndsWith ({ FieldName = "lastName"; Value = "AMS" }, null)
+    let queryable = data.AsQueryable ()
+    let filteredData = queryable.Apply (filter) |> Seq.toList
+    List.length filteredData |> equals 0
+
+[<Fact>]
 let ``ObjectListFilter works with Contains case insensitive operator`` () =
     let filter = Contains ({ FieldName = "firstName"; Value = "EN" }, StringComparer.OrdinalIgnoreCase)
     let queryable = data.AsQueryable ()
@@ -585,9 +613,8 @@ let ``ObjectListFilter works with Contains case insensitive operator`` () =
     result.FirstName |> equals "Jeneffer"
 
 [<Fact>]
-let ``ObjectListFilter case-insensitive operators do not match with case-sensitive filters`` () =
-    // Exact case-sensitive StartsWith "j" (lowercase) should match nothing in the data
-    let filter = StartsWith ({ FieldName = "firstName"; Value = "j" }, null)
+let ``ObjectListFilter works with Contains case sensitive operator`` () =
+    let filter = Contains ({ FieldName = "firstName"; Value = "EN" }, null)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 0
