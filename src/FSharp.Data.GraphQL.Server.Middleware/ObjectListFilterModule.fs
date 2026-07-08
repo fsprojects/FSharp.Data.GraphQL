@@ -196,8 +196,10 @@ module ObjectListFilter =
                 | NonEnumerableCast _ ->
                     Expression.NotEqual (Expression.Convert (``member``, objectType), Expression.Convert ((Expression.Constant f.Value), objectType))
                 | Enumerable ->
-                    let ``const`` = Expression.Constant (Values.normalizeOptional ``member``.Type f.Value)
-                    Expression.Not (Expression.Call (``const``, equalsMethod, ``member``))
+                    let normalized = Values.normalizeOptional ``member``.Type f.Value
+                    let ``const`` = Expression.Constant (normalized)
+                    let boxedArg = Expression.Convert (``member``, objectType)
+                    Expression.Not (Expression.Call (``const``, equalsMethod, boxedArg))
         | Not f -> f |> build |> Expression.Not :> Expression
         | And (f1, f2) -> Expression.AndAlso (build f1, build f2)
         | Or (f1, f2) -> Expression.OrElse (build f1, build f2)
@@ -215,8 +217,10 @@ module ObjectListFilter =
                 | NonEnumerableCast _ ->
                     Expression.Equal (Expression.Convert (``member``, objectType), Expression.Convert ((Expression.Constant f.Value), objectType))
                 | Enumerable ->
-                    let ``const`` = Expression.Constant (Values.normalizeOptional ``member``.Type f.Value)
-                    Expression.Call (``const``, equalsMethod, ``member``)
+                    let normalized = Values.normalizeOptional ``member``.Type f.Value
+                    let ``const`` = Expression.Constant (normalized)
+                    let boxedArg = Expression.Convert (``member``, objectType)
+                    Expression.Call (``const``, equalsMethod, boxedArg)
         | GreaterThan f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             match f.Value with
@@ -362,7 +366,7 @@ module ObjectListFilterExtensions =
         /// <summary>
         /// Applies the filter to a queryable with automatic type coercion of JSON primitives to CLR types.
         /// Supports <see cref="Guid"/>, <see cref="DateTime"/>, <see cref="DateTimeOffset"/>, <see cref="DateOnly"/>, and F# discriminated unions.
-        /// Pass custom coercers via <c>ObjectListFilterLinqOptions</c> constructor.
+        /// Pass <see cref="JsonSerializerOptions"/> via <c>ObjectListFilterLinqOptions</c> constructor for custom serialization.
         /// </summary>
         /// <example>
         /// <code>
@@ -370,32 +374,23 @@ module ObjectListFilterExtensions =
         /// let filter = "id" === "550e8400-e29b-41d4-a716-446655440000"
         /// let users = filter.ApplyTo query
         ///
-        /// // With custom coercer for NodaTime.Instant
-        /// let nodaCoercer : FilterValueCoercer = fun targetType value ->
-        ///     if targetType = typeof&lt;NodaTime.Instant&gt; then
-        ///         match value with
-        ///         | :? string as s ->
-        ///             let parsed = NodaTime.Text.InstantPattern.ExtendedIso.Parse s
-        ///             if parsed.Success then ValueSome (box parsed.Value)
-        ///             else ValueNone
-        ///         | _ -> ValueNone
-        ///     else ValueNone
-        ///
-        /// let options = ObjectListFilterLinqOptions([nodaCoercer])
+        /// // With custom JsonSerializerOptions
+        /// let opts = JsonSerializerOptions(PropertyNameCaseInsensitive = true)
+        /// let options = ObjectListFilterLinqOptions(opts)
         /// let events = filter.ApplyTo(query, options)
         /// </code>
         /// </example>
         member inline filter.ApplyTo<'T, 'D> (query : IQueryable<'T>, [<Optional>] options : ObjectListFilterLinqOptions<'T, 'D> | null) =
             let options = options |> ValueOption.ofObj |> ValueOption.defaultValue ObjectListFilterLinqOptions<'T, 'D>.None
-            let filter = TypeCoercion.coerceFilter options.CustomCoercers typeof<'T> filter
+            let filter = TypeCoercion.coerceFilter options.JsonOptions typeof<'T> filter
             apply options filter query
 
     type IQueryable<'T> with
 
         /// <summary>
         /// Applies the filter with automatic type coercion of JSON primitives to CLR types. Supports <see cref="Guid"/>, <see cref="DateTime"/>,
-        /// <see cref="DateTimeOffset"/>, <see cref="DateOnly"/>, and F# discriminated unions. Pass custom coercers via <c>
-        /// ObjectListFilterLinqOptions</c> constructor.
+        /// <see cref="DateTimeOffset"/>, <see cref="DateOnly"/>, and F# discriminated unions. Pass <see cref="JsonSerializerOptions"/> via <c>
+        /// ObjectListFilterLinqOptions</c> constructor for custom serialization.
         /// </summary>
         /// <example>
         /// <code>
@@ -403,18 +398,9 @@ module ObjectListFilterExtensions =
         /// let filter = "id" === "550e8400-e29b-41d4-a716-446655440000"
         /// let users = query.Apply filter
         ///
-        /// // With custom coercer for NodaTime.Instant
-        /// let nodaCoercer : FilterValueCoercer = fun targetType value ->
-        ///     if targetType = typeof&lt;NodaTime.Instant&gt; then
-        ///         match value with
-        ///         | :? string as s ->
-        ///             let parsed = NodaTime.Text.InstantPattern.ExtendedIso.Parse s
-        ///             if parsed.Success then ValueSome (box parsed.Value)
-        ///             else ValueNone
-        ///         | _ -> ValueNone
-        ///     else ValueNone
-        ///
-        /// let options = ObjectListFilterLinqOptions([nodaCoercer])
+        /// // With custom JsonSerializerOptions
+        /// let opts = JsonSerializerOptions(PropertyNameCaseInsensitive = true)
+        /// let options = ObjectListFilterLinqOptions(opts)
         /// let events = query.Apply(filter, options)
         /// </code>
         /// </example>

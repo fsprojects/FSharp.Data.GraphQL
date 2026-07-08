@@ -2,6 +2,7 @@ namespace FSharp.Data.GraphQL.Server.Middleware
 
 open System
 open System.Collections
+open System.Text.Json
 open FSharp.Data.GraphQL
 
 /// A filter definition for a field value.
@@ -47,24 +48,18 @@ type ObjectListFilterValidationException (message : string, [<Optional>] extensi
     inherit GQLMessageExceptionBase (ErrorKind.Validation, message, extensions)
 
 /// <summary>
-/// Function signature for custom value coercion logic. Takes a target CLR type and a JSON
-/// primitive value, returns the coerced value or <see langword="ValueNone"/> if coercion is not supported.
-/// </summary>
-type FilterValueCoercer = Type -> obj -> obj voption
-
-/// <summary>
 /// Optional configuration for LINQ translation including discriminator handling.
 /// </summary>
 type ObjectListFilterLinqOptions<'T, 'D>
     (
         [<Optional>] compareDiscriminator : CompareDiscriminatorExpression<'T, 'D> | null,
         [<Optional>] getDiscriminatorValue : (Type -> 'D) | null,
-        [<Optional>] customCoercers : FilterValueCoercer list | null
+        [<Optional>] jsonOptions : JsonSerializerOptions | null
     ) =
 
     member _.CompareDiscriminator = compareDiscriminator |> ValueOption.ofObj
     member _.GetDiscriminatorValue = getDiscriminatorValue |> ValueOption.ofObj
-    member _.CustomCoercers = customCoercers |> Option.ofObj |> Option.defaultValue []
+    member _.JsonOptions = jsonOptions |> ValueOption.ofObj
 
     static member None = ObjectListFilterLinqOptions<'T, 'D> (null, null, null)
 
@@ -82,10 +77,10 @@ type ObjectListFilterLinqOptions<'T, 'D>
         ObjectListFilterLinqOptions<'T, 'D> (null, getDiscriminatorValue, null)
     new (getDiscriminator : Expression<Func<'T, 'D>>, getDiscriminatorValue : Type -> 'D) =
         ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, getDiscriminatorValue, null)
-    new (customCoercers : FilterValueCoercer list) =
-        ObjectListFilterLinqOptions<'T, 'D> (null, null, customCoercers)
-    new (getDiscriminator : Expression<Func<'T, 'D>>, customCoercers : FilterValueCoercer list) =
-        ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null, customCoercers)
-    new (compareDiscriminator : CompareDiscriminatorExpression<'T, 'D>, customCoercers : FilterValueCoercer list) =
-        ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator, null, customCoercers)
+    new (jsonOptions : JsonSerializerOptions) =
+        ObjectListFilterLinqOptions<'T, 'D> (null, null, jsonOptions)
+    new (getDiscriminator : Expression<Func<'T, 'D>>, jsonOptions : JsonSerializerOptions) =
+        ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null, jsonOptions)
+    new (compareDiscriminator : CompareDiscriminatorExpression<'T, 'D>, jsonOptions : JsonSerializerOptions) =
+        ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator, null, jsonOptions)
 
