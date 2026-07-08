@@ -401,7 +401,7 @@ This filter is mapped by the middleware into the `ObjectListFilter` discriminate
 
 - `Equals`, `StartsWith`, `EndsWith`, and `Contains` now carry a comparer in the public discriminated union.
 - `Equals` and `Contains` keep the non-generic `System.Collections.IComparer` because they also support non-string comparable values in the public discriminated union.
-- When the filtered field is a string and you construct the DU cases directly, pass a `StringComparer` instance in that comparer slot: `StringComparer.Ordinal` for case-sensitive matching and `StringComparer.OrdinalIgnoreCase` for case-insensitive matching.
+- When the filtered field is a string and you construct the DU cases directly, pass a `StringComparer` instance in that comparer slot. `StringComparer` is accepted there because it also implements `System.Collections.IComparer`. Use `StringComparer.Ordinal` for case-sensitive matching and `StringComparer.OrdinalIgnoreCase` for case-insensitive matching.
 - The built-in case-sensitive operators (`===`, `=@@`, `@@=`, `@=@`) still use the default comparer behavior for you.
 - `Contains` is also used for collection membership checks, so the wrapped value type inside `FieldFilter<_>` stays `System.IComparable` instead of being limited to `string`.
 - If you were previously constructing `Equals`, `StartsWith`, `EndsWith`, or `Contains` directly, update those call sites to provide the comparer argument explicitly.
