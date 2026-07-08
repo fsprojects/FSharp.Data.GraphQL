@@ -21,8 +21,8 @@ type private ComparisonOperator =
     | In of string
 
 // String filter suffixes:
-//   lowercase  → case-insensitive (OrdinalIgnoreCase)
-//   Capitalized / UPPER → case-sensitive (Ordinal)
+//   lowercase (e.g. _ends_with, _ew)   → case-insensitive (OrdinalIgnoreCase)
+//   Capitalized (e.g. _Ends_With, _EW) → case-sensitive (Ordinal)
 [<Literal>]
 let private endsWithSuffix = "_ends_with"
 

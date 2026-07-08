@@ -132,10 +132,10 @@ module ObjectListFilter =
         let ( ===~ ) fname (value : string) = Equals ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
 
         /// Creates a new ObjectListFilter representing a case-insensitive STARTS WITH operation on a string value.
-        let ( =@@~ ) fname value = StartsWith ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
+        let ( =@@~ ) fname (value : string) = StartsWith ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
 
         /// Creates a new ObjectListFilter representing a case-insensitive ENDS WITH operation on a string value.
-        let ( @@=~ ) fname value = EndsWith ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
+        let ( @@=~ ) fname (value : string) = EndsWith ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
 
         /// Creates a new ObjectListFilter representing a case-insensitive CONTAINS operation on a string value.
         let ( @=@~ ) fname (value : string) = Contains ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
