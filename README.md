@@ -422,9 +422,9 @@ type ObjectListFilter =
 ```
 
 - `Equals` and `Contains` keep the non-generic `System.Collections.IComparer` because they also support non-string comparable values in the public DU.
-- When the filtered field is a string and you construct the DU cases directly, pass `StringComparer.Ordinal` for case-sensitive matching and `StringComparer.OrdinalIgnoreCase` for case-insensitive matching.
+- When the filtered field is a string and you construct the DU cases directly, pass a `StringComparer` instance in that comparer slot: `StringComparer.Ordinal` for case-sensitive matching and `StringComparer.OrdinalIgnoreCase` for case-insensitive matching.
 - The built-in case-sensitive operators (`===`, `=@@`, `@@=`, `@=@`) still use the default comparer behavior for you.
-- `Contains` is also used for collection membership checks, so its value type stays `System.IComparable` instead of being limited to `string`.
+- `Contains` is also used for collection membership checks, so the wrapped value type inside `FieldFilter<_>` stays `System.IComparable` instead of being limited to `string`.
 - If you were previously constructing `Equals`, `StartsWith`, `EndsWith`, or `Contains` directly, update those call sites to provide the comparer argument explicitly.
 
 And the value recovered by the filter in the query is usable in the `ResolveFieldContext` of the resolve function of the field. To easily access it, you can use the extension method `Filter`, which returns an `ObjectListFilter voption` (it does not have a value if the object doesn't implement a list with the middleware generic definition, or if the user didn't provide a filter input).
