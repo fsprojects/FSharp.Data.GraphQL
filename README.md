@@ -399,11 +399,10 @@ query TestQuery {
 
 This filter is mapped by the middleware into the `ObjectListFilter` discriminated union, with cases such as `And`, `Or`, `Not`, `Equals`, `GreaterThan`, `GreaterThanOrEqual`, `LessThan`, `LessThanOrEqual`, `In`, `StartsWith`, `EndsWith`, `Contains`, `OfTypes`, and `FilterField`.
 
-- The comparer-aware cases in the public discriminated union are `Equals`, `StartsWith`, `EndsWith`, and `Contains`.
+- `Equals`, `StartsWith`, `EndsWith`, and `Contains` now carry a comparer in the public discriminated union.
 - `Equals` and `Contains` keep the non-generic `System.Collections.IComparer` because they also support non-string comparable values in the public discriminated union.
-- When filters come from GraphQL input, suffix casing selects the string comparer automatically: lowercase suffixes use case-insensitive matching and capitalized suffixes use case-sensitive matching.
 - When the filtered field is a string and you construct the DU cases directly, pass a `StringComparer` instance in that comparer slot. `StringComparer` is accepted there because it also implements `System.Collections.IComparer`. Use `StringComparer.Ordinal` for case-sensitive matching and `StringComparer.OrdinalIgnoreCase` for case-insensitive matching.
-- The built-in `=@@`, `@@=`, and string `@=@` operators keep the existing case-sensitive `CurrentCulture` behavior when no comparer is supplied. `===` continues to use the normal equality translation.
+- The built-in case-sensitive operators (`===`, `=@@`, `@@=`, `@=@`) still use the default comparer behavior for you.
 - `Contains` is also used for collection membership checks, so the wrapped value type inside `FieldFilter<_>` stays `System.IComparable` instead of being limited to `string`.
 - If you were previously constructing `Equals`, `StartsWith`, `EndsWith`, or `Contains` directly, update those call sites to provide the comparer argument explicitly.
 
