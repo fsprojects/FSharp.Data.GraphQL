@@ -14,6 +14,7 @@
     <PackageReference Include="GraphQL.Server.Ui.Voyager" />
     <PackageReference Include="HotChocolate.AspNetCore" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" />
     <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="Thoth.Json.Net" />
   </ItemGroup>
