@@ -1,6 +1,7 @@
 namespace FSharp.Data.GraphQL.Server.Middleware
 
 open System
+open System.Collections
 open FSharp.Data.GraphQL
 
 /// A filter definition for a field value.
@@ -11,15 +12,15 @@ type ObjectListFilter =
     | And of ObjectListFilter * ObjectListFilter
     | Or of ObjectListFilter * ObjectListFilter
     | Not of ObjectListFilter
-    | Equals of Filter : FieldFilter<System.IComparable> * Comparer : System.Collections.IComparer
+    | Equals of Filter : FieldFilter<System.IComparable> * Comparer : IComparer
     | GreaterThan of FieldFilter<System.IComparable>
     | GreaterThanOrEqual of FieldFilter<System.IComparable>
     | LessThan of FieldFilter<System.IComparable>
     | LessThanOrEqual of FieldFilter<System.IComparable>
     | In of FieldFilter<obj list>
-    | StartsWith of Filter : FieldFilter<string> * Comparer : System.Collections.IComparer
-    | EndsWith of Filter : FieldFilter<string> * Comparer : System.Collections.IComparer
-    | Contains of Filter : FieldFilter<System.IComparable> * Comparer : System.Collections.IComparer
+    | StartsWith of Filter : FieldFilter<string> * Comparer : StringComparer
+    | EndsWith of Filter : FieldFilter<string> * Comparer : StringComparer
+    | Contains of Filter : FieldFilter<System.IComparable> * Comparer : IComparer
     | OfTypes of Type list
     | FilterField of FieldFilter<ObjectListFilter>
 
@@ -28,7 +29,6 @@ open System.Linq.Expressions
 open System.Runtime.InteropServices
 open System.Reflection
 open System.Collections.Generic
-open System.Collections
 
 type private CompareDiscriminatorExpression<'T, 'D> = Expression<Func<'T, 'D, bool>>
 
@@ -315,11 +315,11 @@ module ObjectListFilter =
             | NonEnumerableCast ``type`` -> Expression.LessThanOrEqual ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
         | StartsWith (f, comparer) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            let comparison = comparerToStringComparison comparer |> ValueOption.defaultValue StringComparison.Ordinal
+            let comparison = comparerToStringComparison (comparer :> IComparer) |> ValueOption.defaultValue StringComparison.Ordinal
             Expression.Call (normalizeStringMemberExpr ``member``, StringStartsWithMethod, Expression.Constant f.Value, Expression.Constant comparison)
         | EndsWith (f, comparer) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            let comparison = comparerToStringComparison comparer |> ValueOption.defaultValue StringComparison.Ordinal
+            let comparison = comparerToStringComparison (comparer :> IComparer) |> ValueOption.defaultValue StringComparison.Ordinal
             Expression.Call (normalizeStringMemberExpr ``member``, StringEndsWithMethod, Expression.Constant f.Value, Expression.Constant comparison)
 
         | Contains (f, comparer) ->
