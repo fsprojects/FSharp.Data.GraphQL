@@ -11,8 +11,8 @@ type FieldFilter<'Val> = { FieldName : string; Value : 'Val }
 /// A filter definition for an object list.
 /// </summary>
 /// <remarks>
-/// String-based filters can carry a comparer. <see langword="null"/> and
-/// <see cref="StringComparer.Ordinal"/> represent case-sensitive matching, while
+/// String-based filters can carry a comparer. <see langword="null"/> is treated the same as
+/// <see cref="StringComparer.Ordinal"/> for case-sensitive matching, while
 /// <see cref="StringComparer.OrdinalIgnoreCase"/> enables case-insensitive matching.
 /// When filters are provided through GraphQL input, lowercase string suffixes are interpreted
 /// as case-insensitive and capitalized suffixes are interpreted as case-sensitive.
