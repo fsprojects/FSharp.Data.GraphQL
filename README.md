@@ -399,10 +399,10 @@ query TestQuery {
 
 This filter is mapped by the middleware into the `ObjectListFilter` discriminated union, with cases such as `And`, `Or`, `Not`, `Equals`, `GreaterThan`, `GreaterThanOrEqual`, `LessThan`, `LessThanOrEqual`, `In`, `StartsWith`, `EndsWith`, `Contains`, `OfTypes`, and `FilterField`.
 
-- `Equals`, `StartsWith`, `EndsWith`, and `Contains` now carry a comparer in the public discriminated union.
+- The cases `Equals`, `StartsWith`, `EndsWith`, and `Contains` accept a comparer parameter in the public discriminated union.
 - `Equals` and `Contains` keep the non-generic `System.Collections.IComparer` because they also support non-string comparable values in the public discriminated union.
 - When the filtered field is a string and you construct the DU cases directly, pass a `StringComparer` instance in that comparer slot. `StringComparer` is accepted there because it also implements `System.Collections.IComparer`. Use `StringComparer.Ordinal` for case-sensitive matching and `StringComparer.OrdinalIgnoreCase` for case-insensitive matching.
-- The built-in case-sensitive operators (`===`, `=@@`, `@@=`, `@=@`) still use the default comparer behavior for you.
+- The built-in case-sensitive operators (`===`, `=@@`, `@@=`, `@=@`) use the default comparer behavior.
 - `Contains` is also used for collection membership checks, so the wrapped value type inside `FieldFilter<_>` stays `System.IComparable` instead of being limited to `string`.
 - If you were previously constructing `Equals`, `StartsWith`, `EndsWith`, or `Contains` directly, update those call sites to provide the comparer argument explicitly.
 
