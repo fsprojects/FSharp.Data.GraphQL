@@ -421,7 +421,7 @@ type ObjectListFilter =
     | FilterField of FieldFilter<ObjectListFilter>
 ```
 
-`Equals` and `Contains` keep `System.Collections.IComparer` because they also support non-string comparable values. For string comparisons, pass `StringComparer.Ordinal` (or `null`) for case-sensitive matching and `StringComparer.OrdinalIgnoreCase` for case-insensitive matching.
+`Equals` and `Contains` keep the non-generic `System.Collections.IComparer` because they also support non-string comparable values in the public DU. When the filtered field is a string, pass `StringComparer.Ordinal` (or `null`) for case-sensitive matching and `StringComparer.OrdinalIgnoreCase` for case-insensitive matching. `Contains` is also used for collection membership checks, so its value type stays `System.IComparable` instead of being limited to `string`.
 
 And the value recovered by the filter in the query is usable in the `ResolveFieldContext` of the resolve function of the field. To easily access it, you can use the extension method `Filter`, which returns an `ObjectListFilter voption` (it does not have a value if the object doesn't implement a list with the middleware generic definition, or if the user didn't provide a filter input).
 
