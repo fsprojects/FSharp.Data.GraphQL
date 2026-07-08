@@ -528,7 +528,7 @@ let ``ObjectListFilter OfTypes works with two or more types`` () =
         animal.Name |> equals "Horse D"
 
 [<Fact>]
-let ``ObjectListFilter works with EqualsCI operator`` () =
+let ``ObjectListFilter works with Equals case insensitive operator`` () =
     let filter = Equals ({ FieldName = "firstName"; Value = "jonathan" }, StringComparer.OrdinalIgnoreCase)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
@@ -539,7 +539,7 @@ let ``ObjectListFilter works with EqualsCI operator`` () =
     result.LastName |> equals "Abrams"
 
 [<Fact>]
-let ``ObjectListFilter works with EqualsCI operator upper case`` () =
+let ``ObjectListFilter works with Equals case insensitive operator upper case`` () =
     let filter = Equals ({ FieldName = "firstName"; Value = "JONATHAN" }, StringComparer.OrdinalIgnoreCase)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
@@ -549,7 +549,7 @@ let ``ObjectListFilter works with EqualsCI operator upper case`` () =
     result.FirstName |> equals "Jonathan"
 
 [<Fact>]
-let ``ObjectListFilter works with StartsWithCI operator`` () =
+let ``ObjectListFilter works with StartsWith case insensitive operator`` () =
     let filter = StartsWith ({ FieldName = "firstName"; Value = "j" }, StringComparer.OrdinalIgnoreCase)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
@@ -559,7 +559,7 @@ let ``ObjectListFilter works with StartsWithCI operator`` () =
     result.FirstName |> equals "Jonathan"
 
 [<Fact>]
-let ``ObjectListFilter works with EndsWithCI operator`` () =
+let ``ObjectListFilter works with EndsWith case insensitive operator`` () =
     let filter = EndsWith ({ FieldName = "lastName"; Value = "AMS" }, StringComparer.OrdinalIgnoreCase)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
@@ -572,7 +572,7 @@ let ``ObjectListFilter works with EndsWithCI operator`` () =
     result.LastName |> equals "Abrams"
 
 [<Fact>]
-let ``ObjectListFilter works with ContainsCI operator`` () =
+let ``ObjectListFilter works with Contains case insensitive operator`` () =
     let filter = Contains ({ FieldName = "firstName"; Value = "EN" }, StringComparer.OrdinalIgnoreCase)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
