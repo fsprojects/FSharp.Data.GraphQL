@@ -288,4 +288,5 @@
 
 * **Breaking Change** Migrated to .NET 10
 * **Breaking Change** Made Relay `Edge` a read-only struct
+* Added case-insensitive string comparison support to `ObjectListFilter`, including comparer-aware filter cases and GraphQL filter suffix handling
 * Improved Relay XML documentation comments
