@@ -12,7 +12,8 @@ type FieldFilter<'Val> = { FieldName : string; Value : 'Val }
 /// </summary>
 /// <remarks>
 /// String-based filters can carry a comparer. When the comparer is not provided by the default
-/// case-sensitive operators, the behavior is equivalent to using `StringComparer.Ordinal`.
+/// string operators, `StartsWith`, `EndsWith`, and string `Contains` preserve the existing
+/// case-sensitive `StringComparison.CurrentCulture` behavior.
 /// `StringComparer.OrdinalIgnoreCase` enables case-insensitive matching.
 /// When filters are provided through GraphQL input, lowercase string suffixes are interpreted
 /// as case-insensitive and capitalized suffixes are interpreted as case-sensitive.
@@ -230,7 +231,7 @@ module ObjectListFilter =
         |> Seq.head
 
     /// Maps an IComparer to a StringComparison value.
-    /// Returns ValueNone for null or Ordinal comparers (use default Expression.Equal path).
+    /// Returns ValueNone only when the comparer is null or is not a recognized StringComparer.
     let private comparerToStringComparison (comparer : IComparer) =
         match comparer with
         | null -> ValueNone
@@ -324,11 +325,11 @@ module ObjectListFilter =
             | NonEnumerableCast ``type`` -> Expression.LessThanOrEqual ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
         | StartsWith (f, comparer) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            let comparison = comparerToStringComparison (comparer :> IComparer) |> ValueOption.defaultValue StringComparison.Ordinal
+            let comparison = comparerToStringComparison (comparer :> IComparer) |> ValueOption.defaultValue StringComparison.CurrentCulture
             Expression.Call (normalizeStringMemberExpr ``member``, StringStartsWithMethod, Expression.Constant f.Value, Expression.Constant comparison)
         | EndsWith (f, comparer) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            let comparison = comparerToStringComparison (comparer :> IComparer) |> ValueOption.defaultValue StringComparison.Ordinal
+            let comparison = comparerToStringComparison (comparer :> IComparer) |> ValueOption.defaultValue StringComparison.CurrentCulture
             Expression.Call (normalizeStringMemberExpr ``member``, StringEndsWithMethod, Expression.Constant f.Value, Expression.Constant comparison)
 
         | Contains (f, comparer) ->
@@ -367,7 +368,7 @@ module ObjectListFilter =
             | :? FieldInfo as field when field.FieldType |> isEnumerable -> callContains field.FieldType
             | _ ->
                 let unwrappedValue = Helpers.unwrap f.Value
-                let comparison = comparerToStringComparison comparer |> ValueOption.defaultValue StringComparison.Ordinal
+                let comparison = comparerToStringComparison comparer |> ValueOption.defaultValue StringComparison.CurrentCulture
                 Expression.Call (normalizeStringMemberExpr ``member``, StringContainsMethod, Expression.Constant (unwrappedValue :?> string, typeof<string>), Expression.Constant comparison)
         | In f when not (f.Value.IsEmpty) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
