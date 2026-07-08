@@ -9,48 +9,122 @@ open FSharp.Data.GraphQL.Ast
 open FsToolkit.ErrorHandling
 
 type private ComparisonOperator =
-    | EndsWith of string
-    | StartsWith of string
-    | Contains of string
+    | EndsWith of FieldName : string * Comparer : StringComparer
+    | StartsWith of FieldName : string * Comparer : StringComparer
+    | Contains of FieldName : string * Comparer : StringComparer
+    | StringEquals of FieldName : string * Comparer : StringComparer
     | Equals of string
     | GreaterThan of string
     | GreaterThanOrEqual of string
     | LessThan of string
     | LessThanOrEqual of string
     | In of string
-    | EqualsCI of string
-    | StartsWithCI of string
-    | EndsWithCI of string
-    | ContainsCI of string
+
+// String filter suffixes:
+//   lowercase  → case-insensitive (OrdinalIgnoreCase)
+//   Capitalized / UPPER → case-sensitive (Ordinal)
+[<Literal>]
+let private endsWithSuffix = "_ends_with"
+
+[<Literal>]
+let private ewSuffix = "_ew"
+
+[<Literal>]
+let private EndsWithCSSuffix = "_Ends_With"
+
+[<Literal>]
+let private EWCSSuffix = "_EW"
+
+[<Literal>]
+let private startsWithSuffix = "_starts_with"
+
+[<Literal>]
+let private swSuffix = "_sw"
+
+[<Literal>]
+let private StartsWithCSSuffix = "_Starts_With"
+
+[<Literal>]
+let private SWCSSuffix = "_SW"
+
+[<Literal>]
+let private containsSuffix = "_contains"
+
+[<Literal>]
+let private ContainsCSSuffix = "_Contains"
+
+[<Literal>]
+let private equalsSuffix = "_equals"
+
+[<Literal>]
+let private eqSuffix = "_eq"
+
+[<Literal>]
+let private EqualsCSSuffix = "_Equals"
+
+[<Literal>]
+let private EQCSSuffix = "_EQ"
+
+[<Literal>]
+let private greaterThanOrEqualSuffix = "_greater_than_or_equal"
+
+[<Literal>]
+let private gteSuffix = "_gte"
+
+[<Literal>]
+let private greaterThanSuffix = "_greater_than"
+
+[<Literal>]
+let private gtSuffix = "_gt"
+
+[<Literal>]
+let private lessThanOrEqualSuffix = "_less_than_or_equal"
+
+[<Literal>]
+let private lteSuffix = "_lte"
+
+[<Literal>]
+let private lessThanSuffix = "_less_than"
+
+[<Literal>]
+let private ltSuffix = "_lt"
+
+[<Literal>]
+let private inSuffix = "_in"
 
 let rec private coerceObjectListFilterInput (variables : Variables) inputValue : Result<ObjectListFilter voption, IGQLError list> =
 
     let parseFieldCondition (s : string) =
-        let s = s.ToLowerInvariant ()
         let prefix (suffix : string) (s : string) = s.Substring (0, s.Length - suffix.Length)
+        // Phase 1: case-sensitive string ops – match original string against capitalized/uppercase suffixes
         match s with
-        | s when s.EndsWith ("_ends_with_ci") && s.Length > "_ends_with_ci".Length -> EndsWithCI (prefix "_ends_with_ci" s)
-        | s when s.EndsWith ("_ewci") && s.Length > "_ewci".Length -> EndsWithCI (prefix "_ewci" s)
-        | s when s.EndsWith ("_starts_with_ci") && s.Length > "_starts_with_ci".Length -> StartsWithCI (prefix "_starts_with_ci" s)
-        | s when s.EndsWith ("_swci") && s.Length > "_swci".Length -> StartsWithCI (prefix "_swci" s)
-        | s when s.EndsWith ("_contains_ci") && s.Length > "_contains_ci".Length -> ContainsCI (prefix "_contains_ci" s)
-        | s when s.EndsWith ("_cci") && s.Length > "_cci".Length -> ContainsCI (prefix "_cci" s)
-        | s when s.EndsWith ("_equals_ci") && s.Length > "_equals_ci".Length -> EqualsCI (prefix "_equals_ci" s)
-        | s when s.EndsWith ("_eqi") && s.Length > "_eqi".Length -> EqualsCI (prefix "_eqi" s)
-        | s when s.EndsWith ("_ends_with") && s.Length > "_ends_with".Length -> EndsWith (prefix "_ends_with" s)
-        | s when s.EndsWith ("_ew") && s.Length > "_ew".Length -> EndsWith (prefix "_ew" s)
-        | s when s.EndsWith ("_starts_with") && s.Length > "_starts_with".Length -> StartsWith (prefix "_starts_with" s)
-        | s when s.EndsWith ("_sw") && s.Length > "_sw".Length -> StartsWith (prefix "_sw" s)
-        | s when s.EndsWith ("_contains") && s.Length > "_contains".Length -> Contains (prefix "_contains" s)
-        | s when s.EndsWith ("_greater_than") && s.Length > "_greater_than".Length -> GreaterThan (prefix "_greater_than" s)
-        | s when s.EndsWith ("_gt") && s.Length > "_gt".Length -> GreaterThan (prefix "_gt" s)
-        | s when s.EndsWith ("_greater_than_or_equal") && s.Length > "_greater_than_or_equal".Length -> GreaterThanOrEqual (prefix "_greater_than_or_equal" s)
-        | s when s.EndsWith ("_gte") && s.Length > "_gte".Length -> GreaterThanOrEqual (prefix "_gte" s)
-        | s when s.EndsWith ("_less_than") && s.Length > "_less_than".Length -> LessThan (prefix "_less_than" s)
-        | s when s.EndsWith ("_lt") && s.Length > "_lt".Length -> LessThan (prefix "_lt" s)
-        | s when s.EndsWith ("_less_than_or_equal") && s.Length > "_less_than_or_equal".Length -> LessThanOrEqual (prefix "_less_than_or_equal" s)
-        | s when s.EndsWith ("_lte") && s.Length > "_lte".Length -> LessThanOrEqual (prefix "_lte" s)
-        | s when s.EndsWith ("_in") && s.Length > "_in".Length -> In (prefix "_in" s)
+        | s when s.EndsWith EndsWithCSSuffix && s.Length > EndsWithCSSuffix.Length -> EndsWith (prefix EndsWithCSSuffix s, StringComparer.Ordinal)
+        | s when s.EndsWith EWCSSuffix && s.Length > EWCSSuffix.Length -> EndsWith (prefix EWCSSuffix s, StringComparer.Ordinal)
+        | s when s.EndsWith StartsWithCSSuffix && s.Length > StartsWithCSSuffix.Length -> StartsWith (prefix StartsWithCSSuffix s, StringComparer.Ordinal)
+        | s when s.EndsWith SWCSSuffix && s.Length > SWCSSuffix.Length -> StartsWith (prefix SWCSSuffix s, StringComparer.Ordinal)
+        | s when s.EndsWith ContainsCSSuffix && s.Length > ContainsCSSuffix.Length -> Contains (prefix ContainsCSSuffix s, StringComparer.Ordinal)
+        | s when s.EndsWith EqualsCSSuffix && s.Length > EqualsCSSuffix.Length -> StringEquals (prefix EqualsCSSuffix s, StringComparer.Ordinal)
+        | s when s.EndsWith EQCSSuffix && s.Length > EQCSSuffix.Length -> StringEquals (prefix EQCSSuffix s, StringComparer.Ordinal)
+        | _ ->
+        // Phase 2: case-insensitive string ops and numeric ops – lower-case before matching
+        let s = s.ToLowerInvariant ()
+        match s with
+        | s when s.EndsWith endsWithSuffix && s.Length > endsWithSuffix.Length -> EndsWith (prefix endsWithSuffix s, StringComparer.OrdinalIgnoreCase)
+        | s when s.EndsWith ewSuffix && s.Length > ewSuffix.Length -> EndsWith (prefix ewSuffix s, StringComparer.OrdinalIgnoreCase)
+        | s when s.EndsWith startsWithSuffix && s.Length > startsWithSuffix.Length -> StartsWith (prefix startsWithSuffix s, StringComparer.OrdinalIgnoreCase)
+        | s when s.EndsWith swSuffix && s.Length > swSuffix.Length -> StartsWith (prefix swSuffix s, StringComparer.OrdinalIgnoreCase)
+        | s when s.EndsWith containsSuffix && s.Length > containsSuffix.Length -> Contains (prefix containsSuffix s, StringComparer.OrdinalIgnoreCase)
+        | s when s.EndsWith equalsSuffix && s.Length > equalsSuffix.Length -> StringEquals (prefix equalsSuffix s, StringComparer.OrdinalIgnoreCase)
+        | s when s.EndsWith eqSuffix && s.Length > eqSuffix.Length -> StringEquals (prefix eqSuffix s, StringComparer.OrdinalIgnoreCase)
+        | s when s.EndsWith greaterThanOrEqualSuffix && s.Length > greaterThanOrEqualSuffix.Length -> GreaterThanOrEqual (prefix greaterThanOrEqualSuffix s)
+        | s when s.EndsWith gteSuffix && s.Length > gteSuffix.Length -> GreaterThanOrEqual (prefix gteSuffix s)
+        | s when s.EndsWith greaterThanSuffix && s.Length > greaterThanSuffix.Length -> GreaterThan (prefix greaterThanSuffix s)
+        | s when s.EndsWith gtSuffix && s.Length > gtSuffix.Length -> GreaterThan (prefix gtSuffix s)
+        | s when s.EndsWith lessThanOrEqualSuffix && s.Length > lessThanOrEqualSuffix.Length -> LessThanOrEqual (prefix lessThanOrEqualSuffix s)
+        | s when s.EndsWith lteSuffix && s.Length > lteSuffix.Length -> LessThanOrEqual (prefix lteSuffix s)
+        | s when s.EndsWith lessThanSuffix && s.Length > lessThanSuffix.Length -> LessThan (prefix lessThanSuffix s)
+        | s when s.EndsWith ltSuffix && s.Length > ltSuffix.Length -> LessThan (prefix ltSuffix s)
+        | s when s.EndsWith inSuffix && s.Length > inSuffix.Length -> In (prefix inSuffix s)
         | s -> Equals s
 
     let (|EquatableValue|NonEquatableValue|) v =
@@ -108,19 +182,16 @@ let rec private coerceObjectListFilterInput (variables : Variables) inputValue :
             | Error errs -> Error errs
             | Ok ValueNone -> Ok ValueNone
             | Ok (ValueSome filter) -> Ok (ValueSome (Not filter))
-        | EndsWith fname, StringValue value -> Ok (ValueSome (ObjectListFilter.EndsWith { FieldName = fname; Value = value }))
-        | StartsWith fname, StringValue value -> Ok (ValueSome (ObjectListFilter.StartsWith { FieldName = fname; Value = value }))
-        | Contains fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.Contains { FieldName = fname; Value = value }))
-        | EndsWithCI fname, StringValue value -> Ok (ValueSome (ObjectListFilter.EndsWithCI { FieldName = fname; Value = value }))
-        | StartsWithCI fname, StringValue value -> Ok (ValueSome (ObjectListFilter.StartsWithCI { FieldName = fname; Value = value }))
-        | ContainsCI fname, StringValue value -> Ok (ValueSome (ObjectListFilter.ContainsCI { FieldName = fname; Value = value }))
-        | EqualsCI fname, StringValue value -> Ok (ValueSome (ObjectListFilter.EqualsCI { FieldName = fname; Value = value }))
+        | EndsWith (fname, comparer), StringValue value -> Ok (ValueSome (ObjectListFilter.EndsWith ({ FieldName = fname; Value = value }, comparer)))
+        | StartsWith (fname, comparer), StringValue value -> Ok (ValueSome (ObjectListFilter.StartsWith ({ FieldName = fname; Value = value }, comparer)))
+        | Contains (fname, comparer), ComparableValue value -> Ok (ValueSome (ObjectListFilter.Contains ({ FieldName = fname; Value = value }, comparer)))
+        | StringEquals (fname, comparer), StringValue value -> Ok (ValueSome (ObjectListFilter.Equals ({ FieldName = fname; Value = value }, comparer)))
         | Equals fname, ObjectValue value ->
             match mapInput value with
             | Error errs -> Error errs
             | Ok ValueNone -> Ok ValueNone
             | Ok (ValueSome filter) -> Ok (ValueSome (FilterField { FieldName = fname; Value = filter }))
-        | Equals fname, EquatableValue value -> Ok (ValueSome (ObjectListFilter.Equals { FieldName = fname; Value = value }))
+        | Equals fname, EquatableValue value -> Ok (ValueSome (ObjectListFilter.Equals ({ FieldName = fname; Value = value }, null)))
         | GreaterThan fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.GreaterThan { FieldName = fname; Value = value }))
         | GreaterThanOrEqual fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.GreaterThanOrEqual { FieldName = fname; Value = value }))
         | LessThan fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.LessThan { FieldName = fname; Value = value }))

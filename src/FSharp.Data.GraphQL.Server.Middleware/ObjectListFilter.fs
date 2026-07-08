@@ -11,27 +11,24 @@ type ObjectListFilter =
     | And of ObjectListFilter * ObjectListFilter
     | Or of ObjectListFilter * ObjectListFilter
     | Not of ObjectListFilter
-    | Equals of FieldFilter<System.IComparable>
+    | Equals of Filter : FieldFilter<System.IComparable> * Comparer : System.Collections.IComparer
     | GreaterThan of FieldFilter<System.IComparable>
     | GreaterThanOrEqual of FieldFilter<System.IComparable>
     | LessThan of FieldFilter<System.IComparable>
     | LessThanOrEqual of FieldFilter<System.IComparable>
     | In of FieldFilter<obj list>
-    | StartsWith of FieldFilter<string>
-    | EndsWith of FieldFilter<string>
-    | Contains of FieldFilter<System.IComparable>
+    | StartsWith of Filter : FieldFilter<string> * Comparer : System.Collections.IComparer
+    | EndsWith of Filter : FieldFilter<string> * Comparer : System.Collections.IComparer
+    | Contains of Filter : FieldFilter<System.IComparable> * Comparer : System.Collections.IComparer
     | OfTypes of Type list
     | FilterField of FieldFilter<ObjectListFilter>
-    | EqualsCI of FieldFilter<string>
-    | StartsWithCI of FieldFilter<string>
-    | EndsWithCI of FieldFilter<string>
-    | ContainsCI of FieldFilter<string>
 
 open System.Linq
 open System.Linq.Expressions
 open System.Runtime.InteropServices
 open System.Reflection
 open System.Collections.Generic
+open System.Collections
 
 type private CompareDiscriminatorExpression<'T, 'D> = Expression<Func<'T, 'D, bool>>
 
@@ -99,7 +96,7 @@ module ObjectListFilter =
         let ( ||| ) x y = Or (x, y)
 
         /// Creates a new ObjectListFilter representing an EQUALS operation between two comparable values.
-        let ( === ) fname value = Equals { FieldName = fname; Value = value }
+        let ( === ) fname value = Equals ({ FieldName = fname; Value = value }, null)
 
         /// Creates a new ObjectListFilter representing a GREATER THAN operation of a comparable value.
         let ( >>> ) fname value = GreaterThan { FieldName = fname; Value = value }
@@ -114,13 +111,13 @@ module ObjectListFilter =
         let ( <== ) fname value = LessThanOrEqual { FieldName = fname; Value = value }
 
         /// Creates a new ObjectListFilter representing a STARTS WITH operation of a string value.
-        let ( =@@ ) fname value = StartsWith { FieldName = fname; Value = value }
+        let ( =@@ ) fname value = StartsWith ({ FieldName = fname; Value = value }, null)
 
         /// Creates a new ObjectListFilter representing an ENDS WITH operation of a string value.
-        let ( @@= ) fname value = EndsWith { FieldName = fname; Value = value }
+        let ( @@= ) fname value = EndsWith ({ FieldName = fname; Value = value }, null)
 
         /// Creates a new ObjectListFilter representing a CONTAINS operation.
-        let ( @=@ ) fname value = Contains { FieldName = fname; Value = value }
+        let ( @=@ ) fname value = Contains ({ FieldName = fname; Value = value }, null)
 
         /// Creates a new ObjectListFilter representing a IN operation.
         let ( =~= ) fname value = In { FieldName = fname; Value = value }
@@ -132,16 +129,16 @@ module ObjectListFilter =
         let ( !!! ) filter = Not filter
 
         /// Creates a new ObjectListFilter representing a case-insensitive EQUALS operation on a string value.
-        let ( ===~ ) fname value = EqualsCI { FieldName = fname; Value = value }
+        let ( ===~ ) fname (value : string) = Equals ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
 
         /// Creates a new ObjectListFilter representing a case-insensitive STARTS WITH operation on a string value.
-        let ( =@@~ ) fname value = StartsWithCI { FieldName = fname; Value = value }
+        let ( =@@~ ) fname value = StartsWith ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
 
         /// Creates a new ObjectListFilter representing a case-insensitive ENDS WITH operation on a string value.
-        let ( @@=~ ) fname value = EndsWithCI { FieldName = fname; Value = value }
+        let ( @@=~ ) fname value = EndsWith ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
 
         /// Creates a new ObjectListFilter representing a case-insensitive CONTAINS operation on a string value.
-        let ( @=@~ ) fname value = ContainsCI { FieldName = fname; Value = value }
+        let ( @=@~ ) fname (value : string) = Contains ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
 
     let private genericWhereMethod =
         typeof<Queryable>.GetMethods ()
@@ -164,11 +161,10 @@ module ObjectListFilter =
     let private StringEndsWithMethod = stringType.GetMethod ("EndsWith", [| stringType |])
     let private StringContainsMethod = stringType.GetMethod ("Contains", [| stringType |])
     let private stringComparisonType = typeof<StringComparison>
-    let private StringEqualsCIMethod = stringType.GetMethod ("Equals", [| stringType; stringComparisonType |])
-    let private StringStartsWithCIMethod = stringType.GetMethod ("StartsWith", [| stringType; stringComparisonType |])
-    let private StringEndsWithCIMethod = stringType.GetMethod ("EndsWith", [| stringType; stringComparisonType |])
-    let private StringContainsCIMethod = stringType.GetMethod ("Contains", [| stringType; stringComparisonType |])
-    let private OrdinalIgnoreCase = Expression.Constant (StringComparison.OrdinalIgnoreCase)
+    let private StringStartsWithWithComparisonMethod = stringType.GetMethod ("StartsWith", [| stringType; stringComparisonType |])
+    let private StringEndsWithWithComparisonMethod = stringType.GetMethod ("EndsWith", [| stringType; stringComparisonType |])
+    let private StringContainsWithComparisonMethod = stringType.GetMethod ("Contains", [| stringType; stringComparisonType |])
+    let private StringEqualsWithComparisonMethod = stringType.GetMethod ("Equals", [| stringType; stringComparisonType |])
     let private unwrapOptionMethod =
         FSharp.Data.GraphQL.Helpers.moduleType.GetMethod (nameof Helpers.unwrap)
 
@@ -227,6 +223,20 @@ module ObjectListFilter =
         |> Seq.where (fun m -> m.Name = "Equals")
         |> Seq.head
 
+    /// Maps an IComparer to a StringComparison value.
+    /// Returns ValueNone for null or Ordinal comparers (use default Expression.Equal path).
+    let private comparerToStringComparison (comparer : IComparer) =
+        match comparer with
+        | null -> ValueNone
+        | :? StringComparer as sc ->
+            if obj.ReferenceEquals (sc, StringComparer.OrdinalIgnoreCase) then ValueSome StringComparison.OrdinalIgnoreCase
+            elif obj.ReferenceEquals (sc, StringComparer.InvariantCultureIgnoreCase) then ValueSome StringComparison.InvariantCultureIgnoreCase
+            elif obj.ReferenceEquals (sc, StringComparer.CurrentCultureIgnoreCase) then ValueSome StringComparison.CurrentCultureIgnoreCase
+            elif obj.ReferenceEquals (sc, StringComparer.InvariantCulture) then ValueSome StringComparison.InvariantCulture
+            elif obj.ReferenceEquals (sc, StringComparer.CurrentCulture) then ValueSome StringComparison.CurrentCulture
+            else ValueNone
+        | _ -> ValueNone
+
     let rec buildFilterExpr isEnumerableQuery (param : SourceExpression) buildTypeDiscriminatorCheck filter : Expression =
 
         let build = buildFilterExpr isEnumerableQuery param buildTypeDiscriminatorCheck
@@ -246,31 +256,41 @@ module ObjectListFilter =
             | _ -> Expression.Convert (``member``, stringType)
 
         match filter with
-        | Not (Equals f) ->
+        | Not (Equals (f, comparer)) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            let hasEqualityOperator = hasEqualityOperator ``member``.Type
-            match f.Value with
-            | NoCast when hasEqualityOperator -> Expression.NotEqual (``member``, Expression.Constant f.Value)
-            | NoCast
-            | NonEnumerableCast _ ->
-                Expression.NotEqual (Expression.Convert (``member``, objectType), Expression.Convert ((Expression.Constant f.Value), objectType))
-            | Enumerable ->
-                let ``const`` = Expression.Constant (Values.normalizeOptional ``member``.Type f.Value)
-                Expression.Not (Expression.Call (``const``, equalsMethod, ``member``))
+            match comparerToStringComparison comparer with
+            | ValueSome comparison ->
+                let value = Helpers.unwrap (box f.Value) :?> string
+                Expression.Not (Expression.Call (normalizeStringMemberExpr ``member``, StringEqualsWithComparisonMethod, Expression.Constant (value, typeof<string>), Expression.Constant comparison)) :> Expression
+            | ValueNone ->
+                let hasEqualityOperator = hasEqualityOperator ``member``.Type
+                match f.Value with
+                | NoCast when hasEqualityOperator -> Expression.NotEqual (``member``, Expression.Constant f.Value)
+                | NoCast
+                | NonEnumerableCast _ ->
+                    Expression.NotEqual (Expression.Convert (``member``, objectType), Expression.Convert ((Expression.Constant f.Value), objectType))
+                | Enumerable ->
+                    let ``const`` = Expression.Constant (Values.normalizeOptional ``member``.Type f.Value)
+                    Expression.Not (Expression.Call (``const``, equalsMethod, ``member``))
         | Not f -> f |> build |> Expression.Not :> Expression
         | And (f1, f2) -> Expression.AndAlso (build f1, build f2)
         | Or (f1, f2) -> Expression.OrElse (build f1, build f2)
-        | Equals f ->
+        | Equals (f, comparer) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            let hasEqualityOperator = hasEqualityOperator ``member``.Type
-            match f.Value with
-            | NoCast when hasEqualityOperator -> Expression.Equal (``member``, Expression.Constant f.Value)
-            | NoCast
-            | NonEnumerableCast _ ->
-                Expression.Equal (Expression.Convert (``member``, objectType), Expression.Convert ((Expression.Constant f.Value), objectType))
-            | Enumerable ->
-                let ``const`` = Expression.Constant (Values.normalizeOptional ``member``.Type f.Value)
-                Expression.Call (``const``, equalsMethod, ``member``)
+            match comparerToStringComparison comparer with
+            | ValueSome comparison ->
+                let value = Helpers.unwrap (box f.Value) :?> string
+                Expression.Call (normalizeStringMemberExpr ``member``, StringEqualsWithComparisonMethod, Expression.Constant (value, typeof<string>), Expression.Constant comparison) :> Expression
+            | ValueNone ->
+                let hasEqualityOperator = hasEqualityOperator ``member``.Type
+                match f.Value with
+                | NoCast when hasEqualityOperator -> Expression.Equal (``member``, Expression.Constant f.Value)
+                | NoCast
+                | NonEnumerableCast _ ->
+                    Expression.Equal (Expression.Convert (``member``, objectType), Expression.Convert ((Expression.Constant f.Value), objectType))
+                | Enumerable ->
+                    let ``const`` = Expression.Constant (Values.normalizeOptional ``member``.Type f.Value)
+                    Expression.Call (``const``, equalsMethod, ``member``)
         | GreaterThan f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             match f.Value with
@@ -295,14 +315,22 @@ module ObjectListFilter =
             | NoCast -> Expression.LessThanOrEqual (``member``, Expression.Constant f.Value)
             | Enumerable -> Expression.LessThanOrEqual (``member``, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
             | NonEnumerableCast ``type`` -> Expression.LessThanOrEqual ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
-        | StartsWith f ->
+        | StartsWith (f, comparer) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            Expression.Call (normalizeStringMemberExpr ``member``, StringStartsWithMethod, Expression.Constant f.Value)
-        | EndsWith f ->
+            match comparerToStringComparison comparer with
+            | ValueSome comparison ->
+                Expression.Call (normalizeStringMemberExpr ``member``, StringStartsWithWithComparisonMethod, Expression.Constant f.Value, Expression.Constant comparison)
+            | ValueNone ->
+                Expression.Call (normalizeStringMemberExpr ``member``, StringStartsWithMethod, Expression.Constant f.Value)
+        | EndsWith (f, comparer) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            Expression.Call (normalizeStringMemberExpr ``member``, StringEndsWithMethod, Expression.Constant f.Value)
+            match comparerToStringComparison comparer with
+            | ValueSome comparison ->
+                Expression.Call (normalizeStringMemberExpr ``member``, StringEndsWithWithComparisonMethod, Expression.Constant f.Value, Expression.Constant comparison)
+            | ValueNone ->
+                Expression.Call (normalizeStringMemberExpr ``member``, StringEndsWithMethod, Expression.Constant f.Value)
 
-        | Contains f ->
+        | Contains (f, comparer) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             let isEnumerable (memberType : Type) =
                 not (Type.(=) (memberType, stringType))
@@ -338,7 +366,11 @@ module ObjectListFilter =
             | :? FieldInfo as field when field.FieldType |> isEnumerable -> callContains field.FieldType
             | _ ->
                 let unwrappedValue = Helpers.unwrap f.Value
-                Expression.Call (normalizeStringMemberExpr ``member``, StringContainsMethod, Expression.Constant unwrappedValue)
+                match comparerToStringComparison comparer with
+                | ValueSome comparison ->
+                    Expression.Call (normalizeStringMemberExpr ``member``, StringContainsWithComparisonMethod, Expression.Constant (unwrappedValue :?> string, typeof<string>), Expression.Constant comparison)
+                | ValueNone ->
+                    Expression.Call (normalizeStringMemberExpr ``member``, StringContainsMethod, Expression.Constant unwrappedValue)
         | In f when not (f.Value.IsEmpty) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             let enumerableContains = getEnumerableContainsMethod objectType
@@ -351,18 +383,6 @@ module ObjectListFilter =
         | FilterField f ->
             let paramExpr = Expression.PropertyOrField (param, f.FieldName)
             buildFilterExpr isEnumerableQuery (SourceExpression paramExpr) buildTypeDiscriminatorCheck f.Value
-        | EqualsCI f ->
-            let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            Expression.Call (normalizeStringMemberExpr ``member``, StringEqualsCIMethod, Expression.Constant f.Value, OrdinalIgnoreCase)
-        | StartsWithCI f ->
-            let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            Expression.Call (normalizeStringMemberExpr ``member``, StringStartsWithCIMethod, Expression.Constant f.Value, OrdinalIgnoreCase)
-        | EndsWithCI f ->
-            let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            Expression.Call (normalizeStringMemberExpr ``member``, StringEndsWithCIMethod, Expression.Constant f.Value, OrdinalIgnoreCase)
-        | ContainsCI f ->
-            let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            Expression.Call (normalizeStringMemberExpr ``member``, StringContainsCIMethod, Expression.Constant f.Value, OrdinalIgnoreCase)
 
     type private CompareDiscriminatorExpressionVisitor<'T, 'D>
         (compareDiscriminator : CompareDiscriminatorExpression<'T, 'D>, param : SourceExpression, value : obj) =

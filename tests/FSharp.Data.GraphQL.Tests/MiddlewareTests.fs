@@ -599,7 +599,7 @@ let ``Object list filter: must return filter information in Metadata`` () =
                 ]
         ]
     let expectedFilter : KeyValuePair<obj list, _> =
-        kvp ([ "A"; "s" ]) (And (Equals { FieldName = "id"; Value = 2L }, StartsWith { FieldName = "value"; Value = "A" }))
+        kvp ([ "A"; "s" ]) (And (Equals ({ FieldName = "id"; Value = 2L }, null), StartsWith ({ FieldName = "value"; Value = "A" }, StringComparer.OrdinalIgnoreCase)))
     let result = execute query
 
     ensureDirect result <| fun data errors ->
@@ -647,7 +647,7 @@ let ``Object list filter: Must return AND filter information in Metadata`` () =
                 ]
         ]
     let expectedFilter : KeyValuePair<obj list, _> =
-        kvp ([ "A"; "subjects" ]) (And (StartsWith { FieldName = "value"; Value = "3" }, Equals { FieldName = "id"; Value = 6L }))
+        kvp ([ "A"; "subjects" ]) (And (StartsWith ({ FieldName = "value"; Value = "3" }, StringComparer.OrdinalIgnoreCase), Equals ({ FieldName = "id"; Value = 6L }, null)))
     let result = execute query
 
     ensureDirect result <| fun data errors ->
@@ -693,7 +693,7 @@ let ``Object list filter: Must return OR filter information in Metadata`` () =
                 ]
         ]
     let expectedFilter : KeyValuePair<obj list, _> =
-        kvp ([ "A"; "subjects" ]) (Or (StartsWith { FieldName = "value"; Value = "3" }, Equals { FieldName = "id"; Value = 6L }))
+        kvp ([ "A"; "subjects" ]) (Or (StartsWith ({ FieldName = "value"; Value = "3" }, StringComparer.OrdinalIgnoreCase), Equals ({ FieldName = "id"; Value = 6L }, null)))
     let result = execute query
 
     ensureDirect result <| fun data errors ->
@@ -785,7 +785,7 @@ let ``Object list filter: Must return Contains filter information in Metadata`` 
                 ]
         ]
     let expectedFilter : KeyValuePair<obj list, _> =
-        kvp ([ "A"; "subjects" ]) (Contains { FieldName = "value"; Value = "3" })
+        kvp ([ "A"; "subjects" ]) (Contains ({ FieldName = "value"; Value = "3" }, StringComparer.OrdinalIgnoreCase))
     let result = execute query
 
     ensureDirect result <| fun data errors ->
@@ -831,7 +831,7 @@ let ``Object list filter: Must return NOT filter information in Metadata`` () =
                 ]
         ]
     let expectedFilter : KeyValuePair<obj list, _> =
-        kvp ([ "A"; "subjects" ]) (Not (StartsWith { FieldName = "value"; Value = "3" }))
+        kvp ([ "A"; "subjects" ]) (Not (StartsWith ({ FieldName = "value"; Value = "3" }, StringComparer.OrdinalIgnoreCase)))
     let result = execute query
 
     ensureDirect result <| fun data errors ->
@@ -879,7 +879,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
     do
         let notStartsFilter = """{ "not": { "value_starts_with": "3" } }""" |> JsonDocument.Parse |> _.RootElement
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notStartsFilter)
-        let filter = Not (StartsWith { FieldName = "value"; Value = "3" })
+        let filter = Not (StartsWith ({ FieldName = "value"; Value = "3" }, StringComparer.OrdinalIgnoreCase))
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
 
@@ -891,7 +891,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
     do
         let notEndsFilter = """{ "not": { "value_ends_with": "2" } }""" |> JsonDocument.Parse |> _.RootElement
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEndsFilter)
-        let filter = Not (EndsWith { FieldName = "value"; Value = "2" })
+        let filter = Not (EndsWith ({ FieldName = "value"; Value = "2" }, StringComparer.OrdinalIgnoreCase))
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
 
@@ -903,7 +903,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
     do
         let notStartsFilter = """{ "not": { "value_sw": "3" } }""" |> JsonDocument.Parse |> _.RootElement
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notStartsFilter)
-        let filter = Not (StartsWith { FieldName = "value"; Value = "3" })
+        let filter = Not (StartsWith ({ FieldName = "value"; Value = "3" }, StringComparer.OrdinalIgnoreCase))
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
 
@@ -915,7 +915,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
     do
         let notEndsFilter = """{ "not": { "value_ew": "2" } }""" |> JsonDocument.Parse |> _.RootElement
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEndsFilter)
-        let filter = Not (EndsWith { FieldName = "value"; Value = "2" })
+        let filter = Not (EndsWith ({ FieldName = "value"; Value = "2" }, StringComparer.OrdinalIgnoreCase))
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
 
@@ -1023,7 +1023,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
     do
         let notContainsFilter = """{ "not": { "value_contains": "A" } }""" |> JsonDocument.Parse |> _.RootElement
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notContainsFilter)
-        let filter = Not (Contains { FieldName = "value"; Value = "A" })
+        let filter = Not (Contains ({ FieldName = "value"; Value = "A" }, StringComparer.OrdinalIgnoreCase))
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
 
@@ -1035,7 +1035,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
     do
         let notEqualsFilter = """{ "not": { "value": "A2" } }""" |> JsonDocument.Parse |> _.RootElement
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEqualsFilter)
-        let filter = Not (Equals { FieldName = "value"; Value = "A2" })
+        let filter = Not (Equals ({ FieldName = "value"; Value = "A2" }, null))
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
 
@@ -1084,7 +1084,7 @@ let ``Object list filter: Must parse filter that references variables`` () =
     do
         let filterValue = "3" |> JsonDocument.Parse |> _.RootElement
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", filterValue)
-        let filter = (StartsWith { FieldName = "value"; Value = "3" })
+        let filter = (StartsWith ({ FieldName = "value"; Value = "3" }, StringComparer.OrdinalIgnoreCase))
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
 

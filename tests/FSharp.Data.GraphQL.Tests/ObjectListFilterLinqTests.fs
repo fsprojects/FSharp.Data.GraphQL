@@ -9,7 +9,7 @@ open FSharp.Data.GraphQL.Tests.LinqTests
 
 [<Fact>]
 let ``ObjectListFilter works with Equals operator`` () =
-    let filter = Equals { FieldName = "firstName"; Value = "Jonathan" } // :> IComparable
+    let filter = Equals ({ FieldName = "firstName"; Value = "Jonathan" }, null) // :> IComparable
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 1
@@ -90,7 +90,7 @@ let ``ObjectListFilter works with LessThanOrEqual operator`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with StartsWith operator`` () =
-    let filter = StartsWith { FieldName = "firstName"; Value = "J" }
+    let filter = StartsWith ({ FieldName = "firstName"; Value = "J" }, null)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
@@ -103,7 +103,7 @@ let ``ObjectListFilter works with StartsWith operator`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with Contains operator`` () =
-    let filter = Contains { FieldName = "firstName"; Value = "en" }
+    let filter = Contains ({ FieldName = "firstName"; Value = "en" }, null)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
@@ -116,7 +116,7 @@ let ``ObjectListFilter works with Contains operator`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with EndsWith operator`` () =
-    let filter = EndsWith { FieldName = "lastName"; Value = "ams" }
+    let filter = EndsWith ({ FieldName = "lastName"; Value = "ams" }, null)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
@@ -130,7 +130,7 @@ let ``ObjectListFilter works with EndsWith operator`` () =
 [<Fact>]
 let ``ObjectListFilter works with AND operator`` () =
     let filter =
-        And (Contains { FieldName = "firstName"; Value = "en" }, Equals { FieldName = "lastName"; Value = "Adams" })
+        And (Contains ({ FieldName = "firstName"; Value = "en" }, null), Equals ({ FieldName = "lastName"; Value = "Adams" }, null))
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 1
@@ -144,7 +144,7 @@ let ``ObjectListFilter works with AND operator`` () =
 [<Fact>]
 let ``ObjectListFilter works with OR operator`` () =
     let filter =
-        Or (GreaterThan { FieldName = "id"; Value = 4 }, Equals { FieldName = "lastName"; Value = "Adams" })
+        Or (GreaterThan { FieldName = "id"; Value = 4 }, Equals ({ FieldName = "lastName"; Value = "Adams" }, null))
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
@@ -191,7 +191,7 @@ let ``ObjectListFilter works with IN operator for int type field`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with Contains operator for array type field`` () =
-    let filter = Contains { FieldName = "friends"; Value = { Email = "j.abrams@gmail.com" } }
+    let filter = Contains ({ FieldName = "friends"; Value = { Email = "j.abrams@gmail.com" } }, null)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
@@ -215,7 +215,7 @@ let ``ObjectListFilter works with FilterField operator`` () =
     let filter =
         FilterField {
             FieldName = "Contact"
-            Value = Contains { FieldName = "Email"; Value = "j.trif@gmail.com" }
+            Value = Contains ({ FieldName = "Email"; Value = "j.trif@gmail.com" }, null)
         }
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
@@ -229,7 +229,7 @@ let ``ObjectListFilter works with FilterField operator`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with NOT operator`` () =
-    let filter = Not (Equals { FieldName = "lastName"; Value = "Adams" })
+    let filter = Not (Equals ({ FieldName = "lastName"; Value = "Adams" }, null))
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
@@ -416,7 +416,7 @@ let ``ObjectListFilter works with getDiscriminatorValue for Horse`` () =
 [<Fact>]
 let ``ObjectListFilter works with getDiscriminatorValue startsWith for Horse and Hamster`` () =
     let queryable = animalData.AsQueryable ()
-    let filter = StartsWith { FieldName = "Discriminator"; Value = "H" }
+    let filter = StartsWith ({ FieldName = "Discriminator"; Value = "H" }, null)
     let options =
         ObjectListFilterLinqOptions (
             (fun entity (discriminator : string) -> entity.Discriminator.StartsWith discriminator),
@@ -449,7 +449,7 @@ let ``ObjectListFilter works with Contains operator on list collection propertie
         { Name = "Product D"; Tags = [ "Tag4"; "Tag5" ] }
     ]
     let queryable = productList.AsQueryable ()
-    let filter = Contains { FieldName = "Tags"; Value = "Tag3" }
+    let filter = Contains ({ FieldName = "Tags"; Value = "Tag3" }, null)
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
     do
@@ -471,7 +471,7 @@ let ``ObjectListFilter works with Contains operator on array collection properti
         { Name = "Product D"; Tags = [| "Tag4"; "Tag5" |] }
     ]
     let queryable = productArray.AsQueryable ()
-    let filter = Contains { FieldName = "Tags"; Value = "Tag3" }
+    let filter = Contains ({ FieldName = "Tags"; Value = "Tag3" }, null)
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
     do
@@ -493,7 +493,7 @@ let ``ObjectListFilter works with Contains operator on set collection properties
         { Name = "Product D"; Tags = [| "Tag4"; "Tag5" |] |> Set.ofArray }
     ]
     let queryable = productArray.AsQueryable ()
-    let filter = Contains { FieldName = "Tags"; Value = "Tag3" }
+    let filter = Contains ({ FieldName = "Tags"; Value = "Tag3" }, null)
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
     do
@@ -529,7 +529,7 @@ let ``ObjectListFilter OfTypes works with two or more types`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with EqualsCI operator`` () =
-    let filter = EqualsCI { FieldName = "firstName"; Value = "jonathan" }
+    let filter = Equals ({ FieldName = "firstName"; Value = "jonathan" }, StringComparer.OrdinalIgnoreCase)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 1
@@ -540,7 +540,7 @@ let ``ObjectListFilter works with EqualsCI operator`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with EqualsCI operator upper case`` () =
-    let filter = EqualsCI { FieldName = "firstName"; Value = "JONATHAN" }
+    let filter = Equals ({ FieldName = "firstName"; Value = "JONATHAN" }, StringComparer.OrdinalIgnoreCase)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 1
@@ -550,7 +550,7 @@ let ``ObjectListFilter works with EqualsCI operator upper case`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with StartsWithCI operator`` () =
-    let filter = StartsWithCI { FieldName = "firstName"; Value = "j" }
+    let filter = StartsWith ({ FieldName = "firstName"; Value = "j" }, StringComparer.OrdinalIgnoreCase)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
@@ -560,7 +560,7 @@ let ``ObjectListFilter works with StartsWithCI operator`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with EndsWithCI operator`` () =
-    let filter = EndsWithCI { FieldName = "lastName"; Value = "AMS" }
+    let filter = EndsWith ({ FieldName = "lastName"; Value = "AMS" }, StringComparer.OrdinalIgnoreCase)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
@@ -573,7 +573,7 @@ let ``ObjectListFilter works with EndsWithCI operator`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with ContainsCI operator`` () =
-    let filter = ContainsCI { FieldName = "firstName"; Value = "EN" }
+    let filter = Contains ({ FieldName = "firstName"; Value = "EN" }, StringComparer.OrdinalIgnoreCase)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
@@ -587,7 +587,7 @@ let ``ObjectListFilter works with ContainsCI operator`` () =
 [<Fact>]
 let ``ObjectListFilter case-insensitive operators do not match with case-sensitive filters`` () =
     // Exact case-sensitive StartsWith "j" (lowercase) should match nothing in the data
-    let filter = StartsWith { FieldName = "firstName"; Value = "j" }
+    let filter = StartsWith ({ FieldName = "firstName"; Value = "j" }, null)
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 0
