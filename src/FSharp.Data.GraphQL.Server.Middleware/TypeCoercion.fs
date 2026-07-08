@@ -1,6 +1,7 @@
 namespace FSharp.Data.GraphQL.Server.Middleware
 
 open System
+open System.Buffers
 open System.Collections.Generic
 open System.Reflection
 open System.Text.Json
@@ -102,25 +103,41 @@ module TypeCoercion =
         |> ValueOption.defaultValue fieldName
 
     /// <summary>
-    /// Converts a boxed GraphQL scalar primitive to its JSON text representation so that <see cref="JsonSerializer.Deserialize"/> can produce the
-    /// correct CLR value. Strings and enum-like values are JSON-quoted (<c>"value"</c>); numbers and booleans are emitted as raw JSON tokens.
+    /// Writes a boxed GraphQL scalar primitive as a JSON token directly into <paramref name="writer"/>. Strings become JSON strings; numbers and
+    /// booleans become raw JSON tokens. Returns <c>true</c> if the value was written; <c>false</c> if the type is unsupported.
     /// </summary>
-    let private toJsonString (value : obj) : string voption =
+    let private writeJsonValue (value : obj) (writer : Utf8JsonWriter) : bool =
         match value with
-        | :? string as s -> ValueSome $"\"{JsonEncodedText.Encode(s)}\""
-        | :? bool as b -> ValueSome (if b then "true" else "false")
-        | :? int64 as n -> ValueSome (string n)
-        | :? int as n -> ValueSome (string n)
-        | :? double as n -> ValueSome (sprintf "%g" n)
-        | :? float32 as n -> ValueSome (sprintf "%g" n)
-        | :? decimal as n -> ValueSome (string n)
-        | _ -> ValueNone
+        | :? string as s ->
+            writer.WriteStringValue s
+            true
+        | :? bool as b ->
+            writer.WriteBooleanValue b
+            true
+        | :? int64 as n ->
+            writer.WriteNumberValue n
+            true
+        | :? int as n ->
+            writer.WriteNumberValue n
+            true
+        | :? double as n ->
+            writer.WriteNumberValue n
+            true
+        | :? float32 as n ->
+            writer.WriteNumberValue n
+            true
+        | :? decimal as n ->
+            writer.WriteNumberValue n
+            true
+        | _ ->
+            false
 
     // Suppress nullness warnings for the obj / objnull mixture.
 #nowarn "3261"
     /// <summary>
-    /// Tries to coerce a value into <paramref name="targetType"/> using STJ deserialization. Primitives are first rendered as a JSON string via
-    /// <see cref="toJsonString"/> then parsed with <see cref="JsonDocument.Parse"/> and deserialized. Already-correct values pass through unchanged.
+    /// Tries to coerce a value into <paramref name="targetType"/> using STJ deserialization. Primitives are written directly as JSON bytes via
+    /// <see cref="writeJsonValue"/> into an <see cref="ArrayBufferWriter{T}"/>, then deserialized from <c>ReadOnlySpan&lt;byte&gt;</c>.
+    /// Already-correct values pass through unchanged. No intermediate string or <see cref="JsonDocument"/> is allocated.
     /// </summary>
     let tryCoerceValue (jsonOptions : JsonSerializerOptions voption) (targetType : Type) (value : objnull) : obj voption =
         if isNull value then
@@ -128,13 +145,15 @@ module TypeCoercion =
         elif targetType.IsInstanceOfType value then
             ValueSome value
         else
-            match toJsonString value with
-            | ValueNone -> ValueNone
-            | ValueSome json ->
+            let buffer = ArrayBufferWriter<byte> 64
+            use writer = new Utf8JsonWriter (buffer)
+            if not (writeJsonValue value writer) then
+                ValueNone
+            else
+                writer.Flush ()
                 try
                     let opts = jsonOptions |> ValueOption.defaultValue JsonSerializerOptions.Default
-                    use doc = JsonDocument.Parse json
-                    doc.Deserialize (targetType, opts) |> ValueSome
+                    JsonSerializer.Deserialize (buffer.WrittenSpan, targetType, opts) |> ValueSome
                 with _ ->
                     ValueNone
 
