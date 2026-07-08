@@ -408,15 +408,15 @@ type ObjectListFilter =
     | And of ObjectListFilter * ObjectListFilter
     | Or of ObjectListFilter * ObjectListFilter
     | Not of ObjectListFilter
-    | Equals of Filter : FieldFilter<System.IComparable> * Comparer : System.Collections.IComparer
+    | Equals of FieldFilter<System.IComparable> * System.Collections.IComparer
     | GreaterThan of FieldFilter<System.IComparable>
     | GreaterThanOrEqual of FieldFilter<System.IComparable>
     | LessThan of FieldFilter<System.IComparable>
     | LessThanOrEqual of FieldFilter<System.IComparable>
     | In of FieldFilter<obj list>
-    | StartsWith of Filter : FieldFilter<string> * Comparer : StringComparer
-    | EndsWith of Filter : FieldFilter<string> * Comparer : StringComparer
-    | Contains of Filter : FieldFilter<System.IComparable> * Comparer : System.Collections.IComparer
+    | StartsWith of FieldFilter<string> * StringComparer
+    | EndsWith of FieldFilter<string> * StringComparer
+    | Contains of FieldFilter<System.IComparable> * System.Collections.IComparer
     | OfTypes of Type list
     | FilterField of FieldFilter<ObjectListFilter>
 ```

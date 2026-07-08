@@ -181,7 +181,10 @@ let ObjectListFilterType : InputCustomDefinition<ObjectListFilter> = {
     Name = "ObjectListFilter"
     Description =
         Some
-            "The `ObjectListFilter` input represents field filters for object lists. Lowercase string suffixes such as `_starts_with`/`_sw`, `_ends_with`/`_ew`, `_contains`, and `_equals`/`_eq` are case-insensitive. Capitalized string suffixes such as `_Starts_With`/`_SW`, `_Ends_With`/`_EW`, `_Contains`, and `_Equals`/`_EQ` are case-sensitive. Comparison suffixes such as `_gt`, `_gte`, `_lt`, `_lte`, and `_in` are also supported."
+            ("The `ObjectListFilter` input represents field filters for object lists. "
+             + "Lowercase string suffixes such as `_starts_with`/`_sw`, `_ends_with`/`_ew`, `_contains`, and `_equals`/`_eq` are case-insensitive. "
+             + "Capitalized string suffixes such as `_Starts_With`/`_SW`, `_Ends_With`/`_EW`, `_Contains`, and `_Equals`/`_EQ` are case-sensitive. "
+             + "Comparison suffixes such as `_gt`, `_gte`, `_lt`, `_lte`, and `_in` are also supported.")
     CoerceInput =
         (fun _ input variables ->
             match input with
