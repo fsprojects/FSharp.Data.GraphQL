@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <Compile Include="ObjectListFilter.fs" />
+    <Compile Include="FilterSuffixConstants.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
     <Compile Include="SchemaDefinitions.fs" />
     <Compile Include="MiddlewareDefinitions.fs" />
