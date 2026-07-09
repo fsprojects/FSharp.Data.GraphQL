@@ -40,10 +40,6 @@ open System.Runtime.InteropServices
 
 type private CompareDiscriminatorExpression<'T, 'D> = Expression<Func<'T, 'D, bool>>
 
-// ────────────────────────────────────────────────────────────────────────────
-// Type Coercion Support
-// ────────────────────────────────────────────────────────────────────────────
-
 /// <summary>
 /// Validation error raised when an incoming <see cref="ObjectListFilter"/> cannot be
 /// translated to a LINQ expression against the queried entity type.
@@ -54,6 +50,32 @@ type ObjectListFilterValidationException (message : string, [<Optional>] extensi
 /// <summary>
 /// Optional configuration for LINQ translation including discriminator handling.
 /// </summary>
+/// <example id="item-1"><code lang="fsharp">
+/// // discriminator custom condition
+/// let result () =
+///    queryable.Apply(
+///        filter,
+///        ObjectListFilterLinqOptions (
+///            (fun entity discriminator -> entity.Discriminator.StartsWith discriminator),
+///            (function
+///            | t when Type.(=)(t, typeof<Cat>) -> "cat+v1"
+///            | t when Type.(=)(t, typeof<Dog>) -> "dog+v1")
+///        )
+///    )
+/// </code></example>
+/// <example id="item-2"><code lang="fsharp">
+/// // discriminator equals
+/// let result () =
+///     queryable.Apply(
+///         filter,
+///         ObjectListFilterLinqOptions (
+///            (fun entity -> entity.Discriminator),
+///            (function
+///            | t when Type.(=)(t, typeof<Cat>) -> "cat"
+///            | t when Type.(=)(t, typeof<Dog>) -> "dog")
+///         )
+///     )
+/// </code></example>
 type ObjectListFilterLinqOptions<'T, 'D>
     (
         [<Optional>] compareDiscriminator : CompareDiscriminatorExpression<'T, 'D> | null,

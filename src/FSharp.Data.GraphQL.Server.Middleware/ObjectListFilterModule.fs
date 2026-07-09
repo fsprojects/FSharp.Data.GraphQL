@@ -66,8 +66,7 @@ module ObjectListFilter =
         let ( @=@~ ) fname (value : string) = Contains ({ FieldName = fname; Value = value }, StringComparer.CurrentCultureIgnoreCase)
 
     let private genericWhereMethod =
-        let queryableType = typeof<Queryable>
-        queryableType.GetMethods ()
+        typeof<Queryable>.GetMethods ()
         |> Seq.where (fun m -> m.Name = "Where")
         |> Seq.find (fun m ->
             let parameters = m.GetParameters ()
