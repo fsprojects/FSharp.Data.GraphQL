@@ -174,7 +174,8 @@ module TypeCoercion =
                 let unwrapped = unwrapOption prop.PropertyType
                 match tryCoerceValue jsonOptions unwrapped (box ff.Value) with
                 | ValueNone -> filter
-                | ValueSome coerced -> Equals ({ ff with Value = coerced :?> IComparable }, cmp)
+                | ValueSome (:? IComparable as coerced) -> Equals ({ ff with Value = coerced }, cmp)
+                | ValueSome _ -> filter
         | GreaterThan ff
         | GreaterThanOrEqual ff
         | LessThan ff
@@ -185,14 +186,15 @@ module TypeCoercion =
                 let unwrapped = unwrapOption prop.PropertyType
                 match tryCoerceValue jsonOptions unwrapped (box ff.Value) with
                 | ValueNone -> filter
-                | ValueSome coerced ->
-                    let coercedField = { ff with Value = coerced :?> IComparable }
+                | ValueSome (:? IComparable as coerced) ->
+                    let coercedField = { ff with Value = coerced }
                     match originalFilter with
                     | GreaterThan _ -> GreaterThan coercedField
                     | GreaterThanOrEqual _ -> GreaterThanOrEqual coercedField
                     | LessThan _ -> LessThan coercedField
                     | LessThanOrEqual _ -> LessThanOrEqual coercedField
                     | _ -> filter
+                | ValueSome _ -> filter
         | In ff ->
             match entityType.GetProperty (stripOperatorSuffix ff.FieldName, propertyBindFlags) with
             | null -> filter
@@ -224,7 +226,8 @@ module TypeCoercion =
                     | ValueNone -> stringType
                 match tryCoerceValue jsonOptions coercionTarget (box ff.Value) with
                 | ValueNone -> filter
-                | ValueSome coerced -> Contains ({ ff with Value = coerced :?> IComparable }, cmp)
+                | ValueSome (:? IComparable as coerced) -> Contains ({ ff with Value = coerced }, cmp)
+                | ValueSome _ -> filter
         | FilterField ff ->
             match entityType.GetProperty (ff.FieldName, propertyBindFlags) with
             | null -> filter

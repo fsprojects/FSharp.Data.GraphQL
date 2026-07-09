@@ -246,11 +246,11 @@ module ObjectListFilter =
             | NonEnumerableCast ``type`` -> Expression.LessThanOrEqual ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
         | StartsWith (f, comparer) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            let comparison = comparerToStringComparison comparer |> ValueOption.defaultValue StringComparison.Ordinal
+            let comparison = comparerToStringComparison comparer |> ValueOption.defaultValue StringComparison.CurrentCulture
             Expression.Call (normalizeStringMemberExpr ``member``, StringStartsWithMethod, Expression.Constant f.Value, Expression.Constant comparison)
         | EndsWith (f, comparer) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            let comparison = comparerToStringComparison comparer |> ValueOption.defaultValue StringComparison.Ordinal
+            let comparison = comparerToStringComparison comparer |> ValueOption.defaultValue StringComparison.CurrentCulture
             Expression.Call (normalizeStringMemberExpr ``member``, StringEndsWithMethod, Expression.Constant f.Value, Expression.Constant comparison)
 
         | Contains (f, comparer) ->
@@ -289,7 +289,7 @@ module ObjectListFilter =
             | :? FieldInfo as field when field.FieldType |> isEnumerable -> callContains field.FieldType
             | _ ->
                 let unwrappedValue = Helpers.unwrap f.Value
-                let comparison = comparerToStringComparison comparer |> ValueOption.defaultValue StringComparison.Ordinal
+                let comparison = comparerToStringComparison comparer |> ValueOption.defaultValue StringComparison.CurrentCulture
                 Expression.Call (normalizeStringMemberExpr ``member``, StringContainsMethod, Expression.Constant (unwrappedValue :?> string, stringType), Expression.Constant comparison)
         | In f when not (f.Value.IsEmpty) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
@@ -404,4 +404,4 @@ module ObjectListFilterExtensions =
         /// </code>
         /// </example>
         member inline query.Apply (filter : ObjectListFilter, [<Optional>] options : ObjectListFilterLinqOptions<'T, 'D> | null) =
-            apply options filter query
+            filter.ApplyTo (query, options)

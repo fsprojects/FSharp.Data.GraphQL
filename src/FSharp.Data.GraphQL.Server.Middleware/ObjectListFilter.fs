@@ -7,6 +7,7 @@ open System.Text.Json
 /// A filter definition for a field value.
 type FieldFilter<'Val> = { FieldName : string; Value : 'Val }
 
+/// <summary>
 /// A filter definition for an object list.
 /// </summary>
 /// <remarks>
