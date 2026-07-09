@@ -200,8 +200,28 @@ module TypeCoercion =
             | null -> filter
             | prop ->
                 let unwrapped = unwrapOption prop.PropertyType
-                let coercedList = ff.Value |> List.vchoose (tryCoerceValue jsonOptions unwrapped)
-                In { ff with Value = coercedList }
+
+                let struct (coercedValues, failedValues) =
+                    ff.Value
+                    |> List.fold
+                        (fun struct (coerced, failed) value ->
+                            match tryCoerceValue jsonOptions unwrapped value with
+                            | ValueSome coercedValue -> (coercedValue :: coerced, failed)
+                            | ValueNone -> struct (coerced, value :: failed))
+                        ([], [])
+
+                match failedValues with
+                | [] -> In { ff with Value = List.rev coercedValues }
+                | _ ->
+                    let failedValuesText =
+                        failedValues
+                        |> Seq.rev
+                        |> Seq.map (sprintf "%A")
+                        |> String.concat ", "
+
+                    invalidArg
+                        (nameof filter)
+                        ($"Unable to coerce one or more values for '{ff.FieldName}' to '{unwrapped.FullName}'. Uncoerced values: [{failedValuesText}]")
         | StartsWith (ff, cmp)
         | EndsWith (ff, cmp) as originalFilter ->
             match entityType.GetProperty (stripOperatorSuffix ff.FieldName, propertyBindFlags) with

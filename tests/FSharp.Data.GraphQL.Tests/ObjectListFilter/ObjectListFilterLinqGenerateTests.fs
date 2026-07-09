@@ -101,6 +101,7 @@ let cosmosClient =
     new CosmosClient ("https://localhost:8081/", "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==", options)
 let container = cosmosClient.GetContainer ("database", "container")
 let filterOptions = ObjectListFilterLinqOptions<FakeEntity, obj>.None
+let filterOptionsWithConverters = ObjectListFilterLinqOptions<FakeEntity, obj> (jsonOptions)
 
 [<Fact>]
 let ``ObjectListFilter works with Equals operator for ValidStringStruct`` () =
@@ -247,12 +248,19 @@ let ``ObjectListFilter works with Contains operator for ValidStringStruct list``
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE ARRAY_CONTAINS(root["validStringStructList"], "athan")"""
 
 [<Fact>]
-let ``ObjectListFilter works with In operator for ValidStringStruct list`` () =
+let ``ObjectListFilter works with In operator for ValidStringStruct list when converters are provided`` () =
     let queryable = container.GetItemLinqQueryable<FakeEntity> ()
     let filter = In { FieldName = "validStringStruct"; Value = [ "athan"; "gaja" ] }
-    let filterQuery = queryable.Apply (filter, filterOptions)
+    let filterQuery = queryable.Apply (filter, filterOptionsWithConverters)
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE ARRAY_CONTAINS([ "athan", "gaja" ], root["validStringStruct"])"""
+
+[<Fact>]
+let ``ObjectListFilter works with In operator for ValidStringStruct list when converters are not provided`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = In { FieldName = "validStringStruct"; Value = [ "athan"; "gaja" ] }
+    let ex = Assert.Throws<ArgumentException>(fun () -> queryable.Apply (filter, filterOptions) |> ignore)
+    Assert.Contains ("Uncoerced values", ex.Message)
 
 [<Fact>]
 let ``ObjectListFilter works with In operator for empty ValidStringStruct list`` () =
