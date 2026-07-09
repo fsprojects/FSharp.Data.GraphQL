@@ -40,6 +40,10 @@ open System.Runtime.InteropServices
 
 type private CompareDiscriminatorExpression<'T, 'D> = Expression<Func<'T, 'D, bool>>
 
+// ────────────────────────────────────────────────────────────────────────────
+// Type Coercion Support
+// ────────────────────────────────────────────────────────────────────────────
+
 /// <summary>
 /// Validation error raised when an incoming <see cref="ObjectListFilter"/> cannot be
 /// translated to a LINQ expression against the queried entity type.

@@ -22,7 +22,6 @@
   <ItemGroup>
     <Compile Include="FilterSuffixConstants.fs" />
     <Compile Include="ObjectListFilter.fs" />
-    <Compile Include="FilterSuffixConstants.fs" />
     <Compile Include="TypeCoercion.fs" />
     <Compile Include="ObjectListFilterModule.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
