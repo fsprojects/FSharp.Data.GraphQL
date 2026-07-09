@@ -1,5 +1,6 @@
 // The MIT License (MIT)
 // Copyright (c) 2016 Bazinga Technologies Inc
+[<Xunit.TraitAttribute (Tests.TraitType.Category, Tests.TraitName.Linq)>]
 module FSharp.Data.GraphQL.Tests.LinqTests
 
 open Xunit

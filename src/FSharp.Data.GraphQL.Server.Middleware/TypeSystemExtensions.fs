@@ -3,9 +3,7 @@ namespace FSharp.Data.GraphQL.Server.Middleware
 open System
 open System.Collections.Immutable
 open System.Linq
-open FsToolkit.ErrorHandling
 
-open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 
 /// Contains extensions for the type system.

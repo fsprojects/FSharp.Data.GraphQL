@@ -1,4 +1,6 @@
-module FSharp.Data.GraphQL.Tests.ObjectListFilterLinqTests
+[<Xunit.Trait (Tests.TraitType.Category, Tests.TraitName.Linq)>]
+[<Xunit.Trait (Tests.TraitType.Category, Tests.TraitName.ObjectListFilter)>]
+module FSharp.Data.GraphQL.Tests.ObjectListFilter.Linq.Tests
 
 open Xunit
 open System

@@ -14,14 +14,22 @@
     <PublicSign Condition=" '$(OS)' != 'Windows_NT' ">true</PublicSign>-->
   </PropertyGroup>
 
+  <ItemGroup Label="InternalsVisibleTo">
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FSharp.Data.GraphQL.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="FSharp.Control.Reactive" />
     <PackageReference Include="System.Reactive" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="ObjectListFilter.fs" />
     <Compile Include="FilterSuffixConstants.fs" />
+    <Compile Include="ObjectListFilter.fs" />
+    <Compile Include="TypeCoercion.fs" />
+    <Compile Include="ObjectListFilterModule.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
     <Compile Include="SchemaDefinitions.fs" />
     <Compile Include="MiddlewareDefinitions.fs" />
