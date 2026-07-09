@@ -85,6 +85,35 @@ module Array =
                 i <- i + 1
         Array.sub temp 0 i
 
+    /// <summary>
+    /// Attempts to find the first element in an array that satisfies the given predicate.
+    /// </summary>
+    /// <param name="predicate">Function to test each element.</param>
+    /// <param name="source">The input array.</param>
+    /// <returns>ValueSome of the first matching element, or ValueNone if no match is found.</returns>
+    let vtryFind predicate (source : 'T array) =
+        let mutable result = ValueNone
+        let mutable i = 0
+        while i < source.Length && result.IsNone do
+            if predicate source[i] then
+                result <- ValueSome source[i]
+            i <- i + 1
+        result
+
+    /// <summary>
+    /// Applies a function to each element of an array and returns the first result where the function returns ValueSome.
+    /// </summary>
+    /// <param name="mapping">Function to apply to each element.</param>
+    /// <param name="source">The input array.</param>
+    /// <returns>ValueSome of the first successful mapping result, or ValueNone if no match is found.</returns>
+    let vtryPick mapping (source : 'T array) =
+        let mutable result = ValueNone
+        let mutable i = 0
+        while i < source.Length && result.IsNone do
+            result <- mapping source[i]
+            i <- i + 1
+        result
+
 module List =
 
     /// <summary>
@@ -98,6 +127,35 @@ module List =
             listx
             |> List.filter (fun x -> not <| List.exists(fun y -> f(x) = f(y)) listy)
         uniqx @ listy
+
+    /// <summary>
+    /// Attempts to find the first element in a list that satisfies the given predicate.
+    /// </summary>
+    /// <param name="predicate">Function to test each element.</param>
+    /// <param name="source">The input list.</param>
+    /// <returns>ValueSome of the first matching element, or ValueNone if no match is found.</returns>
+    let rec vtryFind predicate (source : 'T list) =
+        match source with
+        | [] -> ValueNone
+        | head :: tail ->
+            if predicate head then
+                ValueSome head
+            else
+                vtryFind predicate tail
+
+    /// <summary>
+    /// Applies a function to each element of a list and returns the first result where the function returns ValueSome.
+    /// </summary>
+    /// <param name="mapping">Function to apply to each element.</param>
+    /// <param name="source">The input list.</param>
+    /// <returns>ValueSome of the first successful mapping result, or ValueNone if no match is found.</returns>
+    let rec vtryPick mapping (source : 'T list) =
+        match source with
+        | [] -> ValueNone
+        | head :: tail ->
+            match mapping head with
+            | ValueSome result -> ValueSome result
+            | ValueNone -> vtryPick mapping tail
 
 module Set =
 

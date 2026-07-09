@@ -20,3 +20,21 @@ type UseInvariantCultureAttribute() =
     override _.After (methodUnderTest) =
         CultureInfo.CurrentUICulture <- _originalUICulture
         CultureInfo.CurrentCulture <- _originalCulture
+
+namespace Tests
+
+module TraitType =
+
+    [<Literal>]
+    let Category = "Category"
+
+    [<Literal>]
+    let ObjectListFilterOperator = "ObjectListFilter operator"
+
+module TraitName =
+
+    [<Literal>]
+    let Linq = "LINQ"
+
+    [<Literal>]
+    let ObjectListFilter = "ObjectListFilter"
