@@ -54,16 +54,16 @@ module ObjectListFilter =
         let ( !!! ) filter = Not filter
 
         /// Creates a new ObjectListFilter representing a case-insensitive EQUALS operation on a string value.
-        let ( ===~ ) fname (value : string) = Equals ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
+        let ( ===~ ) fname (value : string) = Equals ({ FieldName = fname; Value = value }, StringComparer.CurrentCultureIgnoreCase)
 
         /// Creates a new ObjectListFilter representing a case-insensitive STARTS WITH operation on a string value.
-        let ( =@@~ ) fname (value : string) = StartsWith ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
+        let ( =@@~ ) fname (value : string) = StartsWith ({ FieldName = fname; Value = value }, StringComparer.CurrentCultureIgnoreCase)
 
         /// Creates a new ObjectListFilter representing a case-insensitive ENDS WITH operation on a string value.
-        let ( @@=~ ) fname (value : string) = EndsWith ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
+        let ( @@=~ ) fname (value : string) = EndsWith ({ FieldName = fname; Value = value }, StringComparer.CurrentCultureIgnoreCase)
 
         /// Creates a new ObjectListFilter representing a case-insensitive CONTAINS operation on a string value.
-        let ( @=@~ ) fname (value : string) = Contains ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
+        let ( @=@~ ) fname (value : string) = Contains ({ FieldName = fname; Value = value }, StringComparer.CurrentCultureIgnoreCase)
 
     let private genericWhereMethod =
         let queryableType = typeof<Queryable>
