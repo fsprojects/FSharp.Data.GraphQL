@@ -22,15 +22,15 @@ type ObjectListFilter =
     | And of ObjectListFilter * ObjectListFilter
     | Or of ObjectListFilter * ObjectListFilter
     | Not of ObjectListFilter
-    | Equals of Filter : FieldFilter<System.IComparable> * Comparer : IComparer
-    | GreaterThan of FieldFilter<System.IComparable>
-    | GreaterThanOrEqual of FieldFilter<System.IComparable>
-    | LessThan of FieldFilter<System.IComparable>
-    | LessThanOrEqual of FieldFilter<System.IComparable>
+    | Equals of Filter : FieldFilter<IComparable> * Comparer : IComparer
+    | GreaterThan of FieldFilter<IComparable>
+    | GreaterThanOrEqual of FieldFilter<IComparable>
+    | LessThan of FieldFilter<IComparable>
+    | LessThanOrEqual of FieldFilter<IComparable>
     | In of FieldFilter<obj list>
     | StartsWith of Filter : FieldFilter<string> * Comparer : StringComparer
     | EndsWith of Filter : FieldFilter<string> * Comparer : StringComparer
-    | Contains of Filter : FieldFilter<System.IComparable> * Comparer : IComparer
+    | Contains of Filter : FieldFilter<IComparable> * Comparer : IComparer
     | OfTypes of Type list
     | FilterField of FieldFilter<ObjectListFilter>
 
