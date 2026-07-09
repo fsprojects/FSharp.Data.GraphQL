@@ -14,7 +14,7 @@ type FieldFilter<'Val> = { FieldName : string; Value : 'Val }
 /// String-based filters can carry a comparer. When the comparer is not provided by the default
 /// string operators, `StartsWith`, `EndsWith`, and string `Contains` preserve the existing
 /// case-sensitive `StringComparison.CurrentCulture` behavior.
-/// `StringComparer.OrdinalIgnoreCase` enables case-insensitive matching.
+/// `StringComparer.CurrentCultureIgnoreCase` enables case-insensitive matching.
 /// When filters are provided through GraphQL input, lowercase string suffixes are interpreted
 /// as case-insensitive and capitalized suffixes are interpreted as case-sensitive.
 /// </remarks>
@@ -139,16 +139,16 @@ module ObjectListFilter =
         let ( !!! ) filter = Not filter
 
         /// Creates a new ObjectListFilter representing a case-insensitive EQUALS operation on a string value.
-        let ( ===~ ) fname (value : string) = Equals ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
+        let ( ===~ ) fname (value : string) = Equals ({ FieldName = fname; Value = value }, StringComparer.CurrentCultureIgnoreCase)
 
         /// Creates a new ObjectListFilter representing a case-insensitive STARTS WITH operation on a string value.
-        let ( =@@~ ) fname (value : string) = StartsWith ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
+        let ( =@@~ ) fname (value : string) = StartsWith ({ FieldName = fname; Value = value }, StringComparer.CurrentCultureIgnoreCase)
 
         /// Creates a new ObjectListFilter representing a case-insensitive ENDS WITH operation on a string value.
-        let ( @@=~ ) fname (value : string) = EndsWith ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
+        let ( @@=~ ) fname (value : string) = EndsWith ({ FieldName = fname; Value = value }, StringComparer.CurrentCultureIgnoreCase)
 
         /// Creates a new ObjectListFilter representing a case-insensitive CONTAINS operation on a string value.
-        let ( @=@~ ) fname (value : string) = Contains ({ FieldName = fname; Value = value }, StringComparer.OrdinalIgnoreCase)
+        let ( @=@~ ) fname (value : string) = Contains ({ FieldName = fname; Value = value }, StringComparer.CurrentCultureIgnoreCase)
 
     let private genericWhereMethod =
         typeof<Queryable>.GetMethods ()
