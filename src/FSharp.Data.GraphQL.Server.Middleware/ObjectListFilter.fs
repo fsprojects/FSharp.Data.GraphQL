@@ -3,7 +3,6 @@ namespace FSharp.Data.GraphQL.Server.Middleware
 open System
 open System.Collections
 open System.Text.Json
-open FSharp.Data.GraphQL
 
 /// A filter definition for a field value.
 type FieldFilter<'Val> = { FieldName : string; Value : 'Val }
@@ -34,18 +33,10 @@ type ObjectListFilter =
     | OfTypes of Type list
     | FilterField of FieldFilter<ObjectListFilter>
 
-open System.Collections.Generic
 open System.Linq.Expressions
 open System.Runtime.InteropServices
 
 type private CompareDiscriminatorExpression<'T, 'D> = Expression<Func<'T, 'D, bool>>
-
-/// <summary>
-/// Validation error raised when an incoming <see cref="ObjectListFilter"/> cannot be
-/// translated to a LINQ expression against the queried entity type.
-/// </summary>
-type ObjectListFilterValidationException (message : string, [<Optional>] extensions : Dictionary<string, obj> | null) =
-    inherit GQLMessageExceptionBase (ErrorKind.Validation, message, extensions)
 
 /// <summary>
 /// Optional configuration for LINQ translation including discriminator handling.
