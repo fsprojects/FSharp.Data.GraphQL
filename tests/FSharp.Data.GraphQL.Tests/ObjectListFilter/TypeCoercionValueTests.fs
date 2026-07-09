@@ -1,9 +1,10 @@
-module FSharp.Data.GraphQL.Tests.TypeCoercionValueTests
+[<Xunit.TraitAttribute (Tests.TraitType.Category, Tests.TraitName.ObjectListFilter)>]
+module FSharp.Data.GraphQL.Tests.ObjectListFilter.TypeCoercion.ValueTests
 
 open Xunit
 open System
 open FSharp.Data.GraphQL.Server.Middleware
-open FSharp.Data.GraphQL.Tests.TypeCoercionCommon
+open FSharp.Data.GraphQL.Tests.ObjectListFilter.TypeCoercion.Common
 
 // ──────────────────────────────────────────────────────────────────────────────
 // pass-through (value already has the target type)

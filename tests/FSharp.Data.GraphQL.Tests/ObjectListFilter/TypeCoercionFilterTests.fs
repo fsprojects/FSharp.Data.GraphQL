@@ -1,10 +1,9 @@
-module FSharp.Data.GraphQL.Tests.TypeCoercionFilterTests
+[<Xunit.TraitAttribute (Tests.TraitType.Category, Tests.TraitName.ObjectListFilter)>]
+module FSharp.Data.GraphQL.Tests.ObjectListFilter.TypeCoercion.FilterTests
 
 open Xunit
-open FSharp.Data.GraphQL.Shared
 open FSharp.Data.GraphQL.Server.Middleware
-open FSharp.Data.GraphQL.Server.Middleware.ObjectListFilter
-open FSharp.Data.GraphQL.Tests.TypeCoercionCommon
+open FSharp.Data.GraphQL.Tests.ObjectListFilter.TypeCoercion.Common
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Equals operator
