@@ -9,9 +9,10 @@ open FSharp.Data.GraphQL.Ast
 open FsToolkit.ErrorHandling
 
 type private ComparisonOperator =
-    | EndsWith of string
-    | StartsWith of string
-    | Contains of string
+    | EndsWith of FieldName : string * Comparer : StringComparer
+    | StartsWith of FieldName : string * Comparer : StringComparer
+    | Contains of FieldName : string * Comparer : StringComparer
+    | StringEquals of FieldName : string * Comparer : StringComparer
     | Equals of string
     | GreaterThan of string
     | GreaterThanOrEqual of string
@@ -19,26 +20,40 @@ type private ComparisonOperator =
     | LessThanOrEqual of string
     | In of string
 
+
 let rec private coerceObjectListFilterInput (variables : Variables) inputValue : Result<ObjectListFilter voption, IGQLError list> =
 
     let parseFieldCondition (s : string) =
-        let s = s.ToLowerInvariant ()
         let prefix (suffix : string) (s : string) = s.Substring (0, s.Length - suffix.Length)
+        // Phase 1: case-sensitive string ops – match original string against capitalized/uppercase suffixes
         match s with
-        | s when s.EndsWith ("_ends_with") && s.Length > "_ends_with".Length -> EndsWith (prefix "_ends_with" s)
-        | s when s.EndsWith ("_ew") && s.Length > "_ew".Length -> EndsWith (prefix "_ew" s)
-        | s when s.EndsWith ("_starts_with") && s.Length > "_starts_with".Length -> StartsWith (prefix "_starts_with" s)
-        | s when s.EndsWith ("_sw") && s.Length > "_sw".Length -> StartsWith (prefix "_sw" s)
-        | s when s.EndsWith ("_contains") && s.Length > "_contains".Length -> Contains (prefix "_contains" s)
-        | s when s.EndsWith ("_greater_than") && s.Length > "_greater_than".Length -> GreaterThan (prefix "_greater_than" s)
-        | s when s.EndsWith ("_gt") && s.Length > "_gt".Length -> GreaterThan (prefix "_gt" s)
-        | s when s.EndsWith ("_greater_than_or_equal") && s.Length > "_greater_than_or_equal".Length -> GreaterThanOrEqual (prefix "_greater_than_or_equal" s)
-        | s when s.EndsWith ("_gte") && s.Length > "_gte".Length -> GreaterThanOrEqual (prefix "_gte" s)
-        | s when s.EndsWith ("_less_than") && s.Length > "_less_than".Length -> LessThan (prefix "_less_than" s)
-        | s when s.EndsWith ("_lt") && s.Length > "_lt".Length -> LessThan (prefix "_lt" s)
-        | s when s.EndsWith ("_less_than_or_equal") && s.Length > "_less_than_or_equal".Length -> LessThanOrEqual (prefix "_less_than_or_equal" s)
-        | s when s.EndsWith ("_lte") && s.Length > "_lte".Length -> LessThanOrEqual (prefix "_lte" s)
-        | s when s.EndsWith ("_in") && s.Length > "_in".Length -> In (prefix "_in" s)
+        | s when s.EndsWith FilterSuffixConstants.CS.EndsWithSuffix && s.Length > FilterSuffixConstants.CS.EndsWithSuffix.Length -> EndsWith (prefix FilterSuffixConstants.CS.EndsWithSuffix s, StringComparer.CurrentCulture)
+        | s when s.EndsWith FilterSuffixConstants.CS.EWSuffix && s.Length > FilterSuffixConstants.CS.EWSuffix.Length -> EndsWith (prefix FilterSuffixConstants.CS.EWSuffix s, StringComparer.CurrentCulture)
+        | s when s.EndsWith FilterSuffixConstants.CS.StartsWithSuffix && s.Length > FilterSuffixConstants.CS.StartsWithSuffix.Length -> StartsWith (prefix FilterSuffixConstants.CS.StartsWithSuffix s, StringComparer.CurrentCulture)
+        | s when s.EndsWith FilterSuffixConstants.CS.SWSuffix && s.Length > FilterSuffixConstants.CS.SWSuffix.Length -> StartsWith (prefix FilterSuffixConstants.CS.SWSuffix s, StringComparer.CurrentCulture)
+        | s when s.EndsWith FilterSuffixConstants.CS.ContainsSuffix && s.Length > FilterSuffixConstants.CS.ContainsSuffix.Length -> Contains (prefix FilterSuffixConstants.CS.ContainsSuffix s, StringComparer.CurrentCulture)
+        | s when s.EndsWith FilterSuffixConstants.CS.EqualsSuffix && s.Length > FilterSuffixConstants.CS.EqualsSuffix.Length -> StringEquals (prefix FilterSuffixConstants.CS.EqualsSuffix s, StringComparer.CurrentCulture)
+        | s when s.EndsWith FilterSuffixConstants.CS.EQSuffix && s.Length > FilterSuffixConstants.CS.EQSuffix.Length -> StringEquals (prefix FilterSuffixConstants.CS.EQSuffix s, StringComparer.CurrentCulture)
+        | _ ->
+        // Phase 2: case-insensitive string ops and numeric ops – lower-case before matching
+        let s = s.ToLowerInvariant ()
+        match s with
+        | s when s.EndsWith FilterSuffixConstants.CI.EndsWithSuffix && s.Length > FilterSuffixConstants.CI.EndsWithSuffix.Length -> EndsWith (prefix FilterSuffixConstants.CI.EndsWithSuffix s, StringComparer.CurrentCultureIgnoreCase)
+        | s when s.EndsWith FilterSuffixConstants.CI.EWSuffix && s.Length > FilterSuffixConstants.CI.EWSuffix.Length -> EndsWith (prefix FilterSuffixConstants.CI.EWSuffix s, StringComparer.CurrentCultureIgnoreCase)
+        | s when s.EndsWith FilterSuffixConstants.CI.StartsWithSuffix && s.Length > FilterSuffixConstants.CI.StartsWithSuffix.Length -> StartsWith (prefix FilterSuffixConstants.CI.StartsWithSuffix s, StringComparer.CurrentCultureIgnoreCase)
+        | s when s.EndsWith FilterSuffixConstants.CI.SWSuffix && s.Length > FilterSuffixConstants.CI.SWSuffix.Length -> StartsWith (prefix FilterSuffixConstants.CI.SWSuffix s, StringComparer.CurrentCultureIgnoreCase)
+        | s when s.EndsWith FilterSuffixConstants.CI.ContainsSuffix && s.Length > FilterSuffixConstants.CI.ContainsSuffix.Length -> Contains (prefix FilterSuffixConstants.CI.ContainsSuffix s, StringComparer.CurrentCultureIgnoreCase)
+        | s when s.EndsWith FilterSuffixConstants.CI.EqualsSuffix && s.Length > FilterSuffixConstants.CI.EqualsSuffix.Length -> StringEquals (prefix FilterSuffixConstants.CI.EqualsSuffix s, StringComparer.CurrentCultureIgnoreCase)
+        | s when s.EndsWith FilterSuffixConstants.CI.EQSuffix && s.Length > FilterSuffixConstants.CI.EQSuffix.Length -> StringEquals (prefix FilterSuffixConstants.CI.EQSuffix s, StringComparer.CurrentCultureIgnoreCase)
+        | s when s.EndsWith FilterSuffixConstants.GreaterThanOrEqualSuffix && s.Length > FilterSuffixConstants.GreaterThanOrEqualSuffix.Length -> GreaterThanOrEqual (prefix FilterSuffixConstants.GreaterThanOrEqualSuffix s)
+        | s when s.EndsWith FilterSuffixConstants.GTESuffix && s.Length > FilterSuffixConstants.GTESuffix.Length -> GreaterThanOrEqual (prefix FilterSuffixConstants.GTESuffix s)
+        | s when s.EndsWith FilterSuffixConstants.GreaterThanSuffix && s.Length > FilterSuffixConstants.GreaterThanSuffix.Length -> GreaterThan (prefix FilterSuffixConstants.GreaterThanSuffix s)
+        | s when s.EndsWith FilterSuffixConstants.GTSuffix && s.Length > FilterSuffixConstants.GTSuffix.Length -> GreaterThan (prefix FilterSuffixConstants.GTSuffix s)
+        | s when s.EndsWith FilterSuffixConstants.LessThanOrEqualSuffix && s.Length > FilterSuffixConstants.LessThanOrEqualSuffix.Length -> LessThanOrEqual (prefix FilterSuffixConstants.LessThanOrEqualSuffix s)
+        | s when s.EndsWith FilterSuffixConstants.LTESuffix && s.Length > FilterSuffixConstants.LTESuffix.Length -> LessThanOrEqual (prefix FilterSuffixConstants.LTESuffix s)
+        | s when s.EndsWith FilterSuffixConstants.LessThanSuffix && s.Length > FilterSuffixConstants.LessThanSuffix.Length -> LessThan (prefix FilterSuffixConstants.LessThanSuffix s)
+        | s when s.EndsWith FilterSuffixConstants.LTSuffix && s.Length > FilterSuffixConstants.LTSuffix.Length -> LessThan (prefix FilterSuffixConstants.LTSuffix s)
+        | s when s.EndsWith FilterSuffixConstants.InSuffix && s.Length > FilterSuffixConstants.InSuffix.Length -> In (prefix FilterSuffixConstants.InSuffix s)
         | s -> Equals s
 
     let (|EquatableValue|NonEquatableValue|) v =
@@ -96,15 +111,16 @@ let rec private coerceObjectListFilterInput (variables : Variables) inputValue :
             | Error errs -> Error errs
             | Ok ValueNone -> Ok ValueNone
             | Ok (ValueSome filter) -> Ok (ValueSome (Not filter))
-        | EndsWith fname, StringValue value -> Ok (ValueSome (ObjectListFilter.EndsWith { FieldName = fname; Value = value }))
-        | StartsWith fname, StringValue value -> Ok (ValueSome (ObjectListFilter.StartsWith { FieldName = fname; Value = value }))
-        | Contains fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.Contains { FieldName = fname; Value = value }))
+        | EndsWith (fname, comparer), StringValue value -> Ok (ValueSome (ObjectListFilter.EndsWith ({ FieldName = fname; Value = value }, comparer)))
+        | StartsWith (fname, comparer), StringValue value -> Ok (ValueSome (ObjectListFilter.StartsWith ({ FieldName = fname; Value = value }, comparer)))
+        | Contains (fname, comparer), ComparableValue value -> Ok (ValueSome (ObjectListFilter.Contains ({ FieldName = fname; Value = value }, comparer)))
+        | StringEquals (fname, comparer), StringValue value -> Ok (ValueSome (ObjectListFilter.Equals ({ FieldName = fname; Value = value }, comparer)))
         | Equals fname, ObjectValue value ->
             match mapInput value with
             | Error errs -> Error errs
             | Ok ValueNone -> Ok ValueNone
             | Ok (ValueSome filter) -> Ok (ValueSome (FilterField { FieldName = fname; Value = filter }))
-        | Equals fname, EquatableValue value -> Ok (ValueSome (ObjectListFilter.Equals { FieldName = fname; Value = value }))
+        | Equals fname, EquatableValue value -> Ok (ValueSome (ObjectListFilter.Equals ({ FieldName = fname; Value = value }, null)))
         | GreaterThan fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.GreaterThan { FieldName = fname; Value = value }))
         | GreaterThanOrEqual fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.GreaterThanOrEqual { FieldName = fname; Value = value }))
         | LessThan fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.LessThan { FieldName = fname; Value = value }))
@@ -165,7 +181,14 @@ let ObjectListFilterType : InputCustomDefinition<ObjectListFilter> = {
     Name = "ObjectListFilter"
     Description =
         Some
-            "The `Filter` scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query."
+            (String.concat
+                " "
+                [
+                    "The ObjectListFilter value represents field filters for object lists."
+                    "Lowercase string suffixes such as `_starts_with`/`_sw`, `_ends_with`/`_ew`, `_contains` (no shorthand), and `_equals`/`_eq` are case-insensitive when applied to string fields."
+                    "Capitalized string suffixes such as `_Starts_With`/`_SW`, `_Ends_With`/`_EW`, `_Contains` (no shorthand), and `_Equals`/`_EQ` are case-sensitive when applied to string fields."
+                    "Comparison suffixes such as `_gt`, `_gte`, `_lt`, `_lte`, and `_in` are also supported."
+                ])
     CoerceInput =
         (fun _ input variables ->
             match input with
