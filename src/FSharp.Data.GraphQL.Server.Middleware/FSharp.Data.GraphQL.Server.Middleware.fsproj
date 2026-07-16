@@ -15,9 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup Label="InternalsVisibleTo">
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>FSharp.Data.GraphQL.Tests</_Parameter1>
-    </AssemblyAttribute>
+    <InternalsVisibleTo Include="FSharp.Data.GraphQL.Tests" />
   </ItemGroup>
 
   <ItemGroup>
