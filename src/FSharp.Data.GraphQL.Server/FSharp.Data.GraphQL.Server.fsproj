@@ -14,21 +14,10 @@
   </PropertyGroup>
 
   <ItemGroup Label="InternalsVisibleTo">
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>FSharp.Data.GraphQL.Benchmarks</_Parameter1>
-    </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>FSharp.Data.GraphQL.Tests</_Parameter1>
-    </AssemblyAttribute>
-  </ItemGroup>
-
-  <ItemGroup Label="InternalsVisibleTo">
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>FSharp.Data.GraphQL.Server.AspNetCore</_Parameter1>
-    </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>FSharp.Data.GraphQL.Server.Middleware</_Parameter1>
-    </AssemblyAttribute>
+    <InternalsVisibleTo Include="FSharp.Data.GraphQL.Benchmarks" />
+    <InternalsVisibleTo Include="FSharp.Data.GraphQL.Tests" />
+    <InternalsVisibleTo Include="FSharp.Data.GraphQL.Server.AspNetCore" />
+    <InternalsVisibleTo Include="FSharp.Data.GraphQL.Server.Middleware" />
   </ItemGroup>
 
   <ItemGroup>
