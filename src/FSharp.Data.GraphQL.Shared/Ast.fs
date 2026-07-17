@@ -4,6 +4,7 @@ namespace FSharp.Data.GraphQL.Ast
 
 open System
 open System.Text.Json
+open Microsoft.FSharp.Reflection
 //NOTE: For references, see https://facebook.github.io/graphql/
 
 /// 2.2 Query Document
@@ -124,26 +125,35 @@ and InputValue =
             | :? single as value -> FloatValue (double value)
             | :? bool as value -> BooleanValue value
             | :? string as value -> StringValue value
+            | :? Guid as value -> StringValue (value.ToString "D")
             | :? uint64 as value -> IntValue (int64 value)
             | :? uint32 as value -> IntValue (int64 value)
             | :? uint16 as value -> IntValue (int64 value)
+            | :? System.Collections.Generic.IReadOnlyDictionary<string, obj> as dict ->
+                let map =
+                    dict
+                    |> Seq.map (fun kv -> kv.Key, InputValue.OfObject kv.Value)
+                    |> Map.ofSeq
+                ObjectValue map
+            | :? System.Collections.Generic.IDictionary<string, obj> as dict ->
+                let map =
+                    dict
+                    |> Seq.map (fun kv -> kv.Key, InputValue.OfObject kv.Value)
+                    |> Map.ofSeq
+                ObjectValue map
             | value ->
                 let ``type`` = value.GetType()
                 if ``type``.IsArray then
                     let array = value :?> System.Array
                     let list = [ for i in 0 .. array.Length - 1 -> InputValue.OfObject (array.GetValue i) ]
                     ListValue list
+                elif FSharpType.IsUnion (``type``, true) then
+                    let _, unionFields = FSharpValue.GetUnionFields (value, ``type``, true)
+                    match unionFields with
+                    | [| singleField |] -> InputValue.OfObject singleField
+                    | _ -> failwith "Cannot convert object to 'InputValue'"
                 else
-                    let genericType = ``type``.GetGenericTypeDefinition()
-                    if typeof<System.Collections.Generic.IReadOnlyDictionary<string, obj>>.IsAssignableFrom genericType then
-                        let dict = value :?> System.Collections.Generic.IReadOnlyDictionary<string, obj>
-                        let map =
-                            dict
-                            |> Seq.map (fun kv -> kv.Key.ToString(), InputValue.OfObject kv.Value)
-                            |> Map.ofSeq
-                        ObjectValue map
-                    else
-                        failwith "Cannot convert object to 'InputValue'"
+                    failwith "Cannot convert object to 'InputValue'"
 
         static member OfJsonElement (element : JsonElement) =
             match element.ValueKind with
