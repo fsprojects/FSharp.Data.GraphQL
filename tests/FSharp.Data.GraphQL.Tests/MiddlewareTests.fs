@@ -10,22 +10,65 @@ open FSharp
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Middleware
-open FSharp.Data.GraphQL.Shared
 open FSharp.Data.GraphQL.Parser
-open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Ast
 
 #nowarn "40"
 
 type Root = { clientId : int }
 
-and Subject =
+type GuidId = ValueObjectId of Guid
+
+let private parseGuidId (value : string) =
+    match Guid.TryParse value with
+    | true, guid -> Ok (ValueObjectId guid)
+    | false, _ ->
+        Error [
+            { new IGQLError with
+                member _.Message = $"Cannot coerce '{value}' to GuidID"
+            }
+        ]
+
+let private guidIdToString (ValueObjectId guidId) = guidId.ToString "D"
+
+let ValueObjectType =
+    Define.WrappedScalar (
+        name = "ValueObject",
+        coerceInput =
+            (function
+            | InputParameterValue.Variable value when value.ValueKind = JsonValueKind.String -> parseGuidId (value.GetString ())
+            | InputParameterValue.InlineConstant (StringValue value) -> parseGuidId value
+            | _ ->
+                Error [
+                    { new IGQLError with
+                        member _.Message = "ValueObject must be provided as string"
+                    }
+                ]),
+        coerceOutput =
+            (function
+            | :? GuidId as guid -> guidIdToString guid |> Some
+            | _ -> None)
+    )
+
+type Subject =
     | A of A
     | B of B
 
-and A = { Id : int; Value : string; Subjects : int list }
+and A = {
+    Id : int
+    Value : string
+    GuidValue : Guid
+    ValueObject : GuidId
+    Subjects : int list
+}
 
-and B = { Id : int; Value : string; Subjects : int list }
+and B = {
+    Id : int
+    Value : string
+    GuidValue : Guid
+    ValueObject : GuidId
+    Subjects : int list
+}
 
 type Complex = {
     Id : int
@@ -43,12 +86,12 @@ type Property =
     | Community of Community
 
 let getExecutor (expectedFilter : ObjectListFilter voption) =
-    let a1 : A = { Id = 1; Value = "A1"; Subjects = [ 2; 6 ] }
-    let a2 : A = { Id = 2; Value = "A2"; Subjects = [ 1; 3; 5 ] }
-    let a3 : A = { Id = 3; Value = "A3"; Subjects = [ 1; 2; 4 ] }
-    let b1 = { Id = 4; Value = "1000"; Subjects = [ 1; 5 ] }
-    let b2 = { Id = 5; Value = "2000"; Subjects = [ 3; 4; 6 ] }
-    let b3 = { Id = 6; Value = "3000"; Subjects = [ 1; 3; 5 ] }
+    let a1 : A = { Id = 1; Value = "A1"; GuidValue = Guid.Parse "11111111-1111-1111-1111-111111111111"; ValueObject = ValueObjectId (Guid.Parse "11111111-1111-1111-1111-111111111111"); Subjects = [ 2; 6 ] }
+    let a2 : A = { Id = 2; Value = "A2"; GuidValue = Guid.Parse "22222222-2222-2222-2222-222222222222"; ValueObject = ValueObjectId (Guid.Parse "22222222-2222-2222-2222-222222222222"); Subjects = [ 1; 3; 5 ] }
+    let a3 : A = { Id = 3; Value = "A3"; GuidValue = Guid.Parse "33333333-3333-3333-3333-333333333333"; ValueObject = ValueObjectId (Guid.Parse "33333333-3333-3333-3333-333333333333"); Subjects = [ 1; 2; 4 ] }
+    let b1 = { Id = 4; Value = "1000"; GuidValue = Guid.Parse "44444444-4444-4444-4444-444444444444"; ValueObject = ValueObjectId (Guid.Parse "44444444-4444-4444-4444-444444444444"); Subjects = [ 1; 5 ] }
+    let b2 = { Id = 5; Value = "2000"; GuidValue = Guid.Parse "55555555-5555-5555-5555-555555555555"; ValueObject = ValueObjectId (Guid.Parse "55555555-5555-5555-5555-555555555555"); Subjects = [ 3; 4; 6 ] }
+    let b3 = { Id = 6; Value = "3000"; GuidValue = Guid.Parse "66666666-6666-6666-6666-666666666666"; ValueObject = ValueObjectId (Guid.Parse "66666666-6666-6666-6666-666666666666"); Subjects = [ 1; 3; 5 ] }
     let al = [ a1; a2; a3 ]
     let bl = [ b1; b2; b3 ]
     let p1 = Complex{ Id = 1; Name = "Complex 1"; Discriminator = "Complex"; Communities = [ 5 ]; Buildings = [ 3 ] }
@@ -90,6 +133,8 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
                 fun () -> [
                     Define.Field ("id", IntType, resolve = (fun _ a -> a.Id))
                     Define.Field ("value", StringType, resolve = (fun _ a -> a.Value))
+                    Define.Field ("guidValue", GuidType, resolve = (fun _ a -> a.GuidValue))
+                    Define.Field ("valueObject", ValueObjectType, resolve = (fun _ a -> a.ValueObject))
                     Define
                         .Field(
                             "subjects",
@@ -111,6 +156,8 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
                 fun () -> [
                     Define.Field ("id", IntType, resolve = (fun _ b -> b.Id))
                     Define.Field ("value", StringType, resolve = (fun _ b -> b.Value))
+                    Define.Field ("guidValue", GuidType, resolve = (fun _ b -> b.GuidValue))
+                    Define.Field ("valueObject", ValueObjectType, resolve = (fun _ b -> b.ValueObject))
                     Define
                         .Field(
                             "subjects",
@@ -1092,6 +1139,87 @@ let ``Object list filter: Must parse filter that references variables`` () =
             empty errors
             data |> equals (upcast expected)
         result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
+
+[<Fact>]
+let ``Object list filter: Must parse inline filter variable backed by Guid scalar`` () =
+    let query =
+        parse
+            """query testQuery($filter: Guid!) {
+                A (id : 1) {
+                    id
+                    value
+                    subjects (filter : { guidValue : $filter }) { ...Value }
+                }
+        }
+
+        fragment Value on Subject {
+                ...on A {
+                    id
+                    value
+                }
+                ...on B {
+                    id
+                    value
+                }
+        }"""
+    let expected =
+        NameValueLookup.ofList [
+            "A",
+            upcast
+                NameValueLookup.ofList [
+                    "id", upcast 1
+                    "value", upcast "A1"
+                    "subjects",
+                    upcast
+                        [
+                            NameValueLookup.ofList [ "id", upcast 2; "value", upcast "A2" ]
+                            NameValueLookup.ofList [ "id", upcast 6; "value", upcast "3000" ]
+                        ]
+                ]
+        ]
+
+    let guidText = "22222222-2222-2222-2222-222222222222"
+    let filterValue = $"\"{guidText}\"" |> JsonDocument.Parse |> _.RootElement
+    let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", filterValue)
+    let filter = Equals ({ FieldName = "guidvalue"; Value = guidText }, null)
+    let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) filter
+    let result = executeAndVerifyFilter (query, variables, filter)
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+    result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
+
+[<Fact>]
+let ``Object list filter: Must parse inline filter variable backed by wrapped value object`` () =
+    let query =
+        parse
+            """query testQuery($valueObject: ValueObject!) {
+                A (id : 1) {
+                    id
+                    value
+                    subjects (filter : { valueObject : $valueObject }) { ...Value }
+                }
+        }
+
+        fragment Value on Subject {
+                ...on A {
+                    id
+                    value
+                }
+                ...on B {
+                    id
+                    value
+                }
+        }"""
+
+    let valueObjectText = "22222222-2222-2222-2222-222222222222"
+    let valueObjectVariable = $"\"{valueObjectText}\"" |> JsonDocument.Parse |> _.RootElement
+    let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("valueObject", valueObjectVariable)
+    let result = executeWithVariables (query, variables)
+
+    ensureDirect result <| fun _ errors ->
+        empty errors
 
 [<Fact>]
 let ``Object list filter: Must return empty filter when all discriminated union types are specified`` () =
