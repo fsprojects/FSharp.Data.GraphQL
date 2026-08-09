@@ -271,6 +271,51 @@ let ``ObjectListFilter works with In operator for empty ValidStringStruct list``
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE false"""
 
 [<Fact>]
+let ``ObjectListFilter works with Equals operator for empty ValidStringStructList`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Equals ({ FieldName = "validStringStructList"; Value = [] }, null)
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    // Equals empty list should use ARRAY_LENGTH = 0 or NOT ANY
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (ARRAY_LENGTH(root["validStringStructList"]) = 0)"""
+
+[<Fact>]
+let ``ObjectListFilter works with Not Equals operator for empty ValidStringStructList`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Not (Equals ({ FieldName = "validStringStructList"; Value = [] }, null))
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    // Not Equals empty list should use ARRAY_LENGTH > 0
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (ARRAY_LENGTH(root["validStringStructList"]) > 0)"""
+
+[<Fact>]
+let ``ObjectListFilter works with Equals operator for non-empty ValidStringStructList`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Equals ({ FieldName = "validStringStructList"; Value = ["tag1"; "tag2"] }, null)
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    // Equals non-empty list should check exact list match
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validStringStructList"] = ["tag1", "tag2"])"""
+
+[<Fact>]
+let ``ObjectListFilter works with Not Equals operator for non-empty ValidStringStructList`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Not (Equals ({ FieldName = "validStringStructList"; Value = ["tag1"; "tag2"] }, null))
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    // Not Equals non-empty list should check NOT exact list match
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validStringStructList"] != ["tag1", "tag2"])"""
+
+[<Fact>]
+let ``ObjectListFilter works with Equals operator for single-element ValidStringStructList`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Equals ({ FieldName = "validStringStructList"; Value = ["tag1"] }, null)
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    // Equals single-element list
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validStringStructList"] = ["tag1"])"""
+
+[<Fact>]
 let ``ObjectListFilter works with Equals operator for ValidStringObject`` () =
     let filter = Equals ({ FieldName = "validStringObject"; Value = ValidStringObject "Jonathan" }, null)
     let queryable = container.GetItemLinqQueryable<FakeEntity> ()
