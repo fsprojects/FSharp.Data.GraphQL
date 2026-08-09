@@ -15,6 +15,65 @@ open FsToolkit.ErrorHandling
 
 module Types =
 
+    let private asOutputDef (tdef : TypeDef) =
+        match tdef with
+        | :? OutputDef as output -> ValueSome output
+        | _ -> ValueNone
+
+    let private isOptionalInputField (field : InputFieldDef) =
+        match field.TypeDef with
+        | Nullable _ -> true
+        | _ -> field.DefaultValue.IsSome || field.IsSkippable
+
+    let private areFieldArgumentsCompatible (objArgs : InputFieldDef[]) (ifaceArgs : InputFieldDef[]) =
+        let objectArguments = objArgs |> Array.map (fun arg -> arg.Name, arg) |> Map.ofArray
+        let interfaceArguments = ifaceArgs |> Array.map (fun arg -> arg.Name, arg) |> Map.ofArray
+
+        let hasCompatibleInterfaceArguments =
+            ifaceArgs
+            |> Array.forall (fun ifaceArg ->
+                match Map.tryFind ifaceArg.Name objectArguments with
+                | Some objArg -> objArg.TypeDef = ifaceArg.TypeDef
+                | None -> false)
+
+        let hasOptionalExtraObjectArguments =
+            objArgs
+            |> Array.forall (fun objArg ->
+                match Map.tryFind objArg.Name interfaceArguments with
+                | Some ifaceArg -> objArg.TypeDef = ifaceArg.TypeDef
+                | None -> isOptionalInputField objArg)
+
+        hasCompatibleInterfaceArguments && hasOptionalExtraObjectArguments
+
+    let rec private isOutputSubtype (objType : OutputDef) (ifaceType : OutputDef) =
+        match objType, ifaceType with
+        | Nullable objInner, Nullable ifaceInner ->
+            match asOutputDef objInner, asOutputDef ifaceInner with
+            | ValueSome objOutput, ValueSome ifaceOutput -> isOutputSubtype objOutput ifaceOutput
+            | _ -> false
+        | Nullable _, _ -> false
+        | _, Nullable ifaceInner ->
+            match asOutputDef ifaceInner with
+            | ValueSome ifaceOutput -> isOutputSubtype objType ifaceOutput
+            | _ -> false
+        | List objInner, List ifaceInner ->
+            match asOutputDef objInner, asOutputDef ifaceInner with
+            | ValueSome objOutput, ValueSome ifaceOutput -> isOutputSubtype objOutput ifaceOutput
+            | _ -> false
+        | List _, _
+        | _, List _ -> false
+        | _ when objType = ifaceType -> true
+        | (:? ObjectDef as objObject), (:? InterfaceDef as ifaceInterface) ->
+            objObject.Implements |> Array.exists ((=) ifaceInterface)
+        | (:? ObjectDef as objObject), (:? UnionDef as ifaceUnion) ->
+            ifaceUnion.Options |> Array.exists ((=) objObject)
+        | _ -> false
+
+    let private isFieldImplementationCompatible (objField : FieldDef) (ifaceField : FieldDef) =
+        objField.Name = ifaceField.Name
+        && areFieldArgumentsCompatible objField.Args ifaceField.Args
+        && isOutputSubtype objField.TypeDef ifaceField.TypeDef
+
     let validateImplements (objdef : ObjectDef) (idef : InterfaceDef) =
         let objectFields = objdef.Fields
         let errors =
@@ -23,11 +82,11 @@ module Types =
                 (fun acc f ->
                     match Map.tryFind f.Name objectFields with
                     | None ->
-                        $"'%s{f.Name}' field is defined by interface %s{idef.Name}, but not implemented in object %s{objdef.Name}"
+                        $"'%s{f.Name}' field is defined by interface '%s{idef.Name}', but not implemented in object '%s{objdef.Name}'"
                         :: acc
-                    | Some objf when objf = f -> acc
+                    | Some objf when isFieldImplementationCompatible objf f -> acc
                     | Some _ ->
-                        $"'%s{objdef.Name}.%s{f.Name}' field signature does not match it's definition in interface %s{idef.Name}"
+                        $"'%s{objdef.Name}.%s{f.Name}' field signature does not match it's definition in interface '%s{idef.Name}'"
                         :: acc)
                 []
         match errors with
@@ -42,7 +101,7 @@ module Types =
                 if objdef.Fields.Count > 0 then
                     Success
                 else
-                    ValidationError [ objdef.Name + " must have at least one field defined" ]
+                    ValidationError [ $"'%s{objdef.Name}' must have at least one field defined" ]
             let implementsResult =
                 objdef.Implements
                 |> ValidationResult.collect (validateImplements objdef)
@@ -52,7 +111,7 @@ module Types =
                 if indef.Fields.Length > 0 then
                     Success
                 else
-                    ValidationError [ indef.Name + " must have at least one field defined" ]
+                    ValidationError [ $"'%s{indef.Name}' must have at least one field defined" ]
             nonEmptyResult
         | Union uniondef ->
             let nonEmptyResult =
@@ -60,8 +119,7 @@ module Types =
                     Success
                 else
                     ValidationError [
-                        uniondef.Name
-                        + " must have at least one type definition option"
+                        $"'%s{uniondef.Name}' must have at least one type definition option"
                     ]
             nonEmptyResult
         | Enum enumdef ->
@@ -69,14 +127,14 @@ module Types =
                 if enumdef.Options.Length > 0 then
                     Success
                 else
-                    ValidationError [ enumdef.Name + " must have at least one enum value defined" ]
+                    ValidationError [ $"'%s{enumdef.Name}' must have at least one enum value defined" ]
             nonEmptyResult
         | Interface idef ->
             let nonEmptyResult =
                 if idef.Fields.Length > 0 then
                     Success
                 else
-                    ValidationError [ idef.Name + " must have at least one field defined" ]
+                    ValidationError [ $"'%s{idef.Name}' must have at least one field defined" ]
             nonEmptyResult
         | InputCustom _ -> Success
         | _ -> failwithf "Unexpected value of typedef: %O" typedef
