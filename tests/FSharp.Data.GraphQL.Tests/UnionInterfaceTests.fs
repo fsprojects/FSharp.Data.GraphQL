@@ -35,6 +35,16 @@ type Person =
     interface INamed with
         member x.Name = x.Name
 
+type IHasChild =
+    interface
+        abstract Child : INamed
+    end
+
+type ParentWithDog =
+    { Child : Dog }
+    interface IHasChild with
+        member x.Child = x.Child :> INamed
+
 let NamedType =
   Define.Interface<INamed>(
     name = "Named",
@@ -326,6 +336,129 @@ let ``Execute allows fragment conditions to be abstract types`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+
+[<Fact>]
+let ``Executes covariance for interface field implemented by concrete object field`` () =
+    let hasChildType =
+        Define.Interface<IHasChild>(
+            name = "HasChild",
+            fields = [ Define.Field("child", NamedType, fun _ (x : IHasChild) -> x.Child) ])
+
+    let parentWithDogType =
+        Define.Object<ParentWithDog>(
+            name = "ParentWithDog",
+            isTypeOf = is<ParentWithDog>,
+            interfaces = [ hasChildType ],
+            fields = [ Define.Field("child", DogType, fun _ x -> x.Child) ])
+
+    let queryType =
+        Define.Object<obj>(
+            name = "Query",
+            fields = [ Define.Field("parent", hasChildType, fun _ _ -> ({ Child = odie } :> IHasChild)) ])
+
+    let covariantSchema =
+        Schema(query = queryType, config = { SchemaConfig.Default with Types = [ parentWithDogType :> NamedDef ] })
+
+    let ast = parse """{ parent { __typename child { __typename name ... on Dog { barks } } } }"""
+    let result = sync <| Executor(covariantSchema).AsyncExecute(ast, getMockInputContext)
+
+    let expected =
+        NameValueLookup.ofList [
+            "parent", upcast NameValueLookup.ofList [
+                "__typename", box "ParentWithDog"
+                "child", upcast NameValueLookup.ofList [
+                    "__typename", box "Dog"
+                    "name", upcast "Odie"
+                    "barks", upcast true
+                ]
+            ]
+        ]
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+
+[<Fact>]
+let ``Executes covariance for Nullable interface field implemented by non-null object field`` () =
+    let hasChildType =
+        Define.Interface<IHasChild>(
+            name = "HasChildNullable",
+            fields = [ Define.Field("child", Nullable NamedType, fun _ (x : IHasChild) -> Some x.Child) ])
+
+    let parentWithDogType =
+        Define.Object<ParentWithDog>(
+            name = "ParentWithDogNullable",
+            isTypeOf = is<ParentWithDog>,
+            interfaces = [ hasChildType ],
+            fields = [ Define.Field("child", DogType, fun _ x -> x.Child) ])
+
+    let queryType =
+        Define.Object<obj>(
+            name = "QueryNullable",
+            fields = [ Define.Field("parent", hasChildType, fun _ _ -> ({ Child = odie } :> IHasChild)) ])
+
+    let covariantSchema =
+        Schema(query = queryType, config = { SchemaConfig.Default with Types = [ parentWithDogType :> NamedDef ] })
+
+    let ast = parse """{ parent { __typename child { __typename name ... on Dog { barks } } } }"""
+    let result = sync <| Executor(covariantSchema).AsyncExecute(ast, getMockInputContext)
+
+    let expected =
+        NameValueLookup.ofList [
+            "parent", upcast NameValueLookup.ofList [
+                "__typename", box "ParentWithDogNullable"
+                "child", upcast NameValueLookup.ofList [
+                    "__typename", box "Dog"
+                    "name", upcast "Odie"
+                    "barks", upcast true
+                ]
+            ]
+        ]
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+
+[<Fact>]
+let ``Executes covariance for StructNullable interface field implemented by non-null object field`` () =
+    let hasChildType =
+        Define.Interface<IHasChild>(
+            name = "HasChildStructNullable",
+            fields = [ Define.Field("child", StructNullable NamedType, fun _ (x : IHasChild) -> ValueSome x.Child) ])
+
+    let parentWithDogType =
+        Define.Object<ParentWithDog>(
+            name = "ParentWithDogStructNullable",
+            isTypeOf = is<ParentWithDog>,
+            interfaces = [ hasChildType ],
+            fields = [ Define.Field("child", DogType, fun _ x -> x.Child) ])
+
+    let queryType =
+        Define.Object<obj>(
+            name = "QueryStructNullable",
+            fields = [ Define.Field("parent", hasChildType, fun _ _ -> ({ Child = odie } :> IHasChild)) ])
+
+    let covariantSchema =
+        Schema(query = queryType, config = { SchemaConfig.Default with Types = [ parentWithDogType :> NamedDef ] })
+
+    let ast = parse """{ parent { __typename child { __typename name ... on Dog { barks } } } }"""
+    let result = sync <| Executor(covariantSchema).AsyncExecute(ast, getMockInputContext)
+
+    let expected =
+        NameValueLookup.ofList [
+            "parent", upcast NameValueLookup.ofList [
+                "__typename", box "ParentWithDogStructNullable"
+                "child", upcast NameValueLookup.ofList [
+                    "__typename", box "Dog"
+                    "name", upcast "Odie"
+                    "barks", upcast true
+                ]
+            ]
+        ]
+
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
