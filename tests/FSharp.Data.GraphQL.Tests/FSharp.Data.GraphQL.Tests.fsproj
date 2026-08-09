@@ -83,6 +83,7 @@
     <Compile Include="ObjectListFilter\TypeCoercionFilterTests.fs" />
     <Compile Include="ObjectListFilter\TypeCoercionFilterInOperatorTests.fs" />
     <Compile Include="ObjectListFilter\TypeCoercionFilterOptionCollectionTests.fs" />
+    <Compile Include="ObjectListFilter\ObjectListFilterEmptyArrayTests.fs" />
     <Compile Include="DeferredTests.fs" />
     <Compile Include="SubscriptionTests.fs" />
     <Compile Include="MiddlewareTests.fs" />
