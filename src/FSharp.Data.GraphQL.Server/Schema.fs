@@ -213,7 +213,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
     let getPossibleTypes abstractDef =
         match abstractDef with
         | Union u -> u.Options
-        | Interface i -> Map.find i.Name (implementations.Force()) |> Array.ofList
+        | Interface i -> implementations.Force() |> Map.vtryFind i.Name |> ValueOption.defaultValue [] |> Array.ofList
         | _ -> [||]
 
     let rec introspectTypeRef isNullable (namedTypes: Map<string, IntrospectionTypeRef>) typedef =
@@ -354,6 +354,26 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           Types = itypes
           Directives = idirectives }
 
+    let validateSchemaAbstractions() =
+        let errors = ResizeArray<GQLProblemDetails>()
+
+        // Validate that all interfaces have at least one implementing type
+        typeMap.ToSeq()
+        |> Seq.iter (fun (_, typedef) ->
+            match typedef with
+            | Interface idef ->
+                let possibleTypes = getPossibleTypes typedef
+                if Array.isEmpty possibleTypes then
+                    errors.Add(
+                        GQLProblemDetails.CreateWithKind (
+                            $"Interface '%s{idef.Name}' has no implementing object types",
+                            Validation
+                        )
+                    )
+            | _ -> ())
+
+        errors.ToArray()
+
     let introspected = lazy (introspectSchema typeMap)
 
     interface ISchema with
@@ -383,3 +403,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
 
     interface System.Collections.IEnumerable with
         member _.GetEnumerator() = (typeMap.ToSeq() |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
+
+    /// Validates the schema abstractions for GraphQL compliance
+    /// Returns array of validation errors, empty if schema is valid
+    member _.Validate() = validateSchemaAbstractions()

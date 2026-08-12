@@ -41,6 +41,7 @@
     <Compile Include="TypeValidationTests.fs" />
     <Compile Include="UnionInterfaceTests.fs" />
     <Compile Include="InterfaceCovarianceTests.fs" />
+    <Compile Include="InterfaceMissingImplementationTests.fs" />
     <Compile Include="DirectivesTests.fs" />
     <Compile Include="TypeWrappersKindSafetyTests.fs" />
     <None Include="TypeWrappersKindSafety\.gitignore" />
