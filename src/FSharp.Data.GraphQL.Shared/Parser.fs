@@ -316,7 +316,8 @@ module internal Internal =
                 (opt (token_ws name))
                 (opt (token_ws variableDefinitions))
                 (opt (token_ws directives))
-                (token_ws selectionSet)
+                // '}' is a punctuator; token_ws would reject `}fragment` / `}query` (no whitespace).
+                (selectionSet .>> whitespaces)
                 (fun otype name ovars directives selection -> {
                     OperationType = otype
                     Name = name |> ValueOption.ofOption
