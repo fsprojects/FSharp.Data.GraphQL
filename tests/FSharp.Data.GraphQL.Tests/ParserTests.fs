@@ -653,3 +653,38 @@ fragment frag on Friend {
 [<Fact>]
 let ``Parser must parse kitchen sink``() =
     parse KitchenSink
+
+[<Fact>]
+let ``Parser must parse minified shorthand query followed by fragment without whitespace`` () =
+    let expected =
+        docN [
+            queryWithSelection (field "__typename")
+            fragmentWithCondAndSelection "X" "Query" (field "__typename")
+        ]
+    test expected "{__typename}fragment X on Query{__typename}"
+
+[<Fact>]
+let ``Parser must parse minified named query followed by fragment without whitespace`` () =
+    let expected =
+        docN [
+            namedQuerWithSelection "A" (field "__typename")
+            fragmentWithCondAndSelection "X" "Query" (field "__typename")
+        ]
+    test expected "query A{__typename}fragment X on Query{__typename}"
+
+[<Fact>]
+let ``Parser must parse minified adjacent named queries without whitespace`` () =
+    let expected =
+        docN [
+            namedQuerWithSelection "A" (field "__typename")
+            namedQuerWithSelection "B" (field "__typename")
+        ]
+    test expected "query A{__typename}query B{__typename}"
+
+[<Fact>]
+let ``Parser must parse minified named query followed by multiple fragments without whitespace`` () =
+    // Shape used by graphql-js getIntrospectionQuery() and JS tooling (minified).
+    let query =
+        "query IntrospectionQuery{__schema{queryType{name}}}fragment FullType on __Type{kind name}fragment InputValue on __InputValue{name}"
+    let doc = parse query
+    equals 3 doc.Definitions.Length
