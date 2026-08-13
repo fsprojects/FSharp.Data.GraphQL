@@ -328,6 +328,19 @@ let ``Core type definitions are considered nullable`` () =
         empty errors
         data |> equals (upcast expected)
 
+[<Fact>]
+let ``__type must return null for unknown type name`` () =
+    // Spec: `__type(name: String!): __Type` (nullable), so unknown type names must resolve to null.
+    // https://spec.graphql.org/draft/#sec-Schema-Introspection.Schema
+    let root = Define.Object("Query", [ Define.Field("onlyField", StringType) ])
+    let schema = Schema(root)
+    let query = """{ __type(name: "DefinitelyMissingType") { name kind } }"""
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext)
+    let expected = NameValueLookup.ofList [ "__type", null ]
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+
 type User = { FirstName: string; LastName: string }
 type UserInput = { Name: string }
 
