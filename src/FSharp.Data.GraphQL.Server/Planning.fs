@@ -27,7 +27,7 @@ let TypeMetaFieldDef =
     Define.Field(
         name = "__type",
         description = "Request the type information of a single type.",
-        typedef = __Type,
+        typedef = StructNullable __Type,
         args = [
             { Name = "name"
               Description = None
@@ -38,8 +38,8 @@ let TypeMetaFieldDef =
         ],
         resolve = fun ctx (_:obj) ->
             ctx.Schema.Introspected.Types
-            |> Seq.find (fun t -> t.Name = ctx.Arg("name"))
-            |> IntrospectionTypeRef.Named)
+            |> Seq.vtryFind (fun t -> t.Name = ctx.Arg("name"))
+            |> ValueOption.map IntrospectionTypeRef.Named)
 
 /// Field definition allowing to resolve a name of the current Object type at runtime.
 let TypeNameMetaFieldDef : FieldDef<obj> =
