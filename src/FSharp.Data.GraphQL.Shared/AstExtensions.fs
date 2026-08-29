@@ -36,13 +36,16 @@ and internal AstSelectionInfo = {
 } with
 
     member x.AliasOrName = x.Alias |> ValueOption.defaultValue x.Name
-    static member Create (typeCondition : string voption, path : FieldPath, name : string, alias : string voption, [<Optional>] fields : AstSelectionInfo list) = {
-        TypeCondition = typeCondition
-        Name = name
-        Alias = alias
-        Path = path
-        Fields = if obj.ReferenceEquals (fields, null) then [] else fields
-    }
+    static member Create
+        (typeCondition : string voption, path : FieldPath, name : string, alias : string voption, [<Optional>] fields : AstSelectionInfo list)
+        =
+        {
+            TypeCondition = typeCondition
+            Name = name
+            Alias = alias
+            Path = path
+            Fields = if obj.ReferenceEquals (fields, null) then [] else fields
+        }
     member x.SetFields (fields : AstSelectionInfo list) = x.Fields <- fields
 
 and AstFieldInfo =
@@ -102,9 +105,30 @@ type Document with
     /// Generates a GraphQL query string from this document.
     /// </summary>
     /// <param name="options">Specify custom printing voptions for the query string.</param>
-    member x.ToQueryString ([<Optional; DefaultParameterValue (QueryStringPrintingOptions.None)>] options : QueryStringPrintingOptions) =
+    member x.ToQueryString ([<Optional; DefaultParameterValue(QueryStringPrintingOptions.None)>] options : QueryStringPrintingOptions) =
         let sb = PaddedStringBuilder ()
-        let withQuotes (s : string) = "\"" + s + "\""
+        let escapeGraphQLString (s : string) =
+            let escaped = StringBuilder (s.Length + s.Length / 4 + 2)
+            escaped.Append ('"') |> ignore
+            for c in s do
+                let appendStr =
+                    match c with
+                    | '"' -> "\\\""
+                    | '\\' -> "\\\\"
+                    | '\b' -> "\\b"
+                    | '\f' -> "\\f"
+                    | '\n' -> "\\n"
+                    | '\r' -> "\\r"
+                    | '\t' -> "\\t"
+                    | '\u2028' -> "\\u2028"
+                    | '\u2029' -> "\\u2029"
+                    | c when c < '\u0020' ->
+                        let hex = (int c).ToString ("x4", CultureInfo.InvariantCulture)
+                        "\\u" + hex
+                    | c -> string c
+                escaped.Append (appendStr) |> ignore
+            escaped.Append('"').ToString ()
+        let withQuotes = escapeGraphQLString
         let rec printValue x =
             let printObjectValue (name, value) =
                 sb.Append (name)

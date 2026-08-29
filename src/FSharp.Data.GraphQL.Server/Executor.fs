@@ -1,5 +1,6 @@
 namespace FSharp.Data.GraphQL
 
+open System
 open System.Collections.Concurrent
 open System.Collections.Immutable
 open System.Runtime.InteropServices
@@ -9,6 +10,7 @@ open FsToolkit.ErrorHandling
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Ast
+open FSharp.Data.GraphQL.Ast.Extensions
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Planning
@@ -99,6 +101,9 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         | Success -> ()
         | ValidationError errors -> raise (GQLMessageException (System.String.Join("\n", errors)))
 
+    // Compute schema ID once after middleware has run and cache it for the lifetime of this Executor instance
+    let schemaId = schema.Introspected.GetHashCode()
+
     let eval (executionPlan: ExecutionPlan, data: 'Root option, variables: ImmutableDictionary<string, JsonElement>, getInputContext : InputExecutionContextProvider): Async<GQLExecutionResult> =
         let documentId = executionPlan.DocumentId
         let prepareOutput res =
@@ -137,7 +142,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         eval (executionPlan, data, variables, getInputContext)
 
     let createExecutionPlan (ast: Document, operationName: string option, meta : Metadata) =
-        let documentId = ast.GetHashCode()
+        let documentId = DocumentId.fromCanonicalQueryUnsafe (ast.ToQueryString())
         result {
             match findOperation ast operationName with
             | Some operation ->
@@ -159,7 +164,6 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                             ErrorKind.Validation
                         )]
                 do!
-                    let schemaId = schema.Introspected.GetHashCode()
                     let key = { DocumentId = documentId; SchemaId = schemaId }
                     let producer = fun () -> Validation.Ast.validateDocument schema.Introspected ast
                     validationCache.GetOrAdd producer key
@@ -185,7 +189,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// Asynchronously executes a provided execution plan. In case of repetitive queries, execution plan may be preprocessed
     /// and cached using `documentId` as an identifier.
     /// Returned value is a readonly dictionary consisting of following top level entries:
-    /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
+    /// 'documentId' (unique identifier of the current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
     /// 'data' (GraphQL response matching the structure provided in GraphQL query string), and
     /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>
@@ -198,7 +202,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     /// <summary>
     /// Asynchronously executes parsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
-    /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
+    /// 'documentId' (unique identifier of the current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
     /// 'data' (GraphQL response matching the structure provided in GraphQL query string), and
     /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>
@@ -216,7 +220,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     /// <summary>
     /// Asynchronously executes unparsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
-    /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
+    /// 'documentId' (unique identifier of the current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
     /// 'data' (GraphQL response matching the structure provided in GraphQL query string), and
     /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>

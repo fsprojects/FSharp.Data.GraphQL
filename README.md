@@ -230,7 +230,7 @@ printfn "Custom data: %A\n" result.CustomData
 
 // Errors: <null>
 
-// Custom data: map [("documentId", 1221427401)]
+// Custom data: map [("documentId", "<SHA-256 of the executed query document>")]
 ```
 
 For more information about how to use the client provider, see the [examples folder](samples/client-provider).
