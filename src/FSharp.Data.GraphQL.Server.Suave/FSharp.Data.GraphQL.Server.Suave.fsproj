@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(DotNetVersion)</TargetFrameworks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Deterministic>true</Deterministic>
+    <Description>FSharp implementation of Facebook GraphQL query language (Suave integration)</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="HttpHandlers.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Condition="$(IsNuGet) == ''" Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+    <ProjectReference Condition="$(IsNuGet) == ''" Include="..\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
+    <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Shared" VersionOverride="$(Version)" />
+    <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Server" VersionOverride="$(Version)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Suave" NoWarn="NU1608" />
+  </ItemGroup>
+
+</Project>

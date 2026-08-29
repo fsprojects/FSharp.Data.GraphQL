@@ -26,6 +26,7 @@
     <PackageReference Update="Microsoft.NETCore.Platforms" Version="$(SystemVersion)" />
     <PackageReference Update="NuGet.CommandLine" Version="1.*" />
     <PackageReference Update="Oxpecker" Version="2.*" />
+    <PackageReference Update="Suave" Version="3.3.0" NoWarn="NU1608" />
     <PackageReference Update="System.CodeDom" Version="$(SystemVersion)" />
     <PackageReference Update="System.Collections.Immutable" Version="$(SystemVersion)" />
     <PackageReference Update="System.Diagnostics.DiagnosticSource" Version="$(SystemVersion)" />

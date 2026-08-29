@@ -95,6 +95,7 @@
     <Compile Include="AspNetCore/TestSchema.fs" />
     <Compile Include="AspNetCore/InvalidMessageTests.fs" />
     <Compile Include="AspNetCore/SerializationTests.fs" />
+    <Compile Include="Suave/HttpHandlersTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -108,5 +109,6 @@
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.AspNetCore\FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Suave\FSharp.Data.GraphQL.Server.Suave.fsproj" />
   </ItemGroup>
 </Project>
