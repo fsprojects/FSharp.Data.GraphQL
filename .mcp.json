@@ -7,6 +7,15 @@
     "GitHub": {
       "type": "http",
       "url": "https://api.githubcopilot.com/mcp/"
+    },
+    "F#": {
+      "type": "stdio",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "run",
+        "fslangmcp"
+      ]
     }
   }
 }
