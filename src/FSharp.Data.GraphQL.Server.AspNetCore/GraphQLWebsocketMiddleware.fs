@@ -174,27 +174,24 @@ type GraphQLWebSocketMiddleware<'Root>
 
         let sendSubscriptionResponseOutput id subscriptionResult =
             match subscriptionResult with
-            | SubscriptionResult output -> { Data = ValueSome output; Errors = [] } |> sendOutput id
+            | SubscriptionResult output -> SubscriptionExecutionResult.Create (output, []) |> sendOutput id
             | SubscriptionErrors (output, errors) ->
                 logger.LogWarning ("Subscription errors: {subscriptionErrors}", (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}"))))
-                { Data = ValueNone; Errors = errors } |> sendOutput id
+                SubscriptionExecutionResult.CreateErrors errors |> sendOutput id
 
+        // Incremental payloads are sent as soon as they are produced, with their path inside the initial result,
+        // so a client can merge them. The completion marker becomes a final payload with hasNext set to false.
         let sendDeferredResponseOutput id deferredResult =
             match deferredResult with
-            | DeferredResult (obj, path) ->
-                let output = obj :?> Dictionary<string, obj>
-                { Data = ValueSome output; Errors = [] } |> sendOutput id
-            | DeferredErrors (obj, errors, _) ->
+            | ValueSome (DeferredResult (data, path)) ->
+                SubscriptionExecutionResult.CreateIncremental (data, [], path) |> sendOutput id
+            | ValueSome (DeferredErrors (data, errors, path)) ->
                 logger.LogWarning (
                     "Deferred response errors: {deferredErrors}",
                     (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
                 )
-                { Data = ValueNone; Errors = errors } |> sendOutput id
-
-        let sendDeferredResultDelayedBy (ct : CancellationToken) (ms : int) id deferredResult : Task = task {
-            do! Task.Delay (ms, ct)
-            do! deferredResult |> sendDeferredResponseOutput id
-        }
+                SubscriptionExecutionResult.CreateIncremental (data, errors, path) |> sendOutput id
+            | ValueNone -> SubscriptionExecutionResult.CreateCompleted () |> sendOutput id
 
         let applyPlanExecutionResult (id : SubscriptionId) (socket) (executionResult : GQLExecutionResult) : Task = task {
             match executionResult with
@@ -202,16 +199,13 @@ type GraphQLWebSocketMiddleware<'Root>
                 (subscriptions, socket, observableOutput, serializerOptions)
                 |> addClientSubscription id sendSubscriptionResponseOutput
             | Deferred (data, errors, observableOutput) ->
-                do! { Data = ValueSome data; Errors = [] } |> sendOutput id
-                if errors.IsEmpty then
-                    (subscriptions, socket, observableOutput, serializerOptions)
-                    |> addClientSubscription id (sendDeferredResultDelayedBy cancellationToken 5000)
-                else
-                    ()
-            | Direct (data, _) -> do! { Data = ValueSome data; Errors = [] } |> sendOutput id
+                do! SubscriptionExecutionResult.CreateInitial (data, errors) |> sendOutput id
+                (subscriptions, socket, observableOutput |> Observable.withCompletionMarker, serializerOptions)
+                |> addClientSubscription id sendDeferredResponseOutput
+            | Direct (data, _) -> do! SubscriptionExecutionResult.Create (data, []) |> sendOutput id
             | RequestError problemDetails ->
                 logger.LogWarning("Request errors:\n{errors}", problemDetails)
-                do! { Data = ValueNone; Errors = problemDetails } |> sendOutput id
+                do! SubscriptionExecutionResult.CreateErrors problemDetails |> sendOutput id
         }
 
         let logMsgReceivedWithOptionalPayload optionalPayload (msgAsStr : string) =

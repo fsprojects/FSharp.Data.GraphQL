@@ -78,6 +78,44 @@ let rec Person = Define.Object(name = "Person", fieldsFn = fun () -> [
 
 As you may see, we defined Person object definition using *rec* keyword and instead of defining fields as a list and we used a lazily evaluated function instead.
 
+### Defining fields backed by asynchronous sequences
+
+When a list comes from an asynchronous source, such as a database cursor or a paged SDK client, use `Define.TaskSeqField`. Its resolver returns `IAsyncEnumerable<'T>`, which is what the `taskSeq { }` computation expression from [FSharp.Control.TaskSeq](https://github.com/fsprojects/FSharp.Control.TaskSeq) and C# async iterators produce.
+
+```fsharp
+let getOrders (customerId : int) = taskSeq {
+    for page in 0 .. 10 do
+        let! orders = db.GetOrdersPageAsync (customerId, page)
+        yield! orders
+}
+
+Define.TaskSeqField("orders", ListOf Order, fun _ customer -> getOrders customer.Id)
+```
+
+How the sequence is delivered depends on the query:
+
+- Without directives the sequence is enumerated completely and returned as a regular list.
+- With `@defer` on a `Nullable (ListOf ...)` field the complete list is delivered in one deferred payload.
+- With `@stream` every item is delivered as soon as the sequence produces it and its fields are resolved. The enumeration is cancelled when the client unsubscribes.
+
+Streamed items can be grouped into batches. The `preferredBatchSize` argument of `@stream`, available with `SchemaConfig.DefaultWithBufferedStream`, has priority. Otherwise the `batching` parameter of the field applies. It is either a fixed size or a function that reads the size from the source, such as the page size of a paged SDK sequence.
+
+```fsharp
+Define.TaskSeqField("orders", ListOf Order, (fun _ customer -> getOrders customer.Id), batching = StreamBatching.Fixed 50)
+
+Define.TaskSeqField(
+    "blobs",
+    ListOf Blob,
+    (fun _ container -> listBlobs container),
+    batching = StreamBatching.FromSource (function
+        | :? PagedSequence<BlobItem> as paged -> ValueSome paged.PageSize
+        | _ -> ValueNone))
+```
+
+Azure SDK `AsyncPageable<T>` does not expose its page size, because the size is only a hint passed to `AsPages`. To batch its items by pages, keep the hint in your own type, for example a subclass of `AsyncPageable<T>` or a wrapper, and read it in `StreamBatching.FromSource`.
+
+Resolvers are captured as F# quotations. A `taskSeq { }` block that uses `let!` or `yield!` cannot be written inline in the resolver lambda, so define it in a separate function as shown above. Fields defined this way do not support `WithResolveMiddleware`.
+
 ## Defining an Interface 
 
 GraphQL interfaces are so called abstract types (along with unions). This means, that they can be used as part of the query, however query materialization must always be bound to some concrete Object type definition.

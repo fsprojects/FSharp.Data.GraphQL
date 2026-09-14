@@ -59,6 +59,7 @@ type internal CustomResolveFieldDefinition<'Val, 'Res> (source : FieldDef<'Val>,
             | Sync (input, output, expr) -> Sync (input, output, changeResolver expr)
             | Async (input, output, expr) -> Async (input, output, changeResolver expr)
             | Undefined -> failwith "Field has no resolve function."
+            | TaskSeq _ -> raise (NotSupportedException "Resolve middleware is not supported for fields defined with Define.TaskSeqField.")
             | x -> failwith <| sprintf "Resolver '%A' is not supported." x
     interface IEquatable<FieldDef> with
         member _.Equals (other) = source.Equals (other)
