@@ -240,7 +240,7 @@ let Query =
         ])
 
 let schemaConfig =
-    { SchemaConfig.DefaultWithBufferedStream(streamOptions = { Interval = None; PreferredBatchSize = None }) with Types = [ CType; DType ] }
+    { SchemaConfig.DefaultWithBufferedStream(streamOptions = { Interval = ValueNone; PreferredBatchSize = ValueNone }) with Types = [ CType; DType ] }
 
 
 let sub =

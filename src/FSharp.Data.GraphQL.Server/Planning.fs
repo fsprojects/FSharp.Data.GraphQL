@@ -179,16 +179,16 @@ let private getStreamBufferMode (field : Field) =
             )
     let directive =
         field.Directives
-        |> List.tryFind (fun d -> d.Name = "stream")
+        |> List.vtryFind (fun d -> d.Name = "stream")
     let getArg argName (d : Directive) =
         d.Arguments
-        |> List.tryFind (fun x -> x.Name = argName)
-        |> Option.map (fun x -> x.Value |> cast argName)
+        |> List.vtryFind (fun x -> x.Name = argName)
+        |> ValueOption.map (fun x -> x.Value |> cast argName)
     let interval = getArg "interval"
     let preferredBatchSize = getArg "preferredBatchSize"
     match directive with
-    | Some d -> { Interval = interval d; PreferredBatchSize = preferredBatchSize d }
-    | None ->
+    | ValueSome d -> { Interval = interval d; PreferredBatchSize = preferredBatchSize d }
+    | ValueNone ->
         // Buffer options are read only for fields that have the @stream directive, so this indicates a planner bug
         Debug.Fail "Must be prevented by validation"
         raise (InvalidOperationException $"Field '%s{field.AliasOrName}' is planned as streamed, but it has no @stream directive")

@@ -289,6 +289,7 @@
 * **Breaking Change** Migrated to .NET 10
 * **Breaking Change** Made Relay `Edge` a read-only struct
 * **Breaking Change** `SubscriptionExecutionResult.Data` is now `obj Skippable`, and the record has new `Path` and `HasNext` fields for incremental delivery
+* **Breaking Change** `BufferedStreamOptions.Interval` and `BufferedStreamOptions.PreferredBatchSize` are now `int voption`
 * Added case-insensitive string comparison support to `ObjectListFilter`, including comparer-aware filter cases and GraphQL filter suffix handling
 * Improved Relay XML documentation comments
 * Changed query planning to throw `MalformedGQLQueryException` for invalid queries, `NotSupportedException` for unsupported type definition implementations and `InvalidOperationException` for internal planning errors instead of `System.Exception`, with messages naming the affected field, type and execution kind
