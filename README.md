@@ -191,13 +191,17 @@ let operation =
         appearsIn
         homePlanet
         friends {
-          ... on Human {
-            name
-            homePlanet
-          }
-          ... on Droid {
-            name
-            primaryFunction
+          edges {
+            node {
+              ... on Human {
+                name
+                homePlanet
+              }
+              ... on Droid {
+                name
+                primaryFunction
+              }
+            }
           }
         }
       }
@@ -225,8 +229,8 @@ printfn "Custom data: %A\n" result.CustomData
 //   {Name = Some "Darth Vader";
 // AppearsIn = [|NewHope; Empire; Jedi|];
 // HomePlanet = Some "Tatooine";
-// Friends = [|Some {Name = Some "Wilhuff Tarkin";
-// HomePlanet = <null>;}|];};}
+// Friends = {Edges = [|{Node = {Name = Some "Wilhuff Tarkin";
+// HomePlanet = <null>;};}|];};};}
 
 // Errors: <null>
 
