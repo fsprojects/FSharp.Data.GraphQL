@@ -17,15 +17,19 @@ let operation =
         appearsIn
         homePlanet
         hisFriends: friends {
-          ... on Human {
-            humanName: name
-            appearsIn
-            homePlanet
-          }
-          ... on Droid {
-            droidName: name
-            appearsIn
-            primaryFunction
+          edges {
+            node {
+              ... on Human {
+                humanName: name
+                appearsIn
+                homePlanet
+              }
+              ... on Droid {
+                droidName: name
+                appearsIn
+                primaryFunction
+              }
+            }
           }
         }
       }
@@ -38,13 +42,13 @@ let result = operation.Run (ctx)
 
 let hisName = result.Data.Value.MyHero.Value.HisName.Value
 
-let hisFriends = result.Data.Value.MyHero.Value.HisFriends |> Array.choose id
+let hisFriends = result.Data.Value.MyHero.Value.HisFriends.Edges
 
 let humanFriendNames =
-    hisFriends |> Array.choose (fun f -> f.TryAsHuman ()) |> Array.map (fun h -> h.HumanName)
+    hisFriends |> Array.choose (fun e -> e.Node.TryAsHuman ()) |> Array.map (fun h -> h.HumanName)
 
 let droidFriendNames =
-    hisFriends |> Array.choose (fun f -> f.TryAsDroid ()) |> Array.map (fun h -> h.DroidName)
+    hisFriends |> Array.choose (fun e -> e.Node.TryAsDroid ()) |> Array.map (fun h -> h.DroidName)
 
 printfn "His name: %s" hisName
 
