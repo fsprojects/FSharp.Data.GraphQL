@@ -18,6 +18,7 @@
     <Project Path="src/FSharp.Data.GraphQL.Server.Middleware/FSharp.Data.GraphQL.Server.Middleware.fsproj" />
     <Project Path="src/FSharp.Data.GraphQL.Server.Oxpecker/FSharp.Data.GraphQL.Server.Oxpecker.fsproj" />
     <Project Path="src/FSharp.Data.GraphQL.Server.Relay/FSharp.Data.GraphQL.Server.Relay.fsproj" />
+    <Project Path="src/FSharp.Data.GraphQL.Server.Suave/FSharp.Data.GraphQL.Server.Suave.fsproj" />
     <Project Path="src/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.fsproj" />
     <Project Path="src/FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj" />
   </Folder>

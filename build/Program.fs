@@ -340,6 +340,9 @@ Target.create "PackServerGiraffe" <| fun _ -> pack "Server.Giraffe"
 let [<Literal>] PackServerOxpecker = "PackServerOxpecker"
 Target.create "PackServerOxpecker" <| fun _ -> pack "Server.Oxpecker"
 
+let [<Literal>] PackServerSuave = "PackServerSuave"
+Target.create "PackServerSuave" <| fun _ -> pack "Server.Suave"
+
 let [<Literal>] PackClientTarget = "PackClient"
 Target.create PackClientTarget <| fun _ -> pack "Client"
 
@@ -363,6 +366,9 @@ Target.create "PushServerGiraffe" <| fun _ -> push "Server.Giraffe"
 
 let [<Literal>] PushServerOxpecker = "PushServerOxpecker"
 Target.create "PushServerOxpecker" <| fun _ -> push "Server.Oxpecker"
+
+let [<Literal>] PushServerSuave = "PushServerSuave"
+Target.create "PushServerSuave" <| fun _ -> push "Server.Suave"
 
 let [<Literal>] PushClientTarget = "PushClient"
 Target.create PushClientTarget <| fun _ -> push "Client"
@@ -403,6 +409,8 @@ PackSharedTarget
 ==> PushServerGiraffe
 ==> PackServerOxpecker
 ==> PushServerOxpecker
+==> PackServerSuave
+==> PushServerSuave
 ==> PackMiddlewareTarget
 ==> PushMiddlewareTarget
 ==> PackRelayTarget
