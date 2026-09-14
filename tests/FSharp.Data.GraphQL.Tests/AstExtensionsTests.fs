@@ -4,6 +4,7 @@
 module FSharp.Data.GraphQL.Tests.AstExtensionsTests
 
 open Xunit
+open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Ast.Extensions
 
@@ -356,3 +357,141 @@ let ``Should generate information map correctly`` () =
     ]
 
     actual |> equals expected
+
+[<Fact>]
+let ``ToQueryString escapes double quotes in string values`` () =
+    let query = """query q { hero(name: "test\"quote") }"""
+    let document = parse query
+    let printed = document.ToQueryString ()
+    // Verify the printed query contains the escaped quote
+    Assert.Contains ("\\\"", printed)
+    // Verify it can be parsed back
+    let reparsed = parse printed
+    equals (document.ToQueryString ()) (reparsed.ToQueryString ())
+
+[<Fact>]
+let ``ToQueryString escapes backslashes in string values`` () =
+    let query = """query q { hero(path: "C:\\Users\\test") }"""
+    let document = parse query
+    let printed = document.ToQueryString ()
+    // Verify the printed query contains escaped backslashes
+    Assert.Contains ("\\\\", printed)
+    // Verify it can be parsed back
+    let reparsed = parse printed
+    equals (document.ToQueryString ()) (reparsed.ToQueryString ())
+
+[<Fact>]
+let ``ToQueryString escapes newlines in string values`` () =
+    let query = """query q { hero(text: "line1\nline2") }"""
+    let document = parse query
+    let printed = document.ToQueryString ()
+    // Verify the printed query contains the escaped newline within the string value
+    Assert.Contains ("\\n", printed)
+    // Verify the string value itself doesn't contain an actual newline (it should be escaped)
+    // The printed output will have formatting newlines, but the string value should have \n
+    Assert.Contains ("\"line1\\nline2\"", printed)
+    // Verify it can be parsed back
+    let reparsed = parse printed
+    equals (document.ToQueryString ()) (reparsed.ToQueryString ())
+
+[<Fact>]
+let ``ToQueryString escapes tabs in string values`` () =
+    let query = """query q { hero(text: "col1\tcol2") }"""
+    let document = parse query
+    let printed = document.ToQueryString ()
+    // Verify the printed query contains the escaped tab within the string value
+    Assert.Contains ("\\t", printed)
+    Assert.Contains ("\"col1\\tcol2\"", printed)
+    // Verify it can be parsed back
+    let reparsed = parse printed
+    equals (document.ToQueryString ()) (reparsed.ToQueryString ())
+
+[<Fact>]
+let ``ToQueryString escapes carriage returns in string values`` () =
+    let query = """query q { hero(text: "line1\rline2") }"""
+    let document = parse query
+    let printed = document.ToQueryString ()
+    // Verify the printed query contains the escaped carriage return
+    Assert.Contains ("\\r", printed)
+    // Verify it can be parsed back
+    let reparsed = parse printed
+    equals (document.ToQueryString ()) (reparsed.ToQueryString ())
+
+[<Fact>]
+let ``ToQueryString escapes backspace in string values`` () =
+    let query = """query q { hero(text: "test\bback") }"""
+    let document = parse query
+    let printed = document.ToQueryString ()
+    // Verify the printed query contains the escaped backspace
+    Assert.Contains ("\\b", printed)
+    // Verify it can be parsed back
+    let reparsed = parse printed
+    equals (document.ToQueryString ()) (reparsed.ToQueryString ())
+
+[<Fact>]
+let ``ToQueryString escapes form feed in string values`` () =
+    let query = """query q { hero(text: "page1\fpage2") }"""
+    let document = parse query
+    let printed = document.ToQueryString ()
+    // Verify the printed query contains the escaped form feed
+    Assert.Contains ("\\f", printed)
+    // Verify it can be parsed back
+    let reparsed = parse printed
+    equals (document.ToQueryString ()) (reparsed.ToQueryString ())
+
+[<Fact>]
+let ``ToQueryString escapes control characters as unicode in string values`` () =
+    // Test with a control character (e.g., ASCII 0x01)
+    let query = "query q { hero(text: \"test\u0001control\") }"
+    let document = parse query
+    let printed = document.ToQueryString ()
+    // Verify the printed query contains the unicode escape (lowercase hex)
+    Assert.Contains ("\\u0001", printed)
+    // Verify it can be parsed back
+    let reparsed = parse printed
+    equals (document.ToQueryString ()) (reparsed.ToQueryString ())
+
+[<Fact>]
+let ``ToQueryString escapes unicode line separator in string values`` () =
+    let query = """query q { hero(text: "\u2028") }"""
+    let document = parse query
+    let printed = document.ToQueryString ()
+    Assert.Contains ("\\u2028", printed)
+    let reparsed = parse printed
+    equals (document.ToQueryString ()) (reparsed.ToQueryString ())
+
+[<Fact>]
+let ``ToQueryString escapes unicode paragraph separator in string values`` () =
+    let query = """query q { hero(text: "\u2029") }"""
+    let document = parse query
+    let printed = document.ToQueryString ()
+    Assert.Contains ("\\u2029", printed)
+    let reparsed = parse printed
+    equals (document.ToQueryString ()) (reparsed.ToQueryString ())
+
+[<Fact>]
+let ``ToQueryString escapes multiple special characters correctly`` () =
+    let query = """query q { hero(text: "quote:\"newline:\nslash:\\tab:\t") }"""
+    let document = parse query
+    let printed = document.ToQueryString ()
+    // Verify all escapes are present
+    Assert.Contains ("\\\"", printed)
+    Assert.Contains ("\\n", printed)
+    Assert.Contains ("\\\\", printed)
+    Assert.Contains ("\\t", printed)
+    // Verify it can be parsed back
+    let reparsed = parse printed
+    equals (document.ToQueryString ()) (reparsed.ToQueryString ())
+
+[<Fact>]
+let ``ToQueryString produces deterministic output for escaped strings`` () =
+    // This test verifies that the same query with escaped strings produces
+    // the same canonical output, which is critical for documentId stability
+    let query = """query Test { field(arg: "test\"quote\nline\ttab\\back") }"""
+    let document = parse query
+    let printed1 = document.ToQueryString ()
+    let printed2 = document.ToQueryString ()
+    equals printed1 printed2
+    // Verify the documentId is deterministic
+    let documentId = DocumentId.fromCanonicalQuery printed1
+    equals 64 documentId.Length // SHA-256 hex string is always 64 chars

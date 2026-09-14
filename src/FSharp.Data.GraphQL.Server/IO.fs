@@ -10,7 +10,7 @@ open FSharp.Data.GraphQL.Types
 type Output = IDictionary<string, obj>
 
 type GQLResponse =
-    { DocumentId: int
+    { DocumentId: string
       Data : Output Skippable
       Errors : GQLProblemDetails list Skippable }
     static member Direct(documentId, data, errors) =
@@ -27,7 +27,7 @@ type GQLResponse =
           Errors = Include errors }
 
 type GQLExecutionResult =
-    { DocumentId: int
+    { DocumentId: string
       Content : GQLResponseContent
       Metadata : Metadata }
     static member Direct(documentId, data, errors, meta) =
@@ -59,7 +59,7 @@ type GQLExecutionResult =
     static member Error(documentId, msg, meta) =
         GQLExecutionResult.RequestError(documentId, [ GQLProblemDetails.Create msg ], meta)
 
-    static member ErrorFromException(documentId : int, ex : Exception, meta : Metadata) =
+    static member ErrorFromException(documentId : string, ex : Exception, meta : Metadata) =
         GQLExecutionResult.RequestError(documentId, [ GQLProblemDetails.Create (ex.Message, ex) ], meta)
 
     static member Invalid(documentId, errors, meta) =

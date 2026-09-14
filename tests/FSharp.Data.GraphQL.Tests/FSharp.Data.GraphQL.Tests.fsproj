@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Azure.Cosmos" />
+    <PackageReference Include="FSharp.Data.LiteralProviders" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Validus" />
@@ -29,6 +30,8 @@
     <Compile Include="Helpers.fs" />
     <Compile Include="ErrorHelpers.fs" />
     <Compile Include="Literals.fs" />
+    <Compile Include="DocumentIdTests.fs" />
+    <Compile Include="ValidationCacheTests.fs" />
     <Compile Include="Relay\NodeTests.fs" />
     <Compile Include="Relay\CursorTests.fs" />
     <Compile Include="Relay\ConnectionTests.fs" />
