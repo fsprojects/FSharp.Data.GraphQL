@@ -113,7 +113,7 @@ let immediateItems = [ { Id = 1; Value = async { return "one" } }; { Id = 2; Val
 let slowAndFastItems = [ { Id = 1; Value = delayed 3000 "slow" }; { Id = 2; Value = async { return "fast" } } ]
 
 let schemaConfig =
-    SchemaConfig.DefaultWithBufferedStream (streamOptions = { Interval = None; PreferredBatchSize = None })
+    SchemaConfig.DefaultWithBufferedStream (streamOptions = { Interval = ValueNone; PreferredBatchSize = ValueNone })
 
 let executorFor (fields : FieldDef<unit> list) = Executor (Schema (Define.Object<unit>("Query", fields), config = schemaConfig))
 

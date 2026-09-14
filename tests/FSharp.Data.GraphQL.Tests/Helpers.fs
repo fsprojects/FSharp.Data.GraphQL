@@ -128,7 +128,7 @@ let ms x =
         | _ -> 20
     x * factor
 
-type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> 'T -> unit) as this =
+type TestObserver<'T>(obs : IObservable<'T>, [<Struct>] ?onReceived : TestObserver<'T> -> 'T -> unit) as this =
     let received = List<'T>()
     let mutable isCompleted = false
     let mre = new ManualResetEvent(false)
@@ -157,7 +157,7 @@ type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> '
         member _.OnError (error) = error.Reraise()
         member _.OnNext (value) =
             received.Add (value)
-            onReceived |> Option.iter (fun evt -> evt this value)
+            onReceived |> ValueOption.iter (fun evt -> evt this value)
     interface IDisposable with
         member _.Dispose () =
             subscription.Dispose ()
@@ -230,7 +230,7 @@ open System.Threading.Tasks
 /// Tests use it instead of a <c>taskSeq</c> block for sequences that really suspend, because <c>taskSeq</c> code compiled
 /// without optimizations, as in Debug builds of this project, does not resume correctly after an await.
 /// </remarks>
-type SuspendingAsyncEnumerable<'T> (produceItem : CancellationToken -> int -> Task<'T voption>, ?onDisposed : unit -> unit) =
+type SuspendingAsyncEnumerable<'T> (produceItem : CancellationToken -> int -> Task<'T voption>, [<Struct>] ?onDisposed : unit -> unit) =
     interface IAsyncEnumerable<'T> with
         member _.GetAsyncEnumerator cancellationToken =
             let index = ref 0
@@ -251,6 +251,6 @@ type SuspendingAsyncEnumerable<'T> (produceItem : CancellationToken -> int -> Ta
                     )
               interface IAsyncDisposable with
                 member _.DisposeAsync () =
-                    onDisposed |> Option.iter (fun onDisposed -> onDisposed ())
+                    onDisposed |> ValueOption.iter (fun onDisposed -> onDisposed ())
                     ValueTask.CompletedTask
             }

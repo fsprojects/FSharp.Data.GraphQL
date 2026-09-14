@@ -296,8 +296,8 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
     // A batch size requested by the @stream directive takes precedence over the batching policy declared on the field
     let options =
         match options.PreferredBatchSize, value with
-        | None, (:? IAsyncEnumerableFieldValue as fieldValue) ->
-            { options with PreferredBatchSize = ValueOption.toOption fieldValue.PreferredBatchSize }
+        | ValueNone, (:? IAsyncEnumerableFieldValue as fieldValue) ->
+            { options with PreferredBatchSize = fieldValue.PreferredBatchSize }
         | _ -> options
 
     let collectItems : (int * ResolverResult<KeyValuePair<string, obj>>) list -> IObservable<GQLDeferredResponseContent> = function
@@ -320,16 +320,16 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
     let collectBuffered (events : StreamEvent list) : IObservable<GQLDeferredResponseContent> =
         let items =
             events
-            |> List.choose (function
-                | StreamedItem (index, result) -> Some (index, result)
-                | StreamFailure _ -> None)
+            |> List.vchoose (function
+                | StreamedItem (index, result) -> ValueSome (index, result)
+                | StreamFailure _ -> ValueNone)
         // An enumeration failure is delivered as a value after the items of the same buffer,
         // so it neither loses buffered items nor terminates sibling deferred streams
         let failures =
             events
-            |> List.choose (function
-                | StreamFailure error -> Some (DeferredErrors (null, resolverError path ctx error, normalizeErrorPath path))
-                | StreamedItem _ -> None)
+            |> List.vchoose (function
+                | StreamFailure error -> ValueSome (DeferredErrors (null, resolverError path ctx error, normalizeErrorPath path))
+                | StreamedItem _ -> ValueNone)
         match failures with
         | [] -> collectItems items
         | failures -> collectItems items |> Observable.concat (Observable.ofSeq failures)
@@ -337,10 +337,10 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
     let buffer (events : IObservable<StreamEvent>) : IObservable<GQLDeferredResponseContent> =
         let buffered =
             match options.Interval, options.PreferredBatchSize with
-            | Some i, None -> Observable.bufferMilliseconds i events |> Observable.map List.ofSeq
-            | None, Some c -> Observable.bufferCount c events |> Observable.map List.ofSeq
-            | Some i, Some c -> Observable.bufferMillisecondsCount i c events |> Observable.map List.ofSeq
-            | None, None -> Observable.map(List.singleton) events
+            | ValueSome i, ValueNone -> Observable.bufferMilliseconds i events |> Observable.map List.ofSeq
+            | ValueNone, ValueSome c -> Observable.bufferCount c events |> Observable.map List.ofSeq
+            | ValueSome i, ValueSome c -> Observable.bufferMillisecondsCount i c events |> Observable.map List.ofSeq
+            | ValueNone, ValueNone -> Observable.map(List.singleton) events
         buffered
         |> Observable.bind collectBuffered
 
