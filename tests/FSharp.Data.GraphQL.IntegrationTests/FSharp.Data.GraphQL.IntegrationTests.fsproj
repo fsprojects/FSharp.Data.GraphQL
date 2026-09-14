@@ -19,6 +19,7 @@
     <Content Include="integration-introspection.json" />
     <Content Include="reserved_scalar_input_date_introspection.json" />
     <Content Include="reserved_scalar_object_date_introspection.json" />
+    <Content Include="introspection-altered-types.json" />
     <None Include="operation.graphql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -30,6 +31,7 @@
     <Compile Include="ReservedScalarNameProviderTests.fs" />
     <Compile Include="LocalProviderTests.fs" />
     <Compile Include="LocalProviderWithOptionalParametersOnlyTests.fs" />
+    <Compile Include="ResponseJsonTests.fs" />
     <Compile Include="SwapiLocalProviderTests.fs" />
     <Compile Include="SwapiRemoteProviderTests.fs" />
   </ItemGroup>
