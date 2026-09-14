@@ -74,11 +74,6 @@ max_line_length=150
 # Whether end-of-file has a newline, default=true
 insert_final_newline=true
 
-# false: someLineOfCode
-# true: someLineOfCode;
-# default false
-fsharp_semicolon_at_end_of_line=false
-
 # false: f(1,2)
 # true: f(1, 2)
 # default true
@@ -179,10 +174,6 @@ fsharp_max_value_binding_width=100
 # default 40
 fsharp_max_function_binding_width=80
 
-# maximum width for expressions like X.DoY().GetZ(10).Help()
-# default 50
-fsharp_max_dot_get_expression_width=80
-
 # whether open/close brackets go on the same column
 # cramped:    type Range =
 #               { From: float
@@ -243,7 +234,7 @@ fsharp_multi_line_lambda_closing_newline=false
 #        | _ ->
 #        ()
 # default false
-fsharp_keep_indent_in_branch=true
+fsharp_experimental_keep_indent_in_branch=true
 
 # whether a bar is placed before DU
 # false: type MyDU = Short of int
