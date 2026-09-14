@@ -111,7 +111,7 @@ This boilerplate code can be easily reduced with a built-in implementation:
 
 ```fsharp
 let streamOptions =
-    { Interval = Some 2000; PreferredBatchSize = None }
+    { Interval = ValueSome 2000; PreferredBatchSize = ValueNone }
 let schemaConfig =
     SchemaConfig.DefaultWithBufferedStream(streamOptions)
 ```
