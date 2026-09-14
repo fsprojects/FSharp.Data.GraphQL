@@ -2,7 +2,9 @@ namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open System.Linq
 open System.Text.Json.Serialization
+open System.Threading.Tasks
 open Microsoft.FSharp.Reflection
+open FSharp.Control
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Relay
@@ -141,6 +143,17 @@ module Schema =
 
     let getCharacter id = characters |> List.tryFind (matchesId id)
 
+    /// Produces friends one by one with a delay, which demonstrates the @stream directive.
+    /// TaskSeq functions are used instead of a taskSeq block, because a taskSeq block compiled
+    /// without optimizations does not resume correctly after an await.
+    let getFriendsStream (friendIds : string list) =
+        friendIds
+        |> TaskSeq.ofList
+        |> TaskSeq.chooseAsync (fun id -> task {
+            do! Task.Delay 500
+            return getCharacter id
+        })
+
     let EpisodeType =
         Define.Enum (
             name = "Episode",
@@ -226,6 +239,12 @@ module Schema =
                             con
                     )
                     Define.Field ("appearsIn", ListOf EpisodeType, "Which movies they appear in.", (fun _ (h : Human) -> h.AppearsIn))
+                    Define.TaskSeqField (
+                        "friendsStream",
+                        ListOf CharacterType,
+                        "The friends of the human produced one by one. Request the field with @stream to receive each friend as soon as it is available.",
+                        fun _ (h : Human) -> getFriendsStream h.Friends
+                    )
                     Define.Field ("homePlanet", Nullable StringType, "The home planet of the human, or null if unknown.", (fun _ h -> h.HomePlanet))
                 ]
         )

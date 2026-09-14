@@ -252,3 +252,70 @@ let ``singleton should call OnComplete and return item`` () =
     use sub = Observer.create obs
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals (Seq.singleton 1)
+
+open System.Threading
+open System.Threading.Tasks
+open FSharp.Control
+
+let asyncRange (count : int) = taskSeq {
+    for number in 1 .. count do
+        yield number
+}
+
+[<Fact>]
+let ``ofAsyncEnumerable should call OnComplete and return items in expected order`` () =
+    use sub = Observable.ofAsyncEnumerable (asyncRange 5) |> Observer.create
+    sub.WaitCompleted(timeout = ms 10)
+    sub.Received |> seqEquals [ 1; 2; 3; 4; 5 ]
+
+[<Fact>]
+let ``ofAsyncEnumerable should deliver items produced before an enumeration error`` () =
+    let source = taskSeq {
+        yield 1
+        failwith "Boom"
+    }
+    use sub = Observable.ofAsyncEnumerable source |> Observable.materialize |> Observer.create
+    sub.WaitCompleted(timeout = ms 10)
+    Assert.Collection (
+        sub.Received,
+        (fun (notification : System.Reactive.Notification<int>) ->
+            Assert.Equal (System.Reactive.NotificationKind.OnNext, notification.Kind)
+            Assert.Equal (1, notification.Value)),
+        (fun (notification : System.Reactive.Notification<int>) ->
+            Assert.Equal (System.Reactive.NotificationKind.OnError, notification.Kind)
+            Assert.Equal ("Boom", notification.Exception.Message))
+    )
+
+[<Fact>]
+let ``ofAsyncEnumerable should stop the enumeration when the subscription is disposed`` () =
+    let pulled = ref 0
+    use disposed = new ManualResetEventSlim false
+    use received = new ManualResetEventSlim false
+    let source =
+        SuspendingAsyncEnumerable<int> (
+            (fun _ index -> task {
+                pulled.Value <- index + 1
+                do! Task.Delay 20
+                return ValueSome (index + 1)
+            }),
+            fun () -> disposed.Set ()
+        )
+    let subscription = Observable.ofAsyncEnumerable source |> Observable.subscribe (fun _ -> received.Set ())
+    Assert.True (received.Wait (TimeSpan.FromSeconds (float (ms 5))), "Expected an item before the subscription is disposed")
+    subscription.Dispose ()
+    Assert.True (disposed.Wait (TimeSpan.FromSeconds (float (ms 5))), "Expected the enumerator to be disposed with the subscription")
+    let pulledAfterDisposal = pulled.Value
+    Thread.Sleep 200
+    Assert.Equal (pulledAfterDisposal, pulled.Value)
+
+[<Fact>]
+let ``withCompletionMarker should emit the items and then the marker when the source completes`` () =
+    use sub = Observable.ofSeq [ 1; 2 ] |> Observable.withCompletionMarker |> Observer.create
+    sub.WaitCompleted(timeout = ms 10)
+    sub.Received |> seqEquals [ ValueSome 1; ValueSome 2; ValueNone ]
+
+[<Fact>]
+let ``withCompletionMarker should emit only the marker for an empty source`` () =
+    use sub = Observable.ofSeq Seq.empty<int> |> Observable.withCompletionMarker |> Observer.create
+    sub.WaitCompleted(timeout = ms 10)
+    sub.Received |> seqEquals [ ValueNone ]

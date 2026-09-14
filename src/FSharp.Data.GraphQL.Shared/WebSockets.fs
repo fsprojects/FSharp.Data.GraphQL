@@ -3,6 +3,7 @@ namespace FSharp.Data.GraphQL.Shared.WebSockets
 open System
 open System.Collections.Generic
 open System.Text.Json
+open System.Text.Json.Serialization
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Shared
 
@@ -16,7 +17,63 @@ type SubscriptionsDict = IDictionary<SubscriptionId, SubscriptionUnsubscriber * 
 
 type RawMessage = { Id : string voption; Type : string; Payload : JsonDocument voption }
 
-type SubscriptionExecutionResult = { Data : Output voption; Errors : GQLProblemDetails list }
+/// <summary>
+/// Payload of a <c>next</c> message of the <c>graphql-transport-ws</c> protocol.
+/// </summary>
+/// <remarks>
+/// <see cref="SubscriptionExecutionResult.Path"/> and <see cref="SubscriptionExecutionResult.HasNext"/> are present
+/// only in payloads of incremental delivery, which is produced by the <c>@defer</c> and <c>@stream</c> directives.
+/// </remarks>
+type SubscriptionExecutionResult = {
+    /// Result data: an object for complete and initial payloads, or a deferred or streamed value for incremental payloads.
+    /// It is omitted from the final payload of an incremental delivery.
+    Data : obj Skippable
+    /// Errors raised while producing the payload.
+    Errors : GQLProblemDetails list
+    /// Path of a deferred or streamed value inside the initial result.
+    Path : FieldPath Skippable
+    /// Tells whether more incremental payloads follow.
+    HasNext : bool Skippable
+} with
+
+    /// Creates a payload of a complete execution result.
+    static member Create (data : Output, errors : GQLProblemDetails list) = {
+        Data = Include (box data)
+        Errors = errors
+        Path = Skip
+        HasNext = Skip
+    }
+
+    /// Creates a payload that carries only errors.
+    static member CreateErrors (errors : GQLProblemDetails list) = { Data = Include null; Errors = errors; Path = Skip; HasNext = Skip }
+
+    /// Creates the initial payload of an incremental delivery, which is always followed by incremental payloads.
+    static member CreateInitial (data : Output, errors : GQLProblemDetails list) = {
+        Data = Include (box data)
+        Errors = errors
+        Path = Skip
+        HasNext = Include true
+    }
+
+    /// <summary>
+    /// Creates an incremental payload with a deferred or streamed value located at the path.
+    /// More payloads may follow, so <see cref="SubscriptionExecutionResult.HasNext"/> is <see langword="true"/>.
+    /// </summary>
+    static member CreateIncremental (data : objnull, errors : GQLProblemDetails list, path : FieldPath) = {
+        Data = Include data
+        Errors = errors
+        Path = Include path
+        HasNext = Include true
+    }
+
+    /// <summary>
+    /// Creates the final payload of an incremental delivery, which only reports that no more payloads follow.
+    /// </summary>
+    /// <remarks>
+    /// Payloads are sent as soon as they are produced, and whether a payload is the last one becomes known
+    /// only when the deferred results complete, so the end of the delivery is reported separately.
+    /// </remarks>
+    static member CreateCompleted () = { Data = Skip; Errors = []; Path = Skip; HasNext = Include false }
 
 type ServerRawPayload =
     | ExecutionResult of SubscriptionExecutionResult

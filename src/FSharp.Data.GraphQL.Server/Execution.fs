@@ -131,6 +131,13 @@ type StreamOutput =
     | NonBufferedList of int * (KeyValuePair<string, obj> * GQLProblemDetails list)
     | BufferedList of int list * (KeyValuePair<string, obj> * GQLProblemDetails list) list
 
+/// An event of a streamed list: a resolved item with its index in the source,
+/// or a failure raised while enumerating an asynchronous source.
+[<Struct>]
+type private StreamEvent =
+    | StreamedItem of index : int * result : ResolverResult<KeyValuePair<string, obj>>
+    | StreamFailure of error : exn
+
 let private raiseErrors errs = AsyncVal.wrap <| Error errs
 
 /// Given an error e, call ParseError in the given context's Schema to convert it into
@@ -210,14 +217,33 @@ let rec private direct (returnDef : OutputDef) (inputContext : InputExecutionCon
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
         let resolveItem index item =
             executeResolvers inputContext innerCtx (box index :: path) value (toOption item |> AsyncVal.wrap)
+        let resolveItems (items : obj[]) =
+            items
+            |> Array.mapi resolveItem
+            |> collectFields Parallel
+            |> AsyncVal.map(ResolverResult.mapValue(fun items -> KeyValuePair(name, items |> Array.map(fun d -> d.Value) |> box)))
         match value with
+        | :? IAsyncEnumerableFieldValue as fieldValue ->
+            async {
+                // The sequence is drained first, the same way a lazy seq is materialized below.
+                // Enumeration errors are caught inside the computation, because resolveWith only catches synchronous exceptions.
+                let! drained = async {
+                    try
+                        let! items = AsyncEnumerableExtensions.toArrayAsync fieldValue.Items
+                        return Ok items
+                    with e ->
+                        return Error (resolverError path ctx e)
+                }
+                match drained with
+                | Error errs -> return Error errs
+                | Ok items -> return! resolveItems items
+            }
+            |> AsyncVal.ofAsync
         | :? System.Collections.IEnumerable as enumerable ->
             enumerable
             |> Seq.cast<obj>
             |> Seq.toArray
-            |> Array.mapi resolveItem
-            |> collectFields Parallel
-            |> AsyncVal.map(ResolverResult.mapValue(fun items -> KeyValuePair(name, items |> Array.map(fun d -> d.Value) |> box)))
+            |> resolveItems
         | _ -> raise <| GQLMessageException (ErrorMessages.expectedEnumerableValue ctx.ExecutionInfo.Identifier (value.GetType()))
 
     | Nullable (Output innerDef) ->
@@ -267,7 +293,14 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
         | ResolveCollection innerPlan -> { ctx with ExecutionInfo = innerPlan }
         | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
 
-    let collectBuffered : (int * ResolverResult<KeyValuePair<string, obj>>) list -> IObservable<GQLDeferredResponseContent> = function
+    // A batch size requested by the @stream directive takes precedence over the batching policy declared on the field
+    let options =
+        match options.PreferredBatchSize, value with
+        | None, (:? IAsyncEnumerableFieldValue as fieldValue) ->
+            { options with PreferredBatchSize = ValueOption.toOption fieldValue.PreferredBatchSize }
+        | _ -> options
+
+    let collectItems : (int * ResolverResult<KeyValuePair<string, obj>>) list -> IObservable<GQLDeferredResponseContent> = function
         | [] -> Observable.empty
         | [(index, result)] ->
             result
@@ -284,13 +317,30 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
             let (_, indicies, deferred, errs) = List.foldBack merge chunk (chunk.Length - 1, [], None, [])
             deferResults (box indicies :: path) (Ok (box data, deferred, errs))
 
-    let buffer (items : IObservable<int * ResolverResult<KeyValuePair<string, obj>>>) : IObservable<GQLDeferredResponseContent> =
+    let collectBuffered (events : StreamEvent list) : IObservable<GQLDeferredResponseContent> =
+        let items =
+            events
+            |> List.choose (function
+                | StreamedItem (index, result) -> Some (index, result)
+                | StreamFailure _ -> None)
+        // An enumeration failure is delivered as a value after the items of the same buffer,
+        // so it neither loses buffered items nor terminates sibling deferred streams
+        let failures =
+            events
+            |> List.choose (function
+                | StreamFailure error -> Some (DeferredErrors (null, resolverError path ctx error, normalizeErrorPath path))
+                | StreamedItem _ -> None)
+        match failures with
+        | [] -> collectItems items
+        | failures -> collectItems items |> Observable.concat (Observable.ofSeq failures)
+
+    let buffer (events : IObservable<StreamEvent>) : IObservable<GQLDeferredResponseContent> =
         let buffered =
             match options.Interval, options.PreferredBatchSize with
-            | Some i, None -> Observable.bufferMilliseconds i items |> Observable.map List.ofSeq
-            | None, Some c -> Observable.bufferCount c items |> Observable.map List.ofSeq
-            | Some i, Some c -> Observable.bufferMillisecondsCount i c items |> Observable.map List.ofSeq
-            | None, None -> Observable.map(List.singleton) items
+            | Some i, None -> Observable.bufferMilliseconds i events |> Observable.map List.ofSeq
+            | None, Some c -> Observable.bufferCount c events |> Observable.map List.ofSeq
+            | Some i, Some c -> Observable.bufferMillisecondsCount i c events |> Observable.map List.ofSeq
+            | None, None -> Observable.map(List.singleton) events
         buffered
         |> Observable.bind collectBuffered
 
@@ -300,6 +350,25 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
     }
 
     match value with
+    | :? IAsyncEnumerableFieldValue as fieldValue ->
+        let stream : IObservable<GQLDeferredResponseContent> =
+            fieldValue.Items
+            |> Observable.ofAsyncEnumerable
+            // Materialization turns an enumeration failure into a value, so the items produced before it are still delivered
+            |> Observable.materialize
+            |> Observable.mapi (fun index notification ->
+                match notification.Kind with
+                | System.Reactive.NotificationKind.OnNext ->
+                    match resolveItem index notification.Value |> AsyncVal.map StreamedItem with
+                    // Items resolved synchronously are emitted immediately, which keeps them in the source order
+                    | Immediate event -> Observable.singleton event
+                    | pending -> Observable.ofAsyncVal pending
+                | System.Reactive.NotificationKind.OnError -> Observable.singleton (StreamFailure notification.Exception)
+                | _ -> Observable.empty)
+            // Each item is emitted as soon as its own fields are resolved
+            |> Observable.mergeInner
+            |> buffer
+        ResolverResult.defered (KeyValuePair (name, box [])) stream |> AsyncVal.wrap
     | :? System.Collections.IEnumerable as enumerable ->
         let stream : IObservable<GQLDeferredResponseContent> =
             enumerable
@@ -307,8 +376,9 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
             |> Seq.toArray
             |> Array.mapi resolveItem
             |> Observable.ofAsyncValSeq
+            |> Observable.map StreamedItem
             |> buffer
-        ResolverResult.defered (KeyValuePair (info.Identifier, box [])) stream |> AsyncVal.wrap
+        ResolverResult.defered (KeyValuePair (name, box [])) stream |> AsyncVal.wrap
     | _ -> raise <| GQLMessageException (ErrorMessages.expectedEnumerableValue ctx.ExecutionInfo.Identifier (value.GetType()))
 
 and private live (inputContext : InputExecutionContextProvider) (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
@@ -439,6 +509,10 @@ let internal compileField (fieldDef: FieldDef) : ExecuteField =
         fun resolveFieldCtx value -> asyncVal {
                 return! resolve resolveFieldCtx value
             }
+    | Resolve.BoxedTaskSeq(_, _, resolve) ->
+        fun resolveFieldCtx value ->
+            try resolve resolveFieldCtx value |> AsyncVal.wrap
+            with e -> AsyncVal.Failure(e)
     | Resolve.BoxedExpr (resolve) ->
         fun resolveFieldCtx value -> downcast resolve resolveFieldCtx value
     | _ ->

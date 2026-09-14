@@ -15,9 +15,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Azure.Core" />
     <PackageReference Include="Microsoft.Azure.Cosmos" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="FSharp.Control.TaskSeq" />
     <PackageReference Include="Validus" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.utility" />
@@ -96,6 +98,7 @@
     <Compile Include="AspNetCore/InvalidMessageTests.fs" />
     <Compile Include="AspNetCore/SerializationTests.fs" />
     <Compile Include="AspNetCore/RequestHandlerExtensibilityTests.fs" />
+    <Compile Include="TaskSeqFieldTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

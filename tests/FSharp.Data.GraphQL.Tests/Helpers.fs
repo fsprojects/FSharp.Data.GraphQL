@@ -220,3 +220,37 @@ module MockInputContext =
     let mockInputContextInstance = MockInputExecutionContext()
 
 let getMockInputContext = fun () -> MockInputContext.mockInputContextInstance :> IInputExecutionContext
+
+open System.Threading.Tasks
+
+/// <summary>
+/// An asynchronous sequence that produces each item through a task created on demand.
+/// </summary>
+/// <remarks>
+/// Tests use it instead of a <c>taskSeq</c> block for sequences that really suspend, because <c>taskSeq</c> code compiled
+/// without optimizations, as in Debug builds of this project, does not resume correctly after an await.
+/// </remarks>
+type SuspendingAsyncEnumerable<'T> (produceItem : CancellationToken -> int -> Task<'T voption>, ?onDisposed : unit -> unit) =
+    interface IAsyncEnumerable<'T> with
+        member _.GetAsyncEnumerator cancellationToken =
+            let index = ref 0
+            let current = ref Unchecked.defaultof<'T>
+            { new IAsyncEnumerator<'T> with
+                member _.Current = current.Value
+                member _.MoveNextAsync () =
+                    // The ValueTask wraps a Task, because the test project does not reference IcedTasks
+                    ValueTask<bool> (
+                        task {
+                            match! produceItem cancellationToken index.Value with
+                            | ValueSome item ->
+                                current.Value <- item
+                                index.Value <- index.Value + 1
+                                return true
+                            | ValueNone -> return false
+                        }
+                    )
+              interface IAsyncDisposable with
+                member _.DisposeAsync () =
+                    onDisposed |> Option.iter (fun onDisposed -> onDisposed ())
+                    ValueTask.CompletedTask
+            }
