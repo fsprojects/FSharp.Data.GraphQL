@@ -389,6 +389,6 @@ This is an **F# project** targeting **.NET** (see #file:'global.json'). Key deta
 - **Preferences**: Prefer `voption` over `option`, prefer `task` CE over `async` CE
 - **Class construction**: Always use F# class initializers instead of property assignment
 - **Cross-project references**: If you need types from another project in the solution, do not duplicate code — note the dependency and discuss in the PR
-- **Test framework**: `CollectionAssert` cannot work with F# lists, only with F# array syntax
+- **Test framework**: Tests use xUnit; `Assert.Equal`, `Assert.Collection`, `Assert.Contains`, `Assert.Empty` and `Assert.Single` work directly with F# lists, arrays and sequences
 - **Quality over quantity**: It is far better to do nothing in a run than to create low-value noise. Maintainers will lose trust in Repo Assist if it generates spam. Err heavily on the side of silence.
 - 
