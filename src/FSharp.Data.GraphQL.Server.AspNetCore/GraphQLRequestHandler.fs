@@ -16,9 +16,10 @@ open FsToolkit.ErrorHandling
 open FSharp.Data.GraphQL.Server
 open FSharp.Data.GraphQL.Shared
 
+/// Handles GraphQL requests using a provided root schema.
 type DefaultGraphQLRequestHandler<'Root>
     /// <summary>
-    /// Handles GraphQL requests using a provided root schema.
+    /// Initializes a new instance of the <see cref="DefaultGraphQLRequestHandler{T}"/> class.
     /// </summary>
     /// <param name="httpContextAccessor">The accessor to the current HTTP context.</param>
     /// <param name="options">The options monitor for GraphQL options.</param>
@@ -30,9 +31,10 @@ type DefaultGraphQLRequestHandler<'Root>
     ) =
     inherit GraphQLRequestHandler<'Root> (httpContextAccessor, options, logger)
 
+/// Provides logic to parse and execute GraphQL requests.
 and [<AbstractClass>] GraphQLRequestHandler<'Root>
     /// <summary>
-    /// Provides logic to parse and execute GraphQL requests.
+    /// Initializes a new instance of the <see cref="GraphQLRequestHandler{T}"/> class.
     /// </summary>
     /// <param name="httpContextAccessor">The accessor to the current HTTP context.</param>
     /// <param name="options">The options monitor for GraphQL options.</param>
@@ -134,7 +136,10 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
     }
 
     /// Execute default or custom introspection query
-    let executeIntrospectionQuery (executor : Executor<_>) (ast : Ast.Document voption) : Task<IResult> = task {
+    abstract ExecuteIntrospectionQuery : ast : Ast.Document voption -> Task<IResult>
+
+    default _.ExecuteIntrospectionQuery (ast : Ast.Document voption) : Task<IResult> = task {
+        let executor = options.CurrentValue.SchemaExecutor
         let! result =
             match ast with
             | ValueNone -> executor.AsyncExecute (IntrospectionQuery.Definition, getInputContext)
@@ -144,12 +149,18 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
         return (TypedResults.Ok response) :> IResult
     }
 
-    /// <summary>Check if the request is an introspection query
-    /// by first checking on such properties as `GET` method or `empty request body`
+    /// <summary>
+    /// Check if the request is an introspection query
+    /// by first checking on such properties as <c>GET</c> method or <c>empty request body</c>
     /// and lastly by parsing document AST for introspection operation definition.
     /// </summary>
+    /// <remarks>
+    /// This consumes the request body: after JSON binding, the body stream position stays at its end,
+    /// so calling this more than once (e.g. once from a derived handler and again from
+    /// <see cref="HandleAsync"/>) will fail to bind the request on the second call.
+    /// </remarks>
     /// <returns>Result of check of <see cref="OperationType"/></returns>
-    let checkOperationType () = taskResult {
+    member _.CheckOperationType () = taskResult {
 
         let checkAnonymousFieldsOnly (ctx : HttpContext) = taskResult {
             let! gqlRequest = ctx.TryBindJsonAsync<GQLRequestContent>(GQLRequestContent.expectedJSON)
@@ -203,10 +214,10 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
                 return! checkAnonymousFieldsOnly ctx
     }
 
-    abstract ExecuteOperation<'Root> : executor : Executor<'Root> * content : ParsedGQLQueryRequestContent -> Task<IResult>
-
     /// Execute the operation for given request
-    default _.ExecuteOperation<'Root> (executor : Executor<'Root>, content) = task {
+    abstract ExecuteOperation : content : ParsedGQLQueryRequestContent -> Task<IResult>
+
+    default _.ExecuteOperation (content) = task {
 
         let operationName =
             content.OperationName
@@ -228,6 +239,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
         let root = options.CurrentValue.RootFactory ctx
 
         let! result =
+            let executor = options.CurrentValue.SchemaExecutor
             Async.StartImmediateAsTask (
                 executor.AsyncExecute (content.Ast, getInputContext, root, ?variables = variables, ?operationName = operationName),
                 cancellationToken = ctx.RequestAborted
@@ -237,12 +249,14 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
         return (TypedResults.Ok response) :> IResult
     }
 
-    member handler.HandleAsync () : Task<Result<IResult, IResult>> = taskResult {
+    /// Handle the request and return the result
+    abstract HandleAsync : unit -> Task<Result<IResult, IResult>>
+
+    default handler.HandleAsync () : Task<Result<IResult, IResult>> = taskResult {
         if ctx.RequestAborted.IsCancellationRequested then
             return TypedResults.Empty
         else
-            let executor = options.CurrentValue.SchemaExecutor
-            match! checkOperationType () with
-            | IntrospectionQuery optionalAstDocument -> return! executeIntrospectionQuery executor optionalAstDocument
-            | OperationQuery content -> return! handler.ExecuteOperation (executor, content)
+            match! handler.CheckOperationType () with
+            | IntrospectionQuery optionalAstDocument -> return! handler.ExecuteIntrospectionQuery optionalAstDocument
+            | OperationQuery content -> return! handler.ExecuteOperation (content)
     }
