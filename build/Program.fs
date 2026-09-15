@@ -195,6 +195,14 @@ Target.create UpdateIntrospectionFileTarget <| fun _ ->
         "FSharp.Data.GraphQL.IntegrationTests.IntrospectionUpdate.trx"
         (ValueSome "FullyQualifiedName~IntrospectionUpdateTests")
 
+// Runs the rest of the integration tests; the introspection update tests already ran in UpdateIntrospectionFileTarget
+let [<Literal>] RunIntegrationTestsTarget = "RunIntegrationTests"
+Target.create RunIntegrationTestsTarget <| fun _ ->
+    runTests
+        integrationTestsProjectPath
+        "FSharp.Data.GraphQL.IntegrationTests.trx"
+        (ValueSome "FullyQualifiedName!~IntrospectionUpdateTests")
+
 let unitTestsProjectPath =
     "tests"
     </> "FSharp.Data.GraphQL.Tests"
@@ -381,6 +389,7 @@ Target.create "PackAndPush" ignore
 ==> RunUnitTestsTarget
 ==> BuildIntegrationTestsTarget
 ==> UpdateIntrospectionFileTarget
+==> RunIntegrationTestsTarget
 ==> "All"
 =?> (GenerateDocsTarget, Environment.environVar "GITHUB_ACTIONS" = "True")
 |> ignore
