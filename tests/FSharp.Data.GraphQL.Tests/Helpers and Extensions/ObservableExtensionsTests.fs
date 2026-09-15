@@ -413,17 +413,27 @@ let ``ofAsyncEnumerableResolved should stop and deliver the failure when a resol
     sub.Received |> seqEquals [ -1 ]
 
 [<Fact>]
-let ``ofAsyncEnumerableResolved should release the slot and stop when the observer throws`` () =
-    // Regression test: an observer throwing while a background resolution is delivered used to skip the
-    // slot release entirely, deadlocking the enumeration the same way a failed resolution did
+let ``ofAsyncEnumerableResolved should release the slot and not hang when the observer throws`` () : Task = task {
+    // Regression test: an observer throwing while a background resolution is delivered used to skip the slot
+    // release entirely, deadlocking the enumeration the same way a failed resolution did. System.Reactive tears
+    // the subscription down itself (disposing it, which cancels the enumeration) as soon as OnNext throws, so
+    // onFailure/OnCompleted are never expected here: this only checks that DisposeAsync is still reached instead
+    // of the enumeration hanging forever on the concurrency slot the throwing resolution never released.
+    let disposed = TaskCompletionSource ()
+    let source =
+        SuspendingAsyncEnumerable<int> (
+            (fun _ index -> task { return if index = 0 then ValueSome 1 else ValueNone }),
+            fun () -> disposed.TrySetResult () |> ignore
+        )
     let resolve _ (n : int) = async { return n } |> AsyncVal.ofAsync
     let onReceived (_ : TestObserver<int>) (value : int) =
         if value = 1 then failwith "Boom in observer"
     use sub =
-        Observable.ofAsyncEnumerableResolved 1 resolve (fun _ -> -1) (asyncItems [ 1 ])
+        Observable.ofAsyncEnumerableResolved 1 resolve (fun _ -> -1) source
         |> Observer.createWithCallback onReceived
-    sub.WaitCompleted (timeout = ms 10)
-    sub.Received |> seqEquals [ 1; -1 ]
+    do! waitForTask (TimeSpan.FromSeconds (float (ms 5))) "Expected the enumerator to be disposed despite the observer throwing" disposed.Task
+    sub.Received |> seqEquals [ 1 ]
+}
 
 [<Fact>]
 let ``withCompletionMarker should emit the items and then the marker when the source completes`` () =

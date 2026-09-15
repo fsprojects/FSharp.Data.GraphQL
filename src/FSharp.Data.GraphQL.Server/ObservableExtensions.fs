@@ -98,10 +98,13 @@ module internal Observable =
     /// A result produced synchronously is emitted immediately, keeping it in the order it was pulled. An exception
     /// raised by the source, when acquiring or disposing its enumerator as well as while enumerating, is turned into
     /// a result with <paramref name="onFailure"/> and emitted only after every item pulled before it, so it can never
-    /// overtake a result that is still being resolved. A resolution that fails, or an observer that throws while
-    /// a result is delivered, stops the enumeration the same way: the failure is delivered through
-    /// <paramref name="onFailure"/> once every resolution already started has settled.
+    /// overtake a result that is still being resolved. A resolution that fails the same way stops the enumeration and
+    /// is delivered through <paramref name="onFailure"/> once every resolution already started has settled.
     /// Only the resolutions in flight are tracked, so a long-running source does not retain what it already delivered.
+    /// An observer whose <see cref="IObserver{T}.OnNext"/> throws while a result is delivered always has its
+    /// concurrency slot released, so the enumeration never deadlocks over it, but nothing further is delivered to it:
+    /// per the observable contract, the subscription is torn down by the caller as soon as <c>OnNext</c> throws, same
+    /// as for any other observer.
     /// Disposing the subscription cancels the enumeration; resolutions already started are still awaited and, if
     /// still relevant, emitted, but no further item is pulled.
     /// </remarks>
