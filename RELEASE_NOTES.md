@@ -290,3 +290,4 @@
 * **Breaking Change** Made Relay `Edge` a read-only struct
 * Added case-insensitive string comparison support to `ObjectListFilter`, including comparer-aware filter cases and GraphQL filter suffix handling
 * Improved Relay XML documentation comments
+* Changed query planning to throw `MalformedGQLQueryException` for invalid queries, `NotSupportedException` for unsupported type definition implementations and `InvalidOperationException` for internal planning errors instead of `System.Exception`, with messages naming the affected field, type and execution kind
