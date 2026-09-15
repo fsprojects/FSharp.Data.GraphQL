@@ -112,6 +112,17 @@ let immediateItems = [ { Id = 1; Value = async { return "one" } }; { Id = 2; Val
 
 let slowAndFastItems = [ { Id = 1; Value = delayed 3000 "slow" }; { Id = 2; Value = async { return "fast" } } ]
 
+/// Yields one item whose field resolves after a delay, then fails while pulling the next one
+let slowItemThenFailingNumbers () =
+    SuspendingAsyncEnumerable<StreamItem>(fun _ index ->
+        task {
+            match index with
+            | 0 -> return ValueSome { Id = 1; Value = delayed 500 "slow" }
+            | _ -> return failwith "Boom during enumeration"
+        }
+    )
+    :> IAsyncEnumerable<StreamItem>
+
 let schemaConfig =
     SchemaConfig.DefaultWithBufferedStream (streamOptions = { Interval = ValueNone; PreferredBatchSize = ValueNone })
 
@@ -363,6 +374,41 @@ let ``Preferred batch size of the stream directive overrides the batching of the
         ]
 
 [<Fact>]
+let ``Batching from source runs only for a stream query that does not override the batch size, and only once`` () =
+    let mutable callCount = 0
+    let batching =
+        StreamBatching.FromSource (fun _ ->
+            callCount <- callCount + 1
+            ValueNone)
+    let executor =
+        executorFor [
+            Define.TaskSeqField ("numbers", ListOf IntType, (fun _ _ -> asyncItems [ 1; 2; 3 ]), batching = batching)
+            Define.TaskSeqField ("deferrable", Nullable (ListOf IntType), (fun _ _ -> Some (asyncItems [ 1; 2 ])), batching = batching)
+        ]
+    executeQuery executor "{ numbers }" |> ignore
+    callCount |> equals 0
+    executeQuery executor "{ deferrable @defer }" |> ignore
+    callCount |> equals 0
+    executeQuery executor "{ numbers @stream(preferredBatchSize: 1) }" |> ignore
+    callCount |> equals 0
+    executeQuery executor "{ numbers @stream }" |> ignore
+    callCount |> equals 1
+
+[<Fact>]
+let ``Throwing batching callback does not affect a query that does not stream the field`` () =
+    let throwingBatching = StreamBatching.FromSource (fun _ -> failwith "Batching must not run for this query")
+    let executor =
+        executorFor [
+            Define.TaskSeqField ("numbers", ListOf IntType, (fun _ _ -> asyncItems [ 1; 2; 3 ]), batching = throwingBatching)
+        ]
+    let expectedData = NameValueLookup.ofList [ "numbers", upcast [| box 1; box 2; box 3 |] ]
+    let result = executeQuery executor "{ numbers }"
+    ensureDirect result
+    <| fun data errors ->
+        empty errors
+        data |> equals (upcast expectedData)
+
+[<Fact>]
 let ``Nullable TaskSeq field that fails during enumeration returns null with a field error`` () =
     let executor =
         executorFor [ Define.TaskSeqField ("numbers", Nullable (ListOf IntType), fun _ _ -> Some (failingNumbers ())) ]
@@ -407,6 +453,22 @@ let ``Streamed TaskSeq field that fails during enumeration delivers produced ite
         ]
 
 [<Fact>]
+let ``Streamed TaskSeq field emits a slower earlier item before the enumeration failure that follows it`` () =
+    // Regression test: an item resolved asynchronously must not be overtaken by a failure of the source that
+    // is pulled right after it, even though the failure itself completes immediately
+    let executor =
+        executorFor [ Define.TaskSeqField ("items", ListOf StreamItemType, fun _ _ -> slowItemThenFailingNumbers ()) ]
+    let result = executeQuery executor "{ items @stream { id value } }"
+    ensureDeferred result
+    <| fun _ errors deferred ->
+        empty errors
+        waitForCompletion deferred
+        |> seqEquals [
+            DeferredResult ([| box (NameValueLookup.ofList [ "id", upcast 1; "value", upcast "slow" ]) |], [ box "items"; box 0 ])
+            DeferredErrors (null, [ fieldError "Boom during enumeration" "items" ], [ box "items" ])
+        ]
+
+[<Fact>]
 let ``Disposing the stream subscription stops the enumeration of the TaskSeq field`` () : Task = task {
     let pulled = ref 0
     let disposed = TaskCompletionSource ()
@@ -431,6 +493,38 @@ let ``Disposing the stream subscription stops the enumeration of the TaskSeq fie
         pulled.Value |> equals pulledAfterDisposal
     | response -> fail $"Expected a 'Deferred' GQLResponse but got\n{response}"
 }
+
+[<Fact>]
+let ``TaskSeq field with stream directive never resolves more than maxConcurrency items at the same time`` () =
+    let inFlight = ref 0
+    let maxObserved = ref 0
+    let trackConcurrency (work : Async<'T>) : Async<'T> = async {
+        let current = Interlocked.Increment inFlight
+        let mutable observed = maxObserved.Value
+        while current > observed && Interlocked.CompareExchange (maxObserved, current, observed) <> observed do
+            observed <- maxObserved.Value
+        try
+            return! work
+        finally
+            Interlocked.Decrement inFlight |> ignore
+    }
+    let items = [ for id in 1 .. 6 -> { Id = id; Value = trackConcurrency (delayed 100 (string id)) } ]
+    let executor =
+        executorFor [
+            Define.TaskSeqField ("items", ListOf StreamItemType, (fun _ _ -> asyncItems items), maxConcurrency = 2)
+        ]
+    let result = executeQuery executor "{ items @stream { id value } }"
+    ensureDeferred result
+    <| fun _ errors deferred ->
+        empty errors
+        let received = waitForCompletion deferred
+        received |> List.length |> equals 6
+        Assert.True (maxObserved.Value <= 2, $"Expected at most 2 concurrent item resolutions, but observed {maxObserved.Value}")
+
+[<Fact>]
+let ``TaskSeqField with a non-positive maxConcurrency fails at definition time`` () =
+    throws<ArgumentException> (fun () ->
+        Define.TaskSeqField ("numbers", ListOf IntType, (fun _ _ -> asyncItems [ 1 ]), maxConcurrency = 0) |> ignore)
 
 [<Fact>]
 let ``TaskSeq field resolved as null reports a non-null field error`` () =

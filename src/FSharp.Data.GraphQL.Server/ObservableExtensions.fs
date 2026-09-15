@@ -70,6 +70,74 @@ module internal Observable =
         Observable.Create<'T> (Func<IObserver<'T>, CancellationToken, Task> (fun observer cancellationToken -> enumerate observer cancellationToken))
 
     /// <summary>
+    /// Enumerates the sequence, resolving each item into a result with <paramref name="resolve"/>. At most
+    /// <paramref name="maxConcurrency"/> items are pulled from the source and resolved at the same time: once that
+    /// many resolutions are in flight, pulling the next item waits for one of them to be emitted.
+    /// </summary>
+    /// <remarks>
+    /// A result produced synchronously is emitted immediately, keeping it in the order it was pulled. An exception
+    /// raised while enumerating the source is turned into a result with <paramref name="onFailure"/> and emitted
+    /// only after every item pulled before it, so it can never overtake a result that is still being resolved.
+    /// Disposing the subscription cancels the enumeration; resolutions already started are still awaited and, if
+    /// still relevant, emitted, but no further item is pulled.
+    /// </remarks>
+    let ofAsyncEnumerableResolved
+        (maxConcurrency : int)
+        (resolve : int -> 'T -> AsyncVal<'Result>)
+        (onFailure : exn -> 'Result)
+        (source : IAsyncEnumerable<'T>)
+        : IObservable<'Result> =
+        let enumerate (observer : IObserver<'Result>) (cancellationToken : CancellationToken) : Task = task {
+            use slots = new SemaphoreSlim (maxConcurrency, maxConcurrency)
+            // Observer calls are not required to be thread-safe, but resolutions complete on arbitrary threads
+            let sync = obj ()
+            let emit (result : 'Result) =
+                lock sync (fun () -> if not cancellationToken.IsCancellationRequested then observer.OnNext result)
+            let pending = ResizeArray<Task> ()
+            let enumerator = source.GetAsyncEnumerator cancellationToken
+            let mutable failure = ValueNone
+            try
+                let mutable index = 0
+                let mutable hasNext = true
+                // The token is checked explicitly, because a sequence is not obliged to observe the token it was given
+                while hasNext && not cancellationToken.IsCancellationRequested do
+                    do! slots.WaitAsync cancellationToken
+                    let! moved = enumerator.MoveNextAsync ()
+                    if moved then
+                        let itemIndex = index
+                        let item = enumerator.Current
+                        index <- index + 1
+                        match resolve itemIndex item with
+                        // Items resolved synchronously are emitted immediately, which keeps them in the source order
+                        | Immediate result ->
+                            emit result
+                            slots.Release () |> ignore
+                        | pendingResult ->
+                            pending.Add (
+                                task {
+                                    let! result = pendingResult |> AsyncVal.toTask
+                                    emit result
+                                    slots.Release () |> ignore
+                                }
+                            )
+                    else
+                        slots.Release () |> ignore
+                        hasNext <- false
+            with ex ->
+                failure <- ValueSome ex
+            // Captured items no longer need the enumerator, so it is disposed before waiting for their resolutions
+            do! enumerator.DisposeAsync ()
+            do! Task.WhenAll pending
+            match failure with
+            // A failure caused by disposing the subscription has no observer left to be delivered to
+            | ValueSome ex when not cancellationToken.IsCancellationRequested -> emit (onFailure ex)
+            | _ -> ()
+            if not cancellationToken.IsCancellationRequested then
+                lock sync (fun () -> observer.OnCompleted ())
+        }
+        Observable.Create<'Result> (Func<IObserver<'Result>, CancellationToken, Task> (fun observer cancellationToken -> enumerate observer cancellationToken))
+
+    /// <summary>
     /// Wraps every element into <see langword="ValueSome"/> and emits <see langword="ValueNone"/> when the source completes.
     /// </summary>
     /// <remarks>
