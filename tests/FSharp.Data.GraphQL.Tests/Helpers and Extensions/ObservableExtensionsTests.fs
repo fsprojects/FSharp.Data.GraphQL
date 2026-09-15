@@ -253,6 +253,7 @@ let ``singleton should call OnComplete and return item`` () =
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals (Seq.singleton 1)
 
+open System.Collections.Generic
 open System.Threading
 open System.Threading.Tasks
 open FSharp.Control
@@ -385,6 +386,68 @@ let ``ofAsyncEnumerableResolved should stop resolving further items when the sub
     do! Task.Delay 200
     Assert.Equal (pulledAfterDisposal, pulled.Value)
 }
+
+/// A source whose GetAsyncEnumerator throws instead of returning an enumerator
+type private ThrowingAsyncEnumerable<'T> (message : string) =
+    interface IAsyncEnumerable<'T> with
+        member _.GetAsyncEnumerator _ = failwith message
+
+[<Fact>]
+let ``ofAsyncEnumerable should deliver OnError when GetAsyncEnumerator throws`` () =
+    // Regression test: acquiring the enumerator happens before the try, so a throwing source must not bypass
+    // the failure handling and fault the returned Task in a way that skips OnError
+    let source = ThrowingAsyncEnumerable<int> "Boom acquiring the enumerator"
+    use sub = Observable.ofAsyncEnumerable source |> Observable.materialize |> Observer.create
+    sub.WaitCompleted (timeout = ms 10)
+    Assert.Collection (
+        sub.Received,
+        fun (notification : System.Reactive.Notification<int>) ->
+            Assert.Equal (System.Reactive.NotificationKind.OnError, notification.Kind)
+            Assert.Equal ("Boom acquiring the enumerator", notification.Exception.Message)
+    )
+
+[<Fact>]
+let ``ofAsyncEnumerable should deliver OnError when DisposeAsync throws`` () =
+    let source =
+        SuspendingAsyncEnumerable<int> (
+            (fun _ index -> task { return if index = 0 then ValueSome 1 else ValueNone }),
+            fun () -> failwith "Boom disposing"
+        )
+    use sub = Observable.ofAsyncEnumerable source |> Observable.materialize |> Observer.create
+    sub.WaitCompleted (timeout = ms 10)
+    Assert.Collection (
+        sub.Received,
+        (fun (notification : System.Reactive.Notification<int>) ->
+            Assert.Equal (System.Reactive.NotificationKind.OnNext, notification.Kind)
+            Assert.Equal (1, notification.Value)),
+        (fun (notification : System.Reactive.Notification<int>) ->
+            Assert.Equal (System.Reactive.NotificationKind.OnError, notification.Kind)
+            Assert.Equal ("Boom disposing", notification.Exception.Message))
+    )
+
+[<Fact>]
+let ``ofAsyncEnumerableResolved should emit the failure through onFailure when GetAsyncEnumerator throws`` () =
+    // Regression test: this used to fault the returned Task instead of going through onFailure, which terminates
+    // the merged deferred stream of a query instead of producing this field's DeferredErrors
+    let source = ThrowingAsyncEnumerable<int> "Boom acquiring the enumerator"
+    use sub =
+        Observable.ofAsyncEnumerableResolved 2 (fun _ (n : int) -> AsyncVal.wrap n) (fun _ -> -1) source
+        |> Observer.create
+    sub.WaitCompleted (timeout = ms 10)
+    sub.Received |> seqEquals [ -1 ]
+
+[<Fact>]
+let ``ofAsyncEnumerableResolved should emit the failure through onFailure after the item when DisposeAsync throws`` () =
+    let source =
+        SuspendingAsyncEnumerable<int> (
+            (fun _ index -> task { return if index = 0 then ValueSome 1 else ValueNone }),
+            fun () -> failwith "Boom disposing"
+        )
+    use sub =
+        Observable.ofAsyncEnumerableResolved 2 (fun _ (n : int) -> AsyncVal.wrap n) (fun _ -> -1) source
+        |> Observer.create
+    sub.WaitCompleted (timeout = ms 10)
+    sub.Received |> seqEquals [ 1; -1 ]
 
 [<Fact>]
 let ``withCompletionMarker should emit the items and then the marker when the source completes`` () =
