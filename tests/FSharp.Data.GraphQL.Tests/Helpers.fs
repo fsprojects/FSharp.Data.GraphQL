@@ -254,3 +254,10 @@ type SuspendingAsyncEnumerable<'T> (produceItem : CancellationToken -> int -> Ta
                     onDisposed |> ValueOption.iter (fun onDisposed -> onDisposed ())
                     ValueTask.CompletedTask
             }
+
+/// Awaits the task without blocking the test thread and fails the test with the message when the task does not complete in time
+let waitForTask (timeout : TimeSpan) (message : string) (awaited : Task) : Task = task {
+    let! completed = Task.WhenAny (awaited, Task.Delay timeout)
+    if not (obj.ReferenceEquals (completed, awaited)) then
+        fail message
+}
