@@ -98,7 +98,7 @@ How the sequence is delivered depends on the query:
 - With `@defer` on a `Nullable (ListOf ...)` field the complete list is delivered in one deferred payload.
 - With `@stream` every item is delivered as soon as the sequence produces it and its fields are resolved. The enumeration is cancelled when the client unsubscribes.
 
-Streamed items can be grouped into batches. The `preferredBatchSize` argument of `@stream`, available with `SchemaConfig.DefaultWithBufferedStream`, has priority. Otherwise the `batching` parameter of the field applies. It is either a fixed size or a function that reads the size from the source, such as the page size of a paged SDK sequence.
+Streamed items can be grouped into batches. The `preferredBatchSize` argument of `@stream`, available with `SchemaConfig.DefaultWithBufferedStream`, has priority. Otherwise the `batching` parameter of the field applies. It is either a fixed size or a function that reads the size from the source, such as the page size of a paged SDK sequence. The function is evaluated lazily: only for a `@stream` query that does not itself specify `preferredBatchSize`, so it never runs for an ordinary or `@defer` query.
 
 ```fsharp
 Define.TaskSeqField("orders", ListOf Order, (fun _ customer -> getOrders customer.Id), batching = StreamBatching.Fixed 50)
@@ -113,6 +113,14 @@ Define.TaskSeqField(
 ```
 
 Azure SDK `AsyncPageable<T>` does not expose its page size, because the size is only a hint passed to `AsPages`. To batch its items by pages, keep the hint in your own type, for example a subclass of `AsyncPageable<T>` or a wrapper, and read it in `StreamBatching.FromSource`.
+
+With `@stream`, at most `maxConcurrency` items are pulled from the sequence and resolved at the same time; enumeration waits for one of them to complete before pulling the next, so a fast or infinite source cannot outrun resolution. It defaults to `Environment.ProcessorCount`.
+
+```fsharp
+Define.TaskSeqField("orders", ListOf Order, (fun _ customer -> getOrders customer.Id), maxConcurrency = 4)
+```
+
+An error raised while enumerating the source is delivered after every item already pulled has been resolved and delivered, so a slow item can never be overtaken by a failure that follows it.
 
 Resolvers are captured as F# quotations. A `taskSeq { }` block that uses `let!` or `yield!` cannot be written inline in the resolver lambda, so define it in a separate function as shown above. Fields defined this way do not support `WithResolveMiddleware`.
 

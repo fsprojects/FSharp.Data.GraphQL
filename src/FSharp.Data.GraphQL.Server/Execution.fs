@@ -293,11 +293,13 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
         | ResolveCollection innerPlan -> { ctx with ExecutionInfo = innerPlan }
         | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
 
-    // A batch size requested by the @stream directive takes precedence over the batching policy declared on the field
+    // A batch size requested by the @stream directive takes precedence over the batching policy declared on the field.
+    // The policy is evaluated here, lazily, so it never runs for an ordinary or deferred query, and only once per
+    // streamed query even when the query itself supplies a batch size.
     let options =
         match options.PreferredBatchSize, value with
         | ValueNone, (:? IAsyncEnumerableFieldValue as fieldValue) ->
-            { options with PreferredBatchSize = fieldValue.PreferredBatchSize }
+            { options with PreferredBatchSize = fieldValue.GetPreferredBatchSize () }
         | _ -> options
 
     let collectItems : (int * ResolverResult<KeyValuePair<string, obj>>) list -> IObservable<GQLDeferredResponseContent> = function
@@ -351,22 +353,12 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
 
     match value with
     | :? IAsyncEnumerableFieldValue as fieldValue ->
+        let resolveStreamedItem index item = resolveItem index item |> AsyncVal.map StreamedItem
         let stream : IObservable<GQLDeferredResponseContent> =
             fieldValue.Items
-            |> Observable.ofAsyncEnumerable
-            // Materialization turns an enumeration failure into a value, so the items produced before it are still delivered
-            |> Observable.materialize
-            |> Observable.mapi (fun index notification ->
-                match notification.Kind with
-                | System.Reactive.NotificationKind.OnNext ->
-                    match resolveItem index notification.Value |> AsyncVal.map StreamedItem with
-                    // Items resolved synchronously are emitted immediately, which keeps them in the source order
-                    | Immediate event -> Observable.singleton event
-                    | pending -> Observable.ofAsyncVal pending
-                | System.Reactive.NotificationKind.OnError -> Observable.singleton (StreamFailure notification.Exception)
-                | _ -> Observable.empty)
-            // Each item is emitted as soon as its own fields are resolved
-            |> Observable.mergeInner
+            // At most fieldValue.MaxConcurrency items are pulled from the source and resolved at the same time,
+            // each emitted as soon as it is resolved; a failure of the source itself is emitted last
+            |> Observable.ofAsyncEnumerableResolved fieldValue.MaxConcurrency resolveStreamedItem StreamFailure
             |> buffer
         ResolverResult.defered (KeyValuePair (name, box [])) stream |> AsyncVal.wrap
     | :? System.Collections.IEnumerable as enumerable ->
