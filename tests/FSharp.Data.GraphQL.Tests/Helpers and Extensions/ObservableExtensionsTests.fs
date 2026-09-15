@@ -413,6 +413,24 @@ let ``ofAsyncEnumerableResolved should stop and deliver the failure when a resol
     sub.Received |> seqEquals [ -1 ]
 
 [<Fact>]
+let ``ofAsyncEnumerableResolved should not pull another item after a resolution fails while waiting for a slot`` () =
+    // Regression test: with maxConcurrency = 1 the loop is parked in WaitAsync while the one in-flight resolution
+    // runs; once that resolution fails and releases the slot, the loop used to go straight to MoveNextAsync without
+    // rechecking the failure, so a synchronously resolved item 2 was pulled and emitted before the failure
+    let resolve _ (n : int) =
+        if n = 1 then
+            async {
+                do! Async.Sleep (ms 50)
+                return failwith "Boom resolving"
+            }
+            |> AsyncVal.ofAsync
+        else
+            AsyncVal.wrap n
+    use sub = Observable.ofAsyncEnumerableResolved 1 resolve (fun _ -> -1) (asyncItems [ 1; 2; 3 ]) |> Observer.create
+    sub.WaitCompleted (timeout = ms 10)
+    sub.Received |> seqEquals [ -1 ]
+
+[<Fact>]
 let ``ofAsyncEnumerableResolved should release the slot and not hang when the observer throws`` () : Task = task {
     // Regression test: an observer throwing while a background resolution is delivered used to skip the slot
     // release entirely, deadlocking the enumeration the same way a failed resolution did. System.Reactive tears
