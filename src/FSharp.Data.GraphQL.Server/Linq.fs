@@ -103,13 +103,13 @@ let inline private argVal inputContext vars argDef argOpt  =
         Execution.argumentValue inputContext vars argDef arg
         // TODO: Improve error propagation
         |> Result.defaultWith (failwithf "%A")
-        |> Some
+        |> ValueSome
     | None -> argDef.DefaultValue
 
 /// Resolves an object representing one of the supported arguments
 /// given a variables set and GraphQL input data.
 let private resolveLinqArg inputContext vars (name, argDef, arg) =
-    argVal inputContext vars argDef arg |> Option.map (fun v -> { Arg.Name = name; Value = v })
+    argVal inputContext vars argDef arg |> ValueOption.map (fun v -> { Arg.Name = name; Value = v })
 
 let rec private unwrapType =
     function
@@ -272,8 +272,8 @@ let private linqArgs inputContext vars info =
         let args = info.Ast.Arguments
         argDefs
         |> Array.map (fun a -> (a.Name, a, args |> List.tryFind (fun x -> x.Name = a.Name)))
-        |> Array.choose (resolveLinqArg inputContext vars)
-        |> Array.toList
+        |> Seq.vchoose (resolveLinqArg inputContext vars)
+        |> Seq.toList
 
 let rec private track set e =
     match e with

@@ -27,15 +27,15 @@ let (|RequestError|Direct|Deferred|Stream|) (response : GQLExecutionResult) =
 
 let private collectDefaultArgValue acc (argDef: InputFieldDef) =
     match argDef.DefaultValue with
-    | Some defVal -> Map.add argDef.Name defVal acc
-    | None -> acc
+    | ValueSome defVal -> Map.add argDef.Name defVal acc
+    | ValueNone -> acc
 
 let internal argumentValue inputContext variables (argDef: InputFieldDef) (argument: Argument) =
     match argDef.ExecuteInput inputContext argument.Value variables with
     | Ok null ->
         match argDef.DefaultValue with
-        | Some value -> Ok value
-        | None -> Ok null
+        | ValueSome value -> Ok value
+        | ValueNone -> Ok null
     | result -> result
 
 let private getArgumentValues (argDefs: InputFieldDef []) (args: Argument list) (inputContext : InputExecutionContextProvider) (variables: ImmutableDictionary<string, obj>) : Result<Map<string, obj>, IGQLError list> =
@@ -77,18 +77,18 @@ let private defaultResolveType possibleTypesFn abstractDef : obj -> ObjectDef =
         possibleTypes
         |> Array.find (fun objdef ->
             match objdef.IsTypeOf with
-            | Some isTypeOf -> isTypeOf mapped
-            | None -> false)
+            | ValueSome isTypeOf -> isTypeOf mapped
+            | ValueNone -> false)
 
 let private resolveInterfaceType possibleTypesFn (interfacedef: InterfaceDef) =
     match interfacedef.ResolveType with
-    | Some resolveType -> resolveType
-    | None -> defaultResolveType possibleTypesFn interfacedef
+    | ValueSome resolveType -> resolveType
+    | ValueNone -> defaultResolveType possibleTypesFn interfacedef
 
 let private resolveUnionType possibleTypesFn (uniondef: UnionDef) =
     match uniondef.ResolveType with
-    | Some resolveType -> resolveType
-    | None -> defaultResolveType possibleTypesFn uniondef
+    | ValueSome resolveType -> resolveType
+    | ValueNone -> defaultResolveType possibleTypesFn uniondef
 
 let private createFieldContext objdef inputContext argDefs ctx (info: ExecutionInfo) (path : FieldPath) = result {
     let fdef = info.Definition

@@ -293,12 +293,12 @@ let Subscription =
 
 let directives =
     [
-        { Name = "queryOnly" ; Description = None ; Locations = DirectiveLocation.QUERY ; Args = [||] }
-        { Name = "mutationOnly" ; Description = None ; Locations = DirectiveLocation.MUTATION ; Args = [||] }
-        { Name = "subscriptionOnly" ; Description = None ; Locations = DirectiveLocation.SUBSCRIPTION ; Args = [||] }
-        { Name = "fragSpreadOnly" ; Description = None ; Locations = DirectiveLocation.FRAGMENT_SPREAD ; Args = [||] }
-        { Name = "inlineFragOnly" ; Description = None ; Locations = DirectiveLocation.INLINE_FRAGMENT ; Args = [||] }
-        { Name = "fieldOnly" ; Description = None ; Locations = DirectiveLocation.FIELD ; Args = [||] }
+        { Name = "queryOnly" ; Description = ValueNone ; Locations = DirectiveLocation.QUERY ; Args = [||] }
+        { Name = "mutationOnly" ; Description = ValueNone ; Locations = DirectiveLocation.MUTATION ; Args = [||] }
+        { Name = "subscriptionOnly" ; Description = ValueNone ; Locations = DirectiveLocation.SUBSCRIPTION ; Args = [||] }
+        { Name = "fragSpreadOnly" ; Description = ValueNone ; Locations = DirectiveLocation.FRAGMENT_SPREAD ; Args = [||] }
+        { Name = "inlineFragOnly" ; Description = ValueNone ; Locations = DirectiveLocation.INLINE_FRAGMENT ; Args = [||] }
+        { Name = "fieldOnly" ; Description = ValueNone ; Locations = DirectiveLocation.FIELD ; Args = [||] }
     ]
     |> List.append SchemaConfig.Default.Directives
 

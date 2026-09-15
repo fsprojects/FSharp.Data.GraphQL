@@ -24,11 +24,13 @@ module Serialization =
     let private downcastNone<'T> t =
         match t with
         | Option t -> downcast (makeOption t null)
+        | ValueOption t -> downcast (makeValueOption t null)
         | _ -> failwith $"Error parsing JSON value: %O{t} is not an option value."
 
     let private downcastType (t : Type) x =
         match t with
         | Option t -> downcast (makeOption t (Convert.ChangeType(x, t)))
+        | ValueOption t -> downcast (makeValueOption t (Convert.ChangeType(x, t)))
         | _ -> downcast (Convert.ChangeType(x, t))
 
     let private isStringType = isType typeof<string>
@@ -37,7 +39,7 @@ module Serialization =
     let private isUriType = isType typeof<Uri>
     let private isGuidType = isType typeof<Guid>
     let private isBooleanType = isType typeof<bool>
-    let private isEnumType = function (Option t | t) when t.IsEnum -> true | _ -> false
+    let private isEnumType = function (Option t | ValueOption t | t) when t.IsEnum -> true | _ -> false
 
     let private downcastString (t : Type) (s : string) =
         match t with
@@ -60,7 +62,7 @@ module Serialization =
             | _ -> failwith $"Error parsing JSON value: %O{t} is a Guid type, but parsing of value \"%s{s}\" failed."
         | t when isEnumType t ->
             match t with
-            | (Option et | et) ->
+            | (Option et | ValueOption et | et) ->
                 try Enum.Parse(et, s) |> downcastType t
                 with _ -> failwith $"Error parsing JSON value: %O{t} is a Enum type, but parsing of value \"%s{s}\" failed."
         | _ -> failwith $"Error parsing JSON value: %O{t} is not a string type."
@@ -92,8 +94,9 @@ module Serialization =
         Tracer.runAndMeasureExecutionTime "Converted Array JsonValue to CLR array" (fun _ ->
             match t with
             | Option t -> getArrayValue t converter items |> makeOption t
+            | ValueOption t -> getArrayValue t converter items |> makeValueOption t
             | Array itype | Seq itype -> items |> Array.map (converter itype) |> castArray itype
-            | List itype -> items |> Array.map (converter itype) |> Array.toList |> castList itype
+            | List itype -> items |> Seq.map (converter itype) |> Seq.toList |> castList itype
             | _ -> failwith $"Error parsing JSON value: %O{t} is not an array type.")
 
     let private downcastNumber (t : Type) n =
@@ -111,7 +114,7 @@ module Serialization =
             | JsonValue.Record jprops ->
                 let jprops =
                     jprops
-                    |> Array.map (fun (n, v) -> n.ToLowerInvariant(), v)
+                    |> Seq.map (fun (n, v) -> n.ToLowerInvariant(), v)
                     |> Map.ofSeq
                 let tprops t =
                     FSharpType.GetRecordFields(t, true)
@@ -121,9 +124,12 @@ module Serialization =
                     |> Array.map (fun (n, t) ->
                         match Map.tryFind n jprops with
                         | Some p -> n, convert t p
-                        | None -> n, makeOption t null)
+                        | None ->
+                            match t with
+                            | ValueOption vt -> n, makeValueOption vt null
+                            | _ -> n, makeOption t null)
                 let rcrd =
-                    let t = match t with Option t -> t | _ -> t
+                    let t = match t with Option t | ValueOption t -> t | _ -> t
                     let vals = vals t
                     if isMap t
                     then Map.ofArray vals |> box

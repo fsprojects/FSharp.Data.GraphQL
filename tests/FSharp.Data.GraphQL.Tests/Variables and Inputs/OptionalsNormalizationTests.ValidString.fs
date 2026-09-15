@@ -148,7 +148,7 @@ module Scalars =
     type Define with
 
         static member ValidStringScalar<'t>
-            (typeName, createValid : Validator<string, 't>, toString : 't -> string, ?description : string)
+            (typeName, createValid : Validator<string, 't>, toString : 't -> string, [<Struct>] ?description : string)
             =
             let createValid : string -> ValidationResult<'t> = createValid typeName
             Define.WrappedScalar (
@@ -173,7 +173,7 @@ module Scalars =
                 ?description = description
             )
 
-        static member ValidStringScalar<'t>(typeName, createValid : Validator<string, 't voption>, toString : 't -> string, ?description: string) =
+        static member ValidStringScalar<'t>(typeName, createValid : Validator<string, 't voption>, toString : 't -> string, [<Struct>] ?description: string) =
             let createValid = createValid typeName
             Define.WrappedScalar
                 (name = typeName,
