@@ -153,7 +153,13 @@ type GraphQLWebSocketMiddleware<'Root>
         subscriptions
         |> GraphQLSubscriptionsManagement.addSubscription (id, placeholder, (fun _ -> ()))
 
-        placeholder.Disposable <- streamSource.Subscribe (observer)
+        try
+            placeholder.Disposable <- streamSource.Subscribe (observer)
+        with _ ->
+            // Nothing will ever complete this subscription now, so the id is freed here instead; a no-op if the
+            // synchronous completion above already removed it. Rethrown for the caller to report the failure.
+            subscriptions |> GraphQLSubscriptionsManagement.removeSubscription id
+            reraise ()
 
     let tryToGracefullyCloseSocket (code, message) theSocket =
         if theSocket |> canCloseSocket then
