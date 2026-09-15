@@ -261,3 +261,52 @@ let waitForTask (timeout : TimeSpan) (message : string) (awaited : Task) : Task 
     if not (obj.ReferenceEquals (completed, awaited)) then
         fail message
 }
+
+open FSharp.Control
+
+/// Returns the value after the scaled delay
+let delay time x = async {
+    do! Async.Sleep (ms time)
+    return x
+}
+
+/// An asynchronous sequence of the items, safe to use as a taskSeq in Debug builds because it never awaits
+let asyncItems (items : 'T list) = taskSeq {
+    for item in items do
+        yield item
+}
+
+/// A source whose GetAsyncEnumerator throws instead of returning an enumerator
+type ThrowingAsyncEnumerable<'T> (message : string) =
+    interface IAsyncEnumerable<'T> with
+        member _.GetAsyncEnumerator _ = failwith message
+
+/// Produces the item, then fails while pulling the next one
+let itemThenFailure (item : 'T) =
+    SuspendingAsyncEnumerable<'T> (fun _ index ->
+        task {
+            match index with
+            | 0 -> return ValueSome item
+            | _ -> return failwith "Boom during enumeration"
+        })
+    :> IAsyncEnumerable<'T>
+
+/// Produces the item, then completes, and throws from DisposeAsync
+let itemThenDisposalFailure (item : 'T) =
+    SuspendingAsyncEnumerable<'T> (
+        (fun _ index -> task { return if index = 0 then ValueSome item else ValueNone }),
+        fun () -> failwith "Boom disposing"
+    )
+    :> IAsyncEnumerable<'T>
+
+/// Produces numbers forever with a small delay, recording how many were pulled and signalling disposal
+let endlessNumbers (pulled : int ref) (disposed : TaskCompletionSource) =
+    SuspendingAsyncEnumerable<int> (
+        (fun _ index -> task {
+            pulled.Value <- index + 1
+            do! Task.Delay 20
+            return ValueSome (index + 1)
+        }),
+        fun () -> disposed.TrySetResult () |> ignore
+    )
+    :> IAsyncEnumerable<int>

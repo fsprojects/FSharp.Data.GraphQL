@@ -10,11 +10,6 @@ open Helpers
 open System
 open FSharp.Control.Reactive
 
-
-let delay time x = async {
-    do! Async.Sleep(ms time)
-    return x }
-
 [<Fact>]
 let ``ofSeq should call OnComplete and return items in expected order`` () =
     let source = seq { for x in 1 .. 5 do yield x }
@@ -253,19 +248,13 @@ let ``singleton should call OnComplete and return item`` () =
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals (Seq.singleton 1)
 
-open System.Collections.Generic
 open System.Threading
 open System.Threading.Tasks
 open FSharp.Control
 
-let asyncRange (count : int) = taskSeq {
-    for number in 1 .. count do
-        yield number
-}
-
 [<Fact>]
 let ``ofAsyncEnumerable should call OnComplete and return items in expected order`` () =
-    use sub = Observable.ofAsyncEnumerable (asyncRange 5) |> Observer.create
+    use sub = Observable.ofAsyncEnumerable (asyncItems [ 1 .. 5 ]) |> Observer.create
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals [ 1; 2; 3; 4; 5 ]
 
@@ -292,15 +281,7 @@ let ``ofAsyncEnumerable should stop the enumeration when the subscription is dis
     let pulled = ref 0
     let disposed = TaskCompletionSource ()
     let received = TaskCompletionSource ()
-    let source =
-        SuspendingAsyncEnumerable<int> (
-            (fun _ index -> task {
-                pulled.Value <- index + 1
-                do! Task.Delay 20
-                return ValueSome (index + 1)
-            }),
-            fun () -> disposed.TrySetResult () |> ignore
-        )
+    let source = endlessNumbers pulled disposed
     let subscription = Observable.ofAsyncEnumerable source |> Observable.subscribe (fun _ -> received.TrySetResult () |> ignore)
     do! waitForTask (TimeSpan.FromSeconds (float (ms 5))) "Expected an item before the subscription is disposed" received.Task
     subscription.Dispose ()
@@ -314,7 +295,7 @@ let ``ofAsyncEnumerable should stop the enumeration when the subscription is dis
 [<Fact>]
 let ``ofAsyncEnumerableResolved should emit synchronously resolved results in order`` () =
     use sub =
-        Observable.ofAsyncEnumerableResolved 3 (fun _ (n : int) -> AsyncVal.wrap (n * 10)) (fun _ -> -1) (asyncRange 5)
+        Observable.ofAsyncEnumerableResolved 3 (fun _ (n : int) -> AsyncVal.wrap (n * 10)) (fun _ -> -1) (asyncItems [ 1 .. 5 ])
         |> Observer.create
     sub.WaitCompleted (timeout = ms 10)
     sub.Received |> seqEquals [ 10; 20; 30; 40; 50 ]
@@ -334,20 +315,14 @@ let ``ofAsyncEnumerableResolved should never resolve more than maxConcurrency it
             return n
         }
         |> AsyncVal.ofAsync
-    use sub = Observable.ofAsyncEnumerableResolved 2 resolve (fun _ -> -1) (asyncRange 6) |> Observer.create
+    use sub = Observable.ofAsyncEnumerableResolved 2 resolve (fun _ -> -1) (asyncItems [ 1 .. 6 ]) |> Observer.create
     sub.WaitCompleted (timeout = ms 10)
     sub.Received |> Seq.toList |> List.sort |> seqEquals [ 1; 2; 3; 4; 5; 6 ]
     Assert.True (maxObserved.Value <= 2, $"Expected at most 2 concurrent resolutions, but observed {maxObserved.Value}")
 
 [<Fact>]
 let ``ofAsyncEnumerableResolved should emit the failure after a slower earlier item`` () =
-    let source =
-        SuspendingAsyncEnumerable<int> (fun _ index ->
-            task {
-                match index with
-                | 0 -> return ValueSome 1
-                | _ -> return failwith "Boom during enumeration"
-            })
+    let source = itemThenFailure 1
     let resolve index (n : int) =
         if index = 0 then
             async {
@@ -366,15 +341,7 @@ let ``ofAsyncEnumerableResolved should stop resolving further items when the sub
     let pulled = ref 0
     let disposed = TaskCompletionSource ()
     let received = TaskCompletionSource ()
-    let source =
-        SuspendingAsyncEnumerable<int> (
-            (fun _ index -> task {
-                pulled.Value <- index + 1
-                do! Task.Delay 20
-                return ValueSome (index + 1)
-            }),
-            fun () -> disposed.TrySetResult () |> ignore
-        )
+    let source = endlessNumbers pulled disposed
     let subscription =
         Observable.ofAsyncEnumerableResolved 1 (fun _ (n : int) -> AsyncVal.wrap n) (fun _ -> -1) source
         |> Observable.subscribe (fun _ -> received.TrySetResult () |> ignore)
@@ -386,11 +353,6 @@ let ``ofAsyncEnumerableResolved should stop resolving further items when the sub
     do! Task.Delay 200
     Assert.Equal (pulledAfterDisposal, pulled.Value)
 }
-
-/// A source whose GetAsyncEnumerator throws instead of returning an enumerator
-type private ThrowingAsyncEnumerable<'T> (message : string) =
-    interface IAsyncEnumerable<'T> with
-        member _.GetAsyncEnumerator _ = failwith message
 
 [<Fact>]
 let ``ofAsyncEnumerable should deliver OnError when GetAsyncEnumerator throws`` () =
@@ -408,11 +370,7 @@ let ``ofAsyncEnumerable should deliver OnError when GetAsyncEnumerator throws`` 
 
 [<Fact>]
 let ``ofAsyncEnumerable should deliver OnError when DisposeAsync throws`` () =
-    let source =
-        SuspendingAsyncEnumerable<int> (
-            (fun _ index -> task { return if index = 0 then ValueSome 1 else ValueNone }),
-            fun () -> failwith "Boom disposing"
-        )
+    let source = itemThenDisposalFailure 1
     use sub = Observable.ofAsyncEnumerable source |> Observable.materialize |> Observer.create
     sub.WaitCompleted (timeout = ms 10)
     Assert.Collection (
@@ -438,11 +396,7 @@ let ``ofAsyncEnumerableResolved should emit the failure through onFailure when G
 
 [<Fact>]
 let ``ofAsyncEnumerableResolved should emit the failure through onFailure after the item when DisposeAsync throws`` () =
-    let source =
-        SuspendingAsyncEnumerable<int> (
-            (fun _ index -> task { return if index = 0 then ValueSome 1 else ValueNone }),
-            fun () -> failwith "Boom disposing"
-        )
+    let source = itemThenDisposalFailure 1
     use sub =
         Observable.ofAsyncEnumerableResolved 2 (fun _ (n : int) -> AsyncVal.wrap n) (fun _ -> -1) source
         |> Observer.create
