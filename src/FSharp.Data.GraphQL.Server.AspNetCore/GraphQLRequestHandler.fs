@@ -37,14 +37,10 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
     /// <param name="httpContextAccessor">The accessor to the current HTTP context.</param>
     /// <param name="options">The options monitor for GraphQL options.</param>
     /// <param name="logger">The logger to log messages.</param>
-    (
-        httpContextAccessor : IHttpContextAccessor,
-        options : IOptionsMonitor<GraphQLOptions<'Root>>,
-        logger : ILogger
-    ) =
+    (httpContextAccessor : IHttpContextAccessor, options : IOptionsMonitor<GraphQLOptions<'Root>>, logger : ILogger) =
 
     let ctx = httpContextAccessor.HttpContext
-    let getInputContext() = ctx.RequestServices.GetRequiredService<IInputExecutionContext>()
+    let getInputContext () = ctx.RequestServices.GetRequiredService<IInputExecutionContext>()
 
     let toResponse { DocumentId = documentId; Content = content; Metadata = metadata } =
 
@@ -54,18 +50,14 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
 
         match content with
         | Direct (data, errs) ->
-            logger.LogDebug ($"Produced direct GraphQL response with documentId = '{{documentId}}' and metadata:\n{{metadata}}", documentId, metadata)
+            logger.LogDebug ("Produced direct GraphQL response with documentId = '{documentId}' and metadata:\n{metadata}", documentId, metadata)
 
             if logger.IsEnabled LogLevel.Trace then
-                logger.LogTrace ($"GraphQL response data:\n:{{data}}", serializeIndented data)
+                logger.LogTrace ("GraphQL response data:\n{data}", serializeIndented data)
 
             GQLResponse.Direct (documentId, data, errs)
         | Deferred (data, errs, deferred) ->
-            logger.LogDebug (
-                $"Produced deferred GraphQL response with documentId = '{{documentId}}' and metadata:\n{{metadata}}",
-                documentId,
-                metadata
-            )
+            logger.LogDebug ("Produced deferred GraphQL response with documentId = '{documentId}' and metadata:\n{metadata}", documentId, metadata)
 
             if logger.IsEnabled LogLevel.Debug then
                 deferred
@@ -74,12 +66,12 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
                         logger.LogDebug ("Produced GraphQL deferred result for path: {path}", path |> Seq.map string |> Seq.toArray |> Path.Join)
 
                         if logger.IsEnabled LogLevel.Trace then
-                            logger.LogTrace ($"GraphQL deferred data:\n{{data}}", serializeIndented data)
+                            logger.LogTrace ("GraphQL deferred data:\n{data}", serializeIndented data)
                     | DeferredErrors (null, errors, path) ->
                         logger.LogDebug ("Produced GraphQL deferred errors for path: {path}", path |> Seq.map string |> Seq.toArray |> Path.Join)
 
                         if logger.IsEnabled LogLevel.Trace then
-                            logger.LogTrace ($"GraphQL deferred errors:\n{{errors}}", errors)
+                            logger.LogTrace ("GraphQL deferred errors:\n{errors}", errors)
                     | DeferredErrors (data, errors, path) ->
                         logger.LogDebug (
                             "Produced GraphQL deferred result with errors for path: {path}",
@@ -87,16 +79,12 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
                         )
 
                         if logger.IsEnabled LogLevel.Trace then
-                            logger.LogTrace (
-                                $"GraphQL deferred errors:\n{{errors}}\nGraphQL deferred data:\n{{data}}",
-                                errors,
-                                serializeIndented data
-                            ))
+                            logger.LogTrace ("GraphQL deferred errors:\n{errors}\nGraphQL deferred data:\n{data}", errors, serializeIndented data))
 
             GQLResponse.Direct (documentId, data, errs)
 
         | Stream stream ->
-            logger.LogDebug ($"Produced stream GraphQL response with documentId = '{{documentId}}' and metadata:\n{{metadata}}", documentId, metadata)
+            logger.LogDebug ("Produced stream GraphQL response with documentId = '{documentId}' and metadata:\n{metadata}", documentId, metadata)
 
             if logger.IsEnabled LogLevel.Debug then
                 stream
@@ -105,18 +93,18 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
                         logger.LogDebug ("Produced GraphQL subscription result")
 
                         if logger.IsEnabled LogLevel.Trace then
-                            logger.LogTrace ($"GraphQL subscription data:\n{{data}}", serializeIndented data)
+                            logger.LogTrace ("GraphQL subscription data:\n{data}", serializeIndented data)
                     | SubscriptionErrors (null, errors) ->
                         logger.LogDebug ("Produced GraphQL subscription errors")
 
                         if logger.IsEnabled LogLevel.Trace then
-                            logger.LogTrace ($"GraphQL subscription errors:\n{{errors}}", errors)
+                            logger.LogTrace ("GraphQL subscription errors:\n{errors}", errors)
                     | SubscriptionErrors (data, errors) ->
                         logger.LogDebug ("Produced GraphQL subscription result with errors")
 
                         if logger.IsEnabled LogLevel.Trace then
                             logger.LogTrace (
-                                $"GraphQL subscription errors:\n{{errors}}\nGraphQL deferred data:\n{{data}}",
+                                "GraphQL subscription errors:\n{errors}\nGraphQL subscription data:\n{data}",
                                 errors,
                                 serializeIndented data
                             ))
@@ -125,7 +113,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
 
         | RequestError errs ->
             logger.LogWarning (
-                $"Produced request error GraphQL response with documentId = '{{documentId}}' and metadata:\n{{metadata}}",
+                "Produced request error GraphQL response with documentId = '{documentId}' and metadata:\n{metadata}",
                 documentId,
                 metadata
             )
@@ -164,7 +152,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
     let checkOperationType () = taskResult {
 
         let checkAnonymousFieldsOnly (ctx : HttpContext) = taskResult {
-            let! gqlRequest = ctx.TryBindJsonAsync<GQLRequestContent> (GQLRequestContent.expectedJSON)
+            let! gqlRequest = ctx.TryBindJsonAsync<GQLRequestContent>(GQLRequestContent.expectedJSON)
             let! ast = Parser.parseOrIResult ctx.Request.Path.Value gqlRequest.Query
             let operationName = gqlRequest.OperationName |> Skippable.toValueOption
 
@@ -190,7 +178,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
                         let hasNonMetaFields =
                             Ast.containsFieldsBeyond
                                 Ast.metaTypeFields
-                                (fun field -> logger.LogTrace ($"Operation Selection in Field with name: {{fieldName}}", field.Name))
+                                (fun field -> logger.LogTrace ("Operation Selection in Field with name: {fieldName}", field.Name))
                                 (fun _ -> logger.LogTrace "Operation Selection is non-Field type")
                                 op
 
@@ -220,16 +208,22 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
     /// Execute the operation for given request
     default _.ExecuteOperation<'Root> (executor : Executor<'Root>, content) = task {
 
-        let operationName = content.OperationName |> Skippable.filter (not << isNull) |> Skippable.toOption
-        let variables = content.Variables |> Skippable.filter (not << isNull) |> Skippable.toOption
+        let operationName =
+            content.OperationName
+            |> Skippable.filter (not << isNull)
+            |> Skippable.toOption
+        let variables =
+            content.Variables
+            |> Skippable.filter (not << isNull)
+            |> Skippable.toOption
 
         operationName
         |> Option.iter (fun on -> logger.LogTrace ("GraphQL operation name: '{operationName}'", on))
 
-        logger.LogTrace ($"Executing GraphQL query:\n{{query}}", content.Query)
+        logger.LogTrace ("Executing GraphQL query:\n{query}", content.Query)
 
         variables
-        |> Option.iter (fun v -> logger.LogTrace ($"GraphQL variables:\n{{variables}}", v))
+        |> Option.iter (fun v -> logger.LogTrace ("GraphQL variables:\n{variables}", v))
 
         let root = options.CurrentValue.RootFactory ctx
 
