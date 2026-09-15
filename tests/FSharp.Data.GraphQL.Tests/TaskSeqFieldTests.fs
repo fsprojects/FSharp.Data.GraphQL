@@ -42,6 +42,11 @@ let failingNumbers () = taskSeq {
     failwith "Boom during enumeration"
 }
 
+/// A source whose GetAsyncEnumerator throws instead of returning an enumerator
+type ThrowingAsyncEnumerable<'T> (message : string) =
+    interface IAsyncEnumerable<'T> with
+        member _.GetAsyncEnumerator _ = failwith message
+
 let endlessNumbers (pulled : int ref) (disposed : TaskCompletionSource) =
     SuspendingAsyncEnumerable<int>(
         (fun _ index -> task {
@@ -451,6 +456,25 @@ let ``Streamed TaskSeq field that fails during enumeration delivers produced ite
             streamedBatch "failing" [ 1, 2 ]
             DeferredErrors (null, [ fieldError "Boom during enumeration" "failing" ], [ box "failing" ])
         ]
+
+[<Fact>]
+let ``Streamed TaskSeq field that fails acquiring the enumerator still delivers its DeferredErrors`` () =
+    // Regression test: this used to fault the merged deferred observable of the whole query instead of producing
+    // this field's DeferredErrors, which would drop sibling deferred results and the final completion payload
+    let executor =
+        executorFor [
+            Define.TaskSeqField ("failing", ListOf IntType, fun _ _ -> ThrowingAsyncEnumerable<int> "Boom acquiring the enumerator" :> IAsyncEnumerable<int>)
+            Define.TaskSeqField ("numbers", ListOf IntType, fun _ _ -> asyncItems [ 10; 20 ])
+        ]
+    let expectedData =
+        NameValueLookup.ofList [ "failing", upcast []; "numbers", upcast [| box 10; box 20 |] ]
+    let result = executeQuery executor "{ failing @stream numbers }"
+    ensureDeferred result
+    <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedData)
+        waitForCompletion deferred
+        |> seqEquals [ DeferredErrors (null, [ fieldError "Boom acquiring the enumerator" "failing" ], [ box "failing" ]) ]
 
 [<Fact>]
 let ``Streamed TaskSeq field emits a slower earlier item before the enumeration failure that follows it`` () =
