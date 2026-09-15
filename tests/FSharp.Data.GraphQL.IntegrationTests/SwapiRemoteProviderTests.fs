@@ -5,6 +5,9 @@ open Helpers
 open FSharp.Data.GraphQL
 open System.Threading.Tasks
 
+// SwapiLocalProviderTests instantiates the same provider with the same static arguments.
+// The F# compiler in SDK 10.0.3xx fails with FS0193 ("type X is not compatible with type X") when both files
+// declare inline operations with the same name, so the operations here are named differently.
 type Provider = GraphQLProvider<"introspection.json">
 
 let connection = TestHosts.createStarWarsConnection ()
@@ -15,7 +18,7 @@ type Episode = Provider.Types.Episode
 
 module SimpleOperation =
     let operation =
-        Provider.Operation<"""query Q {
+        Provider.Operation<"""query RemoteQ {
 hero (id: "1000") {
   name
   appearsIn
@@ -43,7 +46,7 @@ hero (id: "1000") {
 }
           }"""> ()
 
-    type Operation = Provider.Operations.Q
+    type Operation = Provider.Operations.RemoteQ
 
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.ContainsKey ("documentId") |> equals true
@@ -162,7 +165,7 @@ let ``Should be able to use pattern matching methods on an union type`` () =
 
 module MutationOperation =
     let operation =
-        Provider.Operation<"""mutation M {
+        Provider.Operation<"""mutation RemoteM {
             setMoon (id: "1", isMoon: true) {
                 id
                 name
@@ -170,7 +173,7 @@ module MutationOperation =
               }
             }"""> ()
 
-    type Operation = Provider.Operations.M
+    type Operation = Provider.Operations.RemoteM
 
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.ContainsKey ("documentId") |> equals true
