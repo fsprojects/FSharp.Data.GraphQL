@@ -160,22 +160,28 @@ module internal Observable =
                 // The token is checked explicitly, because a sequence is not obliged to observe the token it was given
                 while hasNext && not cancellationToken.IsCancellationRequested && not (failed ()) do
                     do! slots.WaitAsync cancellationToken
-                    let! moved = acquired.MoveNextAsync ()
-                    if moved then
-                        let itemIndex = index
-                        let item = acquired.Current
-                        index <- index + 1
-                        match resolve itemIndex item with
-                        // Items resolved synchronously are emitted immediately, which keeps them in the source order
-                        | Immediate result ->
-                            try
-                                emit result
-                            finally
-                                slots.Release () |> ignore
-                        | pendingResult -> resolveInBackground pendingResult
-                    else
+                    // A resolution may have failed, or the subscription been disposed, while this waited for a
+                    // slot; rechecked here so no further item is pulled, let alone emitted, after that
+                    if cancellationToken.IsCancellationRequested || failed () then
                         slots.Release () |> ignore
                         hasNext <- false
+                    else
+                        let! moved = acquired.MoveNextAsync ()
+                        if moved then
+                            let itemIndex = index
+                            let item = acquired.Current
+                            index <- index + 1
+                            match resolve itemIndex item with
+                            // Items resolved synchronously are emitted immediately, which keeps them in the source order
+                            | Immediate result ->
+                                try
+                                    emit result
+                                finally
+                                    slots.Release () |> ignore
+                            | pendingResult -> resolveInBackground pendingResult
+                        else
+                            slots.Release () |> ignore
+                            hasNext <- false
             with ex ->
                 failure <- ValueSome ex
             // Captured items no longer need the enumerator, so it is disposed before waiting for their resolutions
