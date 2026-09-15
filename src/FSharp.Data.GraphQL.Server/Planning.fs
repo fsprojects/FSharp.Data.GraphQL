@@ -30,10 +30,10 @@ let TypeMetaFieldDef =
         typedef = StructNullable __Type,
         args = [
             { Name = "name"
-              Description = None
+              Description = ValueNone
               IsSkippable = false
               TypeDef = StringType
-              DefaultValue = None
+              DefaultValue = ValueNone
               ExecuteInput = variableOrElse(InlineConstant >> coerceStringInput >> Result.map box) }
         ],
         resolve = fun ctx (_:obj) ->
