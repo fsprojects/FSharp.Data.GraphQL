@@ -311,6 +311,82 @@ let ``ofAsyncEnumerable should stop the enumeration when the subscription is dis
 }
 
 [<Fact>]
+let ``ofAsyncEnumerableResolved should emit synchronously resolved results in order`` () =
+    use sub =
+        Observable.ofAsyncEnumerableResolved 3 (fun _ (n : int) -> AsyncVal.wrap (n * 10)) (fun _ -> -1) (asyncRange 5)
+        |> Observer.create
+    sub.WaitCompleted (timeout = ms 10)
+    sub.Received |> seqEquals [ 10; 20; 30; 40; 50 ]
+
+[<Fact>]
+let ``ofAsyncEnumerableResolved should never resolve more than maxConcurrency items at the same time`` () =
+    let inFlight = ref 0
+    let maxObserved = ref 0
+    let resolve _ (n : int) =
+        async {
+            let current = Interlocked.Increment inFlight
+            let mutable observed = maxObserved.Value
+            while current > observed && Interlocked.CompareExchange (maxObserved, current, observed) <> observed do
+                observed <- maxObserved.Value
+            do! Async.Sleep (ms 50)
+            Interlocked.Decrement inFlight |> ignore
+            return n
+        }
+        |> AsyncVal.ofAsync
+    use sub = Observable.ofAsyncEnumerableResolved 2 resolve (fun _ -> -1) (asyncRange 6) |> Observer.create
+    sub.WaitCompleted (timeout = ms 10)
+    sub.Received |> Seq.toList |> List.sort |> seqEquals [ 1; 2; 3; 4; 5; 6 ]
+    Assert.True (maxObserved.Value <= 2, $"Expected at most 2 concurrent resolutions, but observed {maxObserved.Value}")
+
+[<Fact>]
+let ``ofAsyncEnumerableResolved should emit the failure after a slower earlier item`` () =
+    let source =
+        SuspendingAsyncEnumerable<int> (fun _ index ->
+            task {
+                match index with
+                | 0 -> return ValueSome 1
+                | _ -> return failwith "Boom during enumeration"
+            })
+    let resolve index (n : int) =
+        if index = 0 then
+            async {
+                do! Async.Sleep (ms 200)
+                return n
+            }
+            |> AsyncVal.ofAsync
+        else
+            AsyncVal.wrap n
+    use sub = Observable.ofAsyncEnumerableResolved 4 resolve (fun _ -> -1) source |> Observer.create
+    sub.WaitCompleted (timeout = ms 10)
+    sub.Received |> seqEquals [ 1; -1 ]
+
+[<Fact>]
+let ``ofAsyncEnumerableResolved should stop resolving further items when the subscription is disposed`` () : Task = task {
+    let pulled = ref 0
+    let disposed = TaskCompletionSource ()
+    let received = TaskCompletionSource ()
+    let source =
+        SuspendingAsyncEnumerable<int> (
+            (fun _ index -> task {
+                pulled.Value <- index + 1
+                do! Task.Delay 20
+                return ValueSome (index + 1)
+            }),
+            fun () -> disposed.TrySetResult () |> ignore
+        )
+    let subscription =
+        Observable.ofAsyncEnumerableResolved 1 (fun _ (n : int) -> AsyncVal.wrap n) (fun _ -> -1) source
+        |> Observable.subscribe (fun _ -> received.TrySetResult () |> ignore)
+    do! waitForTask (TimeSpan.FromSeconds (float (ms 5))) "Expected an item before the subscription is disposed" received.Task
+    subscription.Dispose ()
+    do! waitForTask (TimeSpan.FromSeconds (float (ms 5))) "Expected the enumerator to be disposed with the subscription" disposed.Task
+    let pulledAfterDisposal = pulled.Value
+    // A still running enumeration would pull more items during this delay
+    do! Task.Delay 200
+    Assert.Equal (pulledAfterDisposal, pulled.Value)
+}
+
+[<Fact>]
 let ``withCompletionMarker should emit the items and then the marker when the source completes`` () =
     use sub = Observable.ofSeq [ 1; 2 ] |> Observable.withCompletionMarker |> Observer.create
     sub.WaitCompleted(timeout = ms 10)
