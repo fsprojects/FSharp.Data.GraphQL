@@ -42,14 +42,14 @@ let failingNumbers () = taskSeq {
     failwith "Boom during enumeration"
 }
 
-let endlessNumbers (pulled : int ref) (disposed : ManualResetEventSlim) =
+let endlessNumbers (pulled : int ref) (disposed : TaskCompletionSource) =
     SuspendingAsyncEnumerable<int>(
         (fun _ index -> task {
             pulled.Value <- index + 1
             do! Task.Delay 20
             return ValueSome (index + 1)
         }),
-        fun () -> disposed.Set ()
+        fun () -> disposed.TrySetResult () |> ignore
     )
     :> IAsyncEnumerable<int>
 
@@ -407,25 +407,30 @@ let ``Streamed TaskSeq field that fails during enumeration delivers produced ite
         ]
 
 [<Fact>]
-let ``Disposing the stream subscription stops the enumeration of the TaskSeq field`` () =
+let ``Disposing the stream subscription stops the enumeration of the TaskSeq field`` () : Task = task {
     let pulled = ref 0
-    use disposed = new ManualResetEventSlim false
-    use received = new ManualResetEventSlim false
+    let disposed = TaskCompletionSource ()
+    let received = TaskCompletionSource ()
     let executor =
         executorFor [ Define.TaskSeqField ("numbers", ListOf IntType, fun _ _ -> endlessNumbers pulled disposed) ]
-    let result = executeQuery executor "{ numbers @stream }"
-    ensureDeferred result
-    <| fun _ errors deferred ->
+    let! result = executor.AsyncExecute (parse "{ numbers @stream }", getMockInputContext, ())
+    match result.Content with
+    | Deferred (_, errors, deferred) ->
         empty errors
-        let subscription = deferred |> Observable.subscribe (fun _ -> received.Set ())
-        if not (received.Wait (TimeSpan.FromSeconds (float (ms 5)))) then
-            fail "Timeout while waiting for the first streamed item"
+        let subscription = deferred |> Observable.subscribe (fun _ -> received.TrySetResult () |> ignore)
+        do! waitForTask (TimeSpan.FromSeconds (float (ms 5))) "Timeout while waiting for the first streamed item" received.Task
         subscription.Dispose ()
-        if not (disposed.Wait (TimeSpan.FromSeconds (float (ms 5)))) then
-            fail "The sequence enumerator was not disposed after the subscription had been disposed"
+        do!
+            waitForTask
+                (TimeSpan.FromSeconds (float (ms 5)))
+                "The sequence enumerator was not disposed after the subscription had been disposed"
+                disposed.Task
         let pulledAfterDisposal = pulled.Value
-        Thread.Sleep 200
+        // A still running enumeration would pull more items during this delay
+        do! Task.Delay 200
         pulled.Value |> equals pulledAfterDisposal
+    | response -> fail $"Expected a 'Deferred' GQLResponse but got\n{response}"
+}
 
 [<Fact>]
 let ``TaskSeq field resolved as null reports a non-null field error`` () =
