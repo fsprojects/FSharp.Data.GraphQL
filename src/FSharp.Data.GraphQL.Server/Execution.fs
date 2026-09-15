@@ -56,18 +56,18 @@ let private getArgumentValues (argDefs: InputFieldDef []) (args: Argument list) 
     ) (Ok Map.empty)
 
 let private getOperation = function
-    | OperationDefinition odef -> Some odef
-    | _ -> None
+    | OperationDefinition odef -> ValueSome odef
+    | _ -> ValueNone
 
 
 /// Search through the Definitions in the given Document for an OperationDefinition with the given name.
 /// Or, if there was no name given, and there is only one OperationDefinition in the Document, return that.
 let internal findOperation doc opName =
-    match doc.Definitions |> List.choose getOperation, opName with
-    | [def], _ -> Some def
+    match doc.Definitions |> List.vchoose getOperation, opName with
+    | [def], _ -> ValueSome def
     | defs, name ->
         defs
-        |> List.tryFind (fun def -> def.Name = (name |> ValueOption.ofOption))
+        |> List.vtryFind (fun def -> def.Name = name)
 
 let private defaultResolveType possibleTypesFn abstractDef : obj -> ObjectDef =
     let possibleTypes = possibleTypesFn abstractDef

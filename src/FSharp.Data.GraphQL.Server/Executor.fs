@@ -99,7 +99,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         | Success -> ()
         | ValidationError errors -> raise (GQLMessageException (System.String.Join("\n", errors)))
 
-    let eval (executionPlan: ExecutionPlan, data: 'Root option, variables: ImmutableDictionary<string, JsonElement>, getInputContext : InputExecutionContextProvider): Async<GQLExecutionResult> =
+    let eval (executionPlan: ExecutionPlan, data: 'Root voption, variables: ImmutableDictionary<string, JsonElement>, getInputContext : InputExecutionContextProvider): Async<GQLExecutionResult> =
         let documentId = executionPlan.DocumentId
         let prepareOutput res =
             match res with
@@ -110,7 +110,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         async {
             try
                 let errors = ConcurrentDictionary<ResolveFieldContext, ConcurrentBag<IGQLError>>()
-                let root = data |> Option.map box |> Option.toObj
+                let root = data |> ValueOption.map box |> ValueOption.toObj
                 match coerceVariables executionPlan.Variables getInputContext variables with
                 | Error errs -> return prepareOutput (GQLExecutionResult.Error (documentId, errs, executionPlan.Metadata))
                 | Ok variables ->
@@ -132,15 +132,15 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
             | ex -> return prepareOutput (GQLExecutionResult.ErrorFromException(documentId, ex, executionPlan.Metadata))
         }
 
-    let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: ImmutableDictionary<string, JsonElement> option, getInputContext : InputExecutionContextProvider) =
-        let variables = defaultArg variables ImmutableDictionary.Empty
+    let execute (executionPlan: ExecutionPlan, data: 'Root voption, variables: ImmutableDictionary<string, JsonElement> voption, getInputContext : InputExecutionContextProvider) =
+        let variables = defaultValueArg variables ImmutableDictionary.Empty
         eval (executionPlan, data, variables, getInputContext)
 
-    let createExecutionPlan (ast: Document, operationName: string option, meta : Metadata) =
+    let createExecutionPlan (ast: Document, operationName: string voption, meta : Metadata) =
         let documentId = ast.GetHashCode()
         result {
             match findOperation ast operationName with
-            | Some operation ->
+            | ValueSome operation ->
                 let! rootDef =
                     match operation.OperationType with
                     | Query -> Ok schema.Query
@@ -171,7 +171,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                       Operation = operation
                       DocumentId = documentId }
                 return runMiddlewares _.PlanOperation planningCtx planOperation
-            | None -> return! Error <| [ GQLProblemDetails.CreateWithKind (
+            | ValueNone -> return! Error <| [ GQLProblemDetails.CreateWithKind (
                 "No operation with specified name has been found for provided document",
                 ErrorKind.Validation
             )]
@@ -193,7 +193,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// <param name="getInputContext">Gets input context provider for the operation.</param>
     /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
     /// <param name="variables">Map of all variable values provided by the client request.</param>
-    member _.AsyncExecute(executionPlan: ExecutionPlan, getInputContext : InputExecutionContextProvider, ?data: 'Root, ?variables: ImmutableDictionary<string, JsonElement>): Async<GQLExecutionResult> =
+    member _.AsyncExecute(executionPlan: ExecutionPlan, getInputContext : InputExecutionContextProvider, [<Struct>] ?data: 'Root, [<Struct>] ?variables: ImmutableDictionary<string, JsonElement>): Async<GQLExecutionResult> =
         execute (executionPlan, data, variables, getInputContext)
 
     /// <summary>
@@ -208,8 +208,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution customizations.</param>
-    member _.AsyncExecute(ast: Document, getInputContext : InputExecutionContextProvider, ?data: 'Root, ?variables: ImmutableDictionary<string, JsonElement>, ?operationName: string, ?meta : Metadata): Async<GQLExecutionResult> =
-        let meta = defaultArg meta Metadata.Empty
+    member _.AsyncExecute(ast: Document, getInputContext : InputExecutionContextProvider, [<Struct>] ?data: 'Root, [<Struct>] ?variables: ImmutableDictionary<string, JsonElement>, [<Struct>] ?operationName: string, [<Struct>] ?meta : Metadata): Async<GQLExecutionResult> =
+        let meta = defaultValueArg meta Metadata.Empty
         match createExecutionPlan (ast, operationName, meta) with
         | Ok executionPlan -> execute (executionPlan, data, variables, getInputContext)
         | Error (documentId, errors) -> async.Return <| GQLExecutionResult.Invalid(documentId, errors, meta)
@@ -226,8 +226,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution customizations.</param>
-    member _.AsyncExecute(queryOrMutation: string, getInputContext : InputExecutionContextProvider, ?data: 'Root, ?variables: ImmutableDictionary<string, JsonElement>, ?operationName: string, ?meta : Metadata): Async<GQLExecutionResult> =
-        let meta = defaultArg meta Metadata.Empty
+    member _.AsyncExecute(queryOrMutation: string, getInputContext : InputExecutionContextProvider, [<Struct>] ?data: 'Root, [<Struct>] ?variables: ImmutableDictionary<string, JsonElement>, [<Struct>] ?operationName: string, [<Struct>] ?meta : Metadata): Async<GQLExecutionResult> =
+        let meta = defaultValueArg meta Metadata.Empty
         let ast = parse queryOrMutation
         match createExecutionPlan (ast, operationName, meta) with
         | Ok executionPlan -> execute (executionPlan, data, variables, getInputContext)
@@ -240,8 +240,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// <param name="ast">The parsed GraphQL query string.</param>
     /// <param name="operationName">The name of the operation that should be executed on the parsed document.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution plan customizations.</param>
-    member _.CreateExecutionPlan(ast: Document, ?operationName: string, ?meta : Metadata) =
-        let meta = defaultArg meta Metadata.Empty
+    member _.CreateExecutionPlan(ast: Document, [<Struct>] ?operationName: string, [<Struct>] ?meta : Metadata) =
+        let meta = defaultValueArg meta Metadata.Empty
         createExecutionPlan (ast, operationName, meta)
 
     /// Creates an execution plan for provided GraphQL query string without
@@ -251,7 +251,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// <param name="queryOrMutation">The GraphQL query string.</param>
     /// <param name="operationName">The name of the operation that should be executed on the parsed document.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution plan customizations.</param>
-    member _.CreateExecutionPlan(queryOrMutation: string, ?operationName: string, ?meta : Metadata) =
-        let meta = defaultArg meta Metadata.Empty
+    member _.CreateExecutionPlan(queryOrMutation: string, [<Struct>] ?operationName: string, [<Struct>] ?meta : Metadata) =
+        let meta = defaultValueArg meta Metadata.Empty
         let ast = parse queryOrMutation
         createExecutionPlan (ast, operationName, meta)

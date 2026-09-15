@@ -27,7 +27,7 @@ open FSharp.Data.GraphQL.Types
 type ExecutorExtensions =
 
     [<Extension>]
-    static member CreateExecutionPlanOrFail (executor: Executor<'Root>, ast: Document, ?operationName: string, ?meta : Metadata) =
+    static member CreateExecutionPlanOrFail (executor: Executor<'Root>, ast: Document, [<Struct>] ?operationName: string, [<Struct>] ?meta : Metadata) =
         match executor.CreateExecutionPlan(ast, ?operationName = operationName, ?meta = meta) with
         | Ok executionPlan -> executionPlan
         | Error _ -> failwith "invalid query"; Unchecked.defaultof<_>

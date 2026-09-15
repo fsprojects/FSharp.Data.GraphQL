@@ -271,7 +271,7 @@ type GraphQLWebSocketMiddleware<'Root>
                                             CancellationToken.None
                                         )
                                 else
-                                    let variables = query.Variables |> Skippable.toOption
+                                    let variables = query.Variables |> Skippable.toValueOption
                                     let getInputContext() = httpContext.RequestServices.GetRequiredService<IInputExecutionContext>()
                                     let! planExecutionResult =
                                         let root = options.RootFactory httpContext
