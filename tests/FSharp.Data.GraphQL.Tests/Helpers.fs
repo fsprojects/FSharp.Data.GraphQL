@@ -177,7 +177,7 @@ open System.Runtime.CompilerServices
 type ExecutorExtensions =
 
     [<Extension>]
-    static member CreateExecutionPlanOrFail (executor: Executor<'Root>, queryOrMutation: string, ?operationName: string, ?meta : Metadata) =
+    static member CreateExecutionPlanOrFail (executor: Executor<'Root>, queryOrMutation: string, [<Struct>] ?operationName: string, [<Struct>] ?meta : Metadata) =
         match executor.CreateExecutionPlan(queryOrMutation, ?operationName = operationName, ?meta = meta) with
         | Ok executionPlan -> executionPlan
         | Error _ -> fail "invalid query"; Unchecked.defaultof<_>

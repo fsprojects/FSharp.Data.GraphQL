@@ -211,19 +211,19 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
         let operationName =
             content.OperationName
             |> Skippable.filter (not << isNull)
-            |> Skippable.toOption
+            |> Skippable.toValueOption
         let variables =
             content.Variables
             |> Skippable.filter (not << isNull)
-            |> Skippable.toOption
+            |> Skippable.toValueOption
 
         operationName
-        |> Option.iter (fun on -> logger.LogTrace ("GraphQL operation name: '{operationName}'", on))
+        |> ValueOption.iter (fun on -> logger.LogTrace ("GraphQL operation name: '{operationName}'", on))
 
         logger.LogTrace ("Executing GraphQL query:\n{query}", content.Query)
 
         variables
-        |> Option.iter (fun v -> logger.LogTrace ("GraphQL variables:\n{variables}", v))
+        |> ValueOption.iter (fun v -> logger.LogTrace ("GraphQL variables:\n{variables}", v))
 
         let root = options.CurrentValue.RootFactory ctx
 
