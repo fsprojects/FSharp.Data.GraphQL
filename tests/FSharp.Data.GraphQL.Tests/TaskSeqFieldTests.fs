@@ -18,13 +18,8 @@ type StreamItem = { Id : int; Value : Async<string> }
 
 // Resolvers are captured as quotations, which cannot contain every taskSeq builder member,
 // so the sequences are produced by functions called from the resolvers.
-// Sequences that complete synchronously use taskSeq blocks, while sequences that really suspend
-// use SuspendingAsyncEnumerable, because taskSeq blocks do not resume correctly in Debug builds.
-let asyncItems (items : 'T list) = taskSeq {
-    for item in items do
-        yield item
-}
-
+// Sequences that complete synchronously use taskSeq blocks (Helpers.asyncItems), while sequences that really
+// suspend use SuspendingAsyncEnumerable, because taskSeq blocks do not resume correctly in Debug builds.
 let gatedNumbers (gate : Task) =
     SuspendingAsyncEnumerable<int>(fun _ index -> task {
         match index with
@@ -41,22 +36,6 @@ let failingNumbers () = taskSeq {
     yield 2
     failwith "Boom during enumeration"
 }
-
-/// A source whose GetAsyncEnumerator throws instead of returning an enumerator
-type ThrowingAsyncEnumerable<'T> (message : string) =
-    interface IAsyncEnumerable<'T> with
-        member _.GetAsyncEnumerator _ = failwith message
-
-let endlessNumbers (pulled : int ref) (disposed : TaskCompletionSource) =
-    SuspendingAsyncEnumerable<int>(
-        (fun _ index -> task {
-            pulled.Value <- index + 1
-            do! Task.Delay 20
-            return ValueSome (index + 1)
-        }),
-        fun () -> disposed.TrySetResult () |> ignore
-    )
-    :> IAsyncEnumerable<int>
 
 /// Simulates a paged sequence that exposes the size of its pages
 type PagedAsyncEnumerable<'T> (pageSize : int, items : 'T list) =
@@ -99,11 +78,6 @@ let azurePageSizeOf (source : IAsyncEnumerable<int>) =
     | :? HintedAsyncPageable<int> as pageable -> ValueSome pageable.PageSizeHint
     | _ -> ValueNone
 
-let delayed (milliseconds : int) (value : string) = async {
-    do! Async.Sleep (ms milliseconds)
-    return value
-}
-
 let StreamItemType =
     Define.Object<StreamItem>(
         "StreamItem",
@@ -115,18 +89,7 @@ let StreamItemType =
 
 let immediateItems = [ { Id = 1; Value = async { return "one" } }; { Id = 2; Value = async { return "two" } } ]
 
-let slowAndFastItems = [ { Id = 1; Value = delayed 3000 "slow" }; { Id = 2; Value = async { return "fast" } } ]
-
-/// Yields one item whose field resolves after a delay, then fails while pulling the next one
-let slowItemThenFailingNumbers () =
-    SuspendingAsyncEnumerable<StreamItem>(fun _ index ->
-        task {
-            match index with
-            | 0 -> return ValueSome { Id = 1; Value = delayed 500 "slow" }
-            | _ -> return failwith "Boom during enumeration"
-        }
-    )
-    :> IAsyncEnumerable<StreamItem>
+let slowAndFastItems = [ { Id = 1; Value = delay 3000 "slow" }; { Id = 2; Value = async { return "fast" } } ]
 
 let schemaConfig =
     SchemaConfig.DefaultWithBufferedStream (streamOptions = { Interval = ValueNone; PreferredBatchSize = ValueNone })
@@ -481,7 +444,9 @@ let ``Streamed TaskSeq field emits a slower earlier item before the enumeration 
     // Regression test: an item resolved asynchronously must not be overtaken by a failure of the source that
     // is pulled right after it, even though the failure itself completes immediately
     let executor =
-        executorFor [ Define.TaskSeqField ("items", ListOf StreamItemType, fun _ _ -> slowItemThenFailingNumbers ()) ]
+        executorFor [
+            Define.TaskSeqField ("items", ListOf StreamItemType, fun _ _ -> itemThenFailure { Id = 1; Value = delay 500 "slow" })
+        ]
     let result = executeQuery executor "{ items @stream { id value } }"
     ensureDeferred result
     <| fun _ errors deferred ->
@@ -532,7 +497,7 @@ let ``TaskSeq field with stream directive never resolves more than maxConcurrenc
         finally
             Interlocked.Decrement inFlight |> ignore
     }
-    let items = [ for id in 1 .. 6 -> { Id = id; Value = trackConcurrency (delayed 100 (string id)) } ]
+    let items = [ for id in 1 .. 6 -> { Id = id; Value = trackConcurrency (delay 100 (string id)) } ]
     let executor =
         executorFor [
             Define.TaskSeqField ("items", ListOf StreamItemType, (fun _ _ -> asyncItems items), maxConcurrency = 2)
