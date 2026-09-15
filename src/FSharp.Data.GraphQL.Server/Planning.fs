@@ -68,14 +68,17 @@ let private objectInfo (ctx: PlanningContext) (parentDef: ObjectDef) field inclu
             | Object _ -> fdef.TypeDef
             | _ ->
                 Debug.Fail "Must be prevented by validation"
-                failwith "Unexpected parentdef type!"
+                raise (
+                    NotSupportedException
+                        $"Object definition '%s{parentDef.Name}' is implemented by '%s{parentDef.GetType().FullName}', which is not supported by query planning"
+                )
           Definition = fdef
           Ast = field
           Include = includer
           IsNullable = false }
     | None ->
         Debug.Fail "Must be prevented by validation"
-        failwith $"No field '%s{field.Name}' was defined in object definition '%s{parentDef.Name}'"
+        raise (MalformedGQLQueryException $"No field '%s{field.Name}' was defined in object definition '%s{parentDef.Name}'")
 
 let rec private abstractionInfo (ctx : PlanningContext) (parentDef : AbstractDef) field typeCondition includer =
     let objDefs = ctx.Schema.GetPossibleTypes parentDef
@@ -170,7 +173,10 @@ let private getStreamBufferMode (field : Field) =
         | IntValue v -> int v
         | _ ->
             Debug.Fail "Must be prevented by validation"
-            failwith $"Stream directive parsing error: expected an integer value in argument '%s{argName}', but could not parse it."
+            raise (
+                MalformedGQLQueryException
+                    $"Argument '%s{argName}' of the @stream directive on field '%s{field.AliasOrName}' must be an integer, but '%O{value}' was provided"
+            )
     let directive =
         field.Directives
         |> List.tryFind (fun d -> d.Name = "stream")
@@ -183,8 +189,9 @@ let private getStreamBufferMode (field : Field) =
     match directive with
     | Some d -> { Interval = interval d; PreferredBatchSize = preferredBatchSize d }
     | None ->
+        // Buffer options are read only for fields that have the @stream directive, so this indicates a planner bug
         Debug.Fail "Must be prevented by validation"
-        failwithf $"Expected Stream directive on field '%s{field.AliasOrName}', but it does not exist."
+        raise (InvalidOperationException $"Field '%s{field.AliasOrName}' is planned as streamed, but it has no @stream directive")
 
 let private isLiveField (field : Field) =
     field.Directives |> List.exists (fun d -> d.Name = "live")
@@ -195,17 +202,28 @@ let private (|Planned|Deferred|Streamed|Live|) field =
     elif isLiveField field then Live
     else Planned
 
+/// Returns the name of the execution kind for exception messages, without printing the whole planned subtree
+let private kindName (kind : ExecutionInfoKind) =
+    match kind with
+    | ResolveValue -> nameof ResolveValue
+    | SelectFields _ -> nameof SelectFields
+    | ResolveCollection _ -> nameof ResolveCollection
+    | ResolveAbstraction _ -> nameof ResolveAbstraction
+    | ResolveDeferred _ -> nameof ResolveDeferred
+    | ResolveStreamed _ -> nameof ResolveStreamed
+    | ResolveLive _ -> nameof ResolveLive
+
 let private getSelectionFrag = function
     | SelectFields(fragmentFields) -> fragmentFields
-    | _ ->
+    | kind ->
         Debug.Fail "Must be prevented by validation"
-        failwith "Expected a Selection!"
+        raise (InvalidOperationException $"Expected a fragment to be planned as {nameof SelectFields}, but it was planned as {kindName kind}")
 
 let private getAbstractionFrag = function
     | ResolveAbstraction(fragmentFields) -> fragmentFields
-    | _ ->
+    | kind ->
         Debug.Fail "Must be prevented by validation"
-        failwith "Expected an Abstraction!"
+        raise (InvalidOperationException $"Expected a fragment to be planned as {nameof ResolveAbstraction}, but it was planned as {kindName kind}")
 
 let rec private deepMerge (xs: ExecutionInfo list) (ys: ExecutionInfo list) =
      let rec merge (x: ExecutionInfo) (y: ExecutionInfo) =
@@ -216,7 +234,10 @@ let rec private deepMerge (xs: ExecutionInfo list) (ys: ExecutionInfo list) =
          | SelectFields(xs'), SelectFields(ys') -> { x with Kind = SelectFields(deepMerge xs' ys') }
          | _ ->
             Debug.Fail "Must be prevented by validation"
-            failwith "Cannot merge ExecutionInfos with different kinds!"
+            raise (
+                InvalidOperationException
+                    $"Cannot merge field '%s{x.Identifier}' planned as {kindName x.Kind} with the same field planned as {kindName y.Kind}"
+            )
      // Apply the merge to every conflict
      let xs' =
          xs
@@ -245,9 +266,12 @@ let rec private plan (ctx : PlanningContext) (info : ExecutionInfo) : ExecutionI
         { info with Kind = ResolveCollection inner }
     | Abstract _ ->
         planAbstraction ctx info.Ast.SelectionSet info (ref []) ValueNone
-    | _ ->
+    | returnDef ->
         Debug.Fail "Must be prevented by validation"
-        failwith "Invalid Return Type in Planning!"
+        raise (
+            NotSupportedException
+                $"Field '%s{info.Identifier}' returns the type definition '{returnDef}' implemented by '%s{returnDef.GetType().FullName}', which is not supported by query planning"
+        )
 
 and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) (info: ExecutionInfo) visitedFragments : ExecutionInfo =
     let parentDef = downcast info.ReturnDef
@@ -366,7 +390,7 @@ let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
     let fields =
         match resolvedInfo.Kind with
         | SelectFields tf -> tf
-        | x -> failwith $"Expected SelectFields Kind, but got %A{x}"
+        | kind -> raise (InvalidOperationException $"Expected the operation root to be planned as {nameof SelectFields}, but it was planned as {kindName kind}")
     let variables = planVariables ctx.Schema ctx.Operation
     match ctx.Operation.OperationType with
     | Query ->
@@ -389,7 +413,10 @@ let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
               Metadata = ctx.Metadata }
         | None ->
             Debug.Fail "Must be prevented by validation"
-            failwith "Tried to execute a GraphQL mutation on schema with no mutation type defined"
+            raise (
+                MalformedGQLQueryException
+                    "Operation to be executed is of type mutation, but no mutation root object was defined in current schema"
+            )
     | Subscription ->
         match ctx.Schema.Subscription with
         | Some subscriptionDef ->
@@ -402,4 +429,7 @@ let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
               Metadata = ctx.Metadata }
         | None ->
             Debug.Fail "Must be prevented by validation"
-            failwith "Tried to execute a GraphQL subscription on schema with no mutation type defined"
+            raise (
+                MalformedGQLQueryException
+                    "Operation to be executed is of type subscription, but no subscription root object was defined in the current schema"
+            )
