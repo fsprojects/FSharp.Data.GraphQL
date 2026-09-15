@@ -70,9 +70,8 @@ Target.create RestoreTarget <| fun _ ->
     |> Seq.iter (fun pattern -> DotNet.restore DotNetCli.setRestoreOptions pattern)
 
 
-let [<Literal>] BuildTarget = "Build"
-Target.create BuildTarget <| fun _ ->
-    "FSharp.Data.GraphQL.slnx"
+let buildSolution (solution : string) =
+    solution
     |> DotNet.build (fun options -> {
         options with
             Common = options.Common.WithRedirectOutput true |> DotNetCli.setVersion
@@ -88,6 +87,14 @@ Target.create BuildTarget <| fun _ ->
             }
     })
 
+let [<Literal>] BuildTarget = "Build"
+Target.create BuildTarget <| fun _ -> buildSolution "FSharp.Data.GraphQL.slnx"
+
+// The integration tests are not part of FSharp.Data.GraphQL.slnx and are neither restored nor built by BuildTarget.
+// They reference the client provider assembly produced by BuildTarget, so this must run after it.
+let [<Literal>] BuildIntegrationTestsTarget = "BuildIntegrationTests"
+Target.create BuildIntegrationTestsTarget <| fun _ -> buildSolution "FSharp.Data.GraphQL.Integration.slnx"
+
 let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
     CreateProcess.fromRawCommandLine "dotnet" $"run --project {project} --no-build --no-launch-profile --configuration {configurationString} --urls=http://localhost:%i{port}/"
     |> CreateProcess.withStandardInput (CreatePipe streamRef)
@@ -98,9 +105,14 @@ let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
 
     System.Threading.Thread.Sleep (2000)
 
-let runTests (project : string) =
-    let projectName = Path.GetFileNameWithoutExtension project
-    let resultsFileName = $"{projectName}.trx"
+let [<Literal>] TestResultsDirectory = "test-results"
+
+let runTests (project : string) (resultsFileName : string) (filter : string voption) =
+    let resultsFilePath = TestResultsDirectory </> resultsFileName
+    // A stale results file from a previous run must not hide a run that produced none
+    // (checked first, because File.Delete throws when the results directory does not exist yet)
+    if File.Exists resultsFilePath then
+        File.Delete resultsFilePath
 
     DotNet.test
         (fun options ->
@@ -108,9 +120,13 @@ let runTests (project : string) =
                 options with
                     NoBuild = true
                     Logger = Some $"trx;LogFileName={resultsFileName}"
-                    ResultsDirectory = Some "test-results"
+                    ResultsDirectory = Some TestResultsDirectory
                     Framework = Some DotNetMoniker
                     Configuration = configuration
+                    Common = {
+                        options.Common with
+                            CustomParams = filter |> ValueOption.map (fun filter -> $"--filter {filter}") |> ValueOption.toOption
+                    }
                     MSBuildParams = {
                         options.MSBuildParams with
                             DisableInternalBinLog = true
@@ -125,6 +141,11 @@ let runTests (project : string) =
             |> _.WithRedirectOutput(true)
             |> _.WithCommon(DotNetCli.setVersion))
         project
+
+    // `dotnet test --no-build` on a project that was never restored does not import the test SDK,
+    // so it runs nothing and still exits with 0. The missing results file is the only trace of that.
+    if not (File.Exists resultsFilePath) then
+        failwith $"'dotnet test {project}' produced no test results at '{resultsFilePath}'. Was the project restored and built?"
 
 let integrationTestServerProjectPath =
     "tests"
@@ -169,36 +190,10 @@ let integrationTestsProjectPath =
 
 let [<Literal>] UpdateIntrospectionFileTarget = "UpdateIntrospectionFile"
 Target.create UpdateIntrospectionFileTarget <| fun _ ->
-    let projectName = Path.GetFileNameWithoutExtension integrationTestsProjectPath
-    let resultsFileName = $"{projectName}.trx"
-
-    DotNet.test
-        (fun options ->
-            {
-                options with
-                    NoBuild = true
-                    Logger = Some $"trx;LogFileName={resultsFileName}"
-                    ResultsDirectory = Some "test-results"
-                    Framework = Some DotNetMoniker
-                    Configuration = configuration
-                    Common = {
-                        options.Common with
-                            CustomParams = Some "--filter FullyQualifiedName~IntrospectionUpdateTests"
-                    }
-                    MSBuildParams = {
-                        options.MSBuildParams with
-                            DisableInternalBinLog = true
-                            Verbosity = Some Normal
-                            Properties = [
-                                if embedAll then
-                                    ("DebugType", "embedded")
-                                    ("EmbedAllSources", "true")
-                            ]
-                    }
-            }
-            |> _.WithRedirectOutput(true)
-            |> _.WithCommon(DotNetCli.setVersion))
+    runTests
         integrationTestsProjectPath
+        "FSharp.Data.GraphQL.IntegrationTests.IntrospectionUpdate.trx"
+        (ValueSome "FullyQualifiedName~IntrospectionUpdateTests")
 
 let unitTestsProjectPath =
     "tests"
@@ -207,7 +202,7 @@ let unitTestsProjectPath =
 
 let [<Literal>] RunUnitTestsTarget = "RunUnitTests"
 Target.create RunUnitTestsTarget <| fun _ ->
-    runTests unitTestsProjectPath
+    runTests unitTestsProjectPath "FSharp.Data.GraphQL.Tests.trx" ValueNone
 
 let prepareDocGen () =
     Shell.rm "docs/release-notes.md"
@@ -384,6 +379,7 @@ Target.create "PackAndPush" ignore
 ==> RestoreTarget
 ==> BuildTarget
 ==> RunUnitTestsTarget
+==> BuildIntegrationTestsTarget
 ==> UpdateIntrospectionFileTarget
 ==> "All"
 =?> (GenerateDocsTarget, Environment.environVar "GITHUB_ACTIONS" = "True")
