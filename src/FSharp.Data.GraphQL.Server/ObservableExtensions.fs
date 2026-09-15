@@ -42,26 +42,46 @@ module internal Observable =
     }
 
     /// <summary>
+    /// Disposes the enumerator, if one was acquired, and returns the failure to report: the one captured while
+    /// enumerating, or the one raised by the disposal itself when there was none before.
+    /// </summary>
+    let internal disposeEnumerator (enumerator : IAsyncEnumerator<'T> voption) (failure : exn voption) : Task<exn voption> = task {
+        match enumerator with
+        | ValueNone -> return failure
+        | ValueSome enumerator ->
+            try
+                do! enumerator.DisposeAsync ()
+                return failure
+            with ex ->
+                // An enumeration failure is the more useful one to report, the disposal failure is likely its consequence
+                return failure |> ValueOption.orElse (ValueSome ex)
+    }
+
+    /// <summary>
     /// Creates a cold observable, which enumerates the asynchronous sequence for every subscription.
     /// </summary>
     /// <remarks>
     /// Disposing the subscription cancels the enumeration and disposes the enumerator.
-    /// An exception raised by the sequence is delivered through <see cref="IObserver{T}.OnError"/>.
+    /// An exception raised by the sequence, when acquiring or disposing its enumerator as well as while enumerating,
+    /// is delivered through <see cref="IObserver{T}.OnError"/>.
     /// </remarks>
     let ofAsyncEnumerable (source : IAsyncEnumerable<'T>) : IObservable<'T> =
         let enumerate (observer : IObserver<'T>) (cancellationToken : CancellationToken) : Task = task {
-            let enumerator = source.GetAsyncEnumerator cancellationToken
+            let mutable enumerator = ValueNone
             let mutable failure = ValueNone
             try
+                // Acquired inside the try, because a source may throw when asked for its enumerator
+                let acquired = source.GetAsyncEnumerator cancellationToken
+                enumerator <- ValueSome acquired
                 let mutable hasNext = true
                 // The token is checked explicitly, because a sequence is not obliged to observe the token it was given
                 while hasNext && not cancellationToken.IsCancellationRequested do
-                    let! moved = enumerator.MoveNextAsync ()
-                    if moved then observer.OnNext enumerator.Current
+                    let! moved = acquired.MoveNextAsync ()
+                    if moved then observer.OnNext acquired.Current
                     else hasNext <- false
             with ex ->
                 failure <- ValueSome ex
-            do! enumerator.DisposeAsync ()
+            let! failure = disposeEnumerator enumerator failure
             match failure with
             // A failure caused by disposing the subscription has no observer left to be delivered to
             | ValueSome ex when not cancellationToken.IsCancellationRequested -> observer.OnError ex
@@ -76,8 +96,9 @@ module internal Observable =
     /// </summary>
     /// <remarks>
     /// A result produced synchronously is emitted immediately, keeping it in the order it was pulled. An exception
-    /// raised while enumerating the source is turned into a result with <paramref name="onFailure"/> and emitted
-    /// only after every item pulled before it, so it can never overtake a result that is still being resolved.
+    /// raised by the source, when acquiring or disposing its enumerator as well as while enumerating, is turned into
+    /// a result with <paramref name="onFailure"/> and emitted only after every item pulled before it, so it can never
+    /// overtake a result that is still being resolved.
     /// Disposing the subscription cancels the enumeration; resolutions already started are still awaited and, if
     /// still relevant, emitted, but no further item is pulled.
     /// </remarks>
@@ -94,18 +115,21 @@ module internal Observable =
             let emit (result : 'Result) =
                 lock sync (fun () -> if not cancellationToken.IsCancellationRequested then observer.OnNext result)
             let pending = ResizeArray<Task> ()
-            let enumerator = source.GetAsyncEnumerator cancellationToken
+            let mutable enumerator = ValueNone
             let mutable failure = ValueNone
             try
+                // Acquired inside the try, because a source may throw when asked for its enumerator
+                let acquired = source.GetAsyncEnumerator cancellationToken
+                enumerator <- ValueSome acquired
                 let mutable index = 0
                 let mutable hasNext = true
                 // The token is checked explicitly, because a sequence is not obliged to observe the token it was given
                 while hasNext && not cancellationToken.IsCancellationRequested do
                     do! slots.WaitAsync cancellationToken
-                    let! moved = enumerator.MoveNextAsync ()
+                    let! moved = acquired.MoveNextAsync ()
                     if moved then
                         let itemIndex = index
-                        let item = enumerator.Current
+                        let item = acquired.Current
                         index <- index + 1
                         match resolve itemIndex item with
                         // Items resolved synchronously are emitted immediately, which keeps them in the source order
@@ -126,7 +150,7 @@ module internal Observable =
             with ex ->
                 failure <- ValueSome ex
             // Captured items no longer need the enumerator, so it is disposed before waiting for their resolutions
-            do! enumerator.DisposeAsync ()
+            let! failure = disposeEnumerator enumerator failure
             do! Task.WhenAll pending
             match failure with
             // A failure caused by disposing the subscription has no observer left to be delivered to
@@ -159,18 +183,21 @@ module internal AsyncEnumerableExtensions =
         let! cancellationToken = Async.CancellationToken
         let enumerate () : Task<Result<'T[], exn>> = task {
             let items = ResizeArray<'T> ()
-            let enumerator = source.GetAsyncEnumerator cancellationToken
+            let mutable enumerator = ValueNone
             let mutable failure = ValueNone
             try
+                // Acquired inside the try, because a source may throw when asked for its enumerator
+                let acquired = source.GetAsyncEnumerator cancellationToken
+                enumerator <- ValueSome acquired
                 let mutable hasNext = true
                 while hasNext do
                     cancellationToken.ThrowIfCancellationRequested ()
-                    let! moved = enumerator.MoveNextAsync ()
-                    if moved then items.Add enumerator.Current
+                    let! moved = acquired.MoveNextAsync ()
+                    if moved then items.Add acquired.Current
                     else hasNext <- false
             with ex ->
                 failure <- ValueSome ex
-            do! enumerator.DisposeAsync ()
+            let! failure = Observable.disposeEnumerator enumerator failure
             match failure with
             | ValueSome ex -> return Error ex
             | ValueNone -> return Ok (items.ToArray ())

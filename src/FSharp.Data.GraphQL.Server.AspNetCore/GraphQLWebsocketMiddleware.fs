@@ -145,10 +145,15 @@ type GraphQLWebSocketMiddleware<'Root>
                         |> GraphQLSubscriptionsManagement.removeSubscription (id))
             )
 
-        let unsubscriber = streamSource.Subscribe (observer)
+        // Registered before subscribing, so a stream that completes synchronously (from inside Subscribe) still
+        // finds the id when its onCompleted callback above runs; only then is it safe to remove and dispose it.
+        // Assigning Disposable on an already-disposed SingleAssignmentDisposable disposes the assigned value too.
+        let placeholder = new System.Reactive.Disposables.SingleAssignmentDisposable ()
 
         subscriptions
-        |> GraphQLSubscriptionsManagement.addSubscription (id, unsubscriber, (fun _ -> ()))
+        |> GraphQLSubscriptionsManagement.addSubscription (id, placeholder, (fun _ -> ()))
+
+        placeholder.Disposable <- streamSource.Subscribe (observer)
 
     let tryToGracefullyCloseSocket (code, message) theSocket =
         if theSocket |> canCloseSocket then
@@ -177,7 +182,10 @@ type GraphQLWebSocketMiddleware<'Root>
             | SubscriptionResult output -> SubscriptionExecutionResult.Create (output, []) |> sendOutput id
             | SubscriptionErrors (output, errors) ->
                 logger.LogWarning ("Subscription errors: {subscriptionErrors}", (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}"))))
-                SubscriptionExecutionResult.CreateErrors errors |> sendOutput id
+                // The executor may still have resolved partial data alongside the field errors; forward it as-is
+                match output with
+                | null -> SubscriptionExecutionResult.CreateErrors errors |> sendOutput id
+                | output -> SubscriptionExecutionResult.Create (output, errors) |> sendOutput id
 
         // Incremental payloads are sent as soon as they are produced, with their path inside the initial result,
         // so a client can merge them. The completion marker becomes a final payload with hasNext set to false.
@@ -202,7 +210,10 @@ type GraphQLWebSocketMiddleware<'Root>
                 do! SubscriptionExecutionResult.CreateInitial (data, errors) |> sendOutput id
                 (subscriptions, socket, observableOutput |> Observable.withCompletionMarker, serializerOptions)
                 |> addClientSubscription id sendDeferredResponseOutput
-            | Direct (data, _) -> do! SubscriptionExecutionResult.Create (data, []) |> sendOutput id
+            | Direct (data, errors) ->
+                if not errors.IsEmpty then
+                    logger.LogWarning ("Request errors:\n{errors}", errors)
+                do! SubscriptionExecutionResult.Create (data, errors) |> sendOutput id
             | RequestError problemDetails ->
                 logger.LogWarning("Request errors:\n{errors}", problemDetails)
                 do! SubscriptionExecutionResult.CreateErrors problemDetails |> sendOutput id
