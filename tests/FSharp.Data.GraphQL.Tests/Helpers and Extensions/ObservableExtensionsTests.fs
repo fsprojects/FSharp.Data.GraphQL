@@ -404,6 +404,28 @@ let ``ofAsyncEnumerableResolved should emit the failure through onFailure after 
     sub.Received |> seqEquals [ 1; -1 ]
 
 [<Fact>]
+let ``ofAsyncEnumerableResolved should stop and deliver the failure when a resolution fails`` () =
+    // Regression test: a failed resolution used to leave its concurrency slot held forever, so with
+    // maxConcurrency = 1 the enumeration would deadlock instead of ever reaching onFailure or OnCompleted
+    let resolve _ (_ : int) = AsyncVal.Failure (exn "Boom resolving")
+    use sub = Observable.ofAsyncEnumerableResolved 1 resolve (fun _ -> -1) (asyncItems [ 1 ]) |> Observer.create
+    sub.WaitCompleted (timeout = ms 10)
+    sub.Received |> seqEquals [ -1 ]
+
+[<Fact>]
+let ``ofAsyncEnumerableResolved should release the slot and stop when the observer throws`` () =
+    // Regression test: an observer throwing while a background resolution is delivered used to skip the
+    // slot release entirely, deadlocking the enumeration the same way a failed resolution did
+    let resolve _ (n : int) = async { return n } |> AsyncVal.ofAsync
+    let onReceived (_ : TestObserver<int>) (value : int) =
+        if value = 1 then failwith "Boom in observer"
+    use sub =
+        Observable.ofAsyncEnumerableResolved 1 resolve (fun _ -> -1) (asyncItems [ 1 ])
+        |> Observer.createWithCallback onReceived
+    sub.WaitCompleted (timeout = ms 10)
+    sub.Received |> seqEquals [ 1; -1 ]
+
+[<Fact>]
 let ``withCompletionMarker should emit the items and then the marker when the source completes`` () =
     use sub = Observable.ofSeq [ 1; 2 ] |> Observable.withCompletionMarker |> Observer.create
     sub.WaitCompleted(timeout = ms 10)

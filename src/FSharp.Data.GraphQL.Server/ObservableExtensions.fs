@@ -98,7 +98,10 @@ module internal Observable =
     /// A result produced synchronously is emitted immediately, keeping it in the order it was pulled. An exception
     /// raised by the source, when acquiring or disposing its enumerator as well as while enumerating, is turned into
     /// a result with <paramref name="onFailure"/> and emitted only after every item pulled before it, so it can never
-    /// overtake a result that is still being resolved.
+    /// overtake a result that is still being resolved. A resolution that fails, or an observer that throws while
+    /// a result is delivered, stops the enumeration the same way: the failure is delivered through
+    /// <paramref name="onFailure"/> once every resolution already started has settled.
+    /// Only the resolutions in flight are tracked, so a long-running source does not retain what it already delivered.
     /// Disposing the subscription cancels the enumeration; resolutions already started are still awaited and, if
     /// still relevant, emitted, but no further item is pulled.
     /// </remarks>
@@ -114,7 +117,35 @@ module internal Observable =
             let sync = obj ()
             let emit (result : 'Result) =
                 lock sync (fun () -> if not cancellationToken.IsCancellationRequested then observer.OnNext result)
-            let pending = ResizeArray<Task> ()
+            // Only the number of resolutions still in flight is tracked, not the tasks themselves, so a long-running
+            // source does not retain one task per item; the last resolution to settle after the enumeration has ended
+            // completes drained. Ref cells, because the resolutions run on other threads.
+            let inFlight = ref 0
+            let enumerationEnded = ref false
+            let drained = TaskCompletionSource ()
+            let resolutionFailure = ref ValueNone
+            let failed () = lock sync (fun () -> resolutionFailure.Value.IsSome)
+            let settle () =
+                lock sync (fun () ->
+                    inFlight.Value <- inFlight.Value - 1
+                    if enumerationEnded.Value && inFlight.Value = 0 then drained.TrySetResult () |> ignore)
+            let resolveInBackground (pendingResult : AsyncVal<'Result>) =
+                lock sync (fun () -> inFlight.Value <- inFlight.Value + 1)
+                task {
+                    try
+                        try
+                            let! result = pendingResult |> AsyncVal.toTask
+                            emit result
+                        with ex ->
+                            // The first failure stops the enumeration; it is delivered once every started resolution has settled
+                            lock sync (fun () -> if resolutionFailure.Value.IsNone then resolutionFailure.Value <- ValueSome ex)
+                    finally
+                        // Released whatever happened, otherwise the enumeration would wait for this slot forever.
+                        // Released before settling, because settling lets the enumeration finish and dispose the semaphore.
+                        slots.Release () |> ignore
+                        settle ()
+                }
+                |> ignore
             let mutable enumerator = ValueNone
             let mutable failure = ValueNone
             try
@@ -124,7 +155,7 @@ module internal Observable =
                 let mutable index = 0
                 let mutable hasNext = true
                 // The token is checked explicitly, because a sequence is not obliged to observe the token it was given
-                while hasNext && not cancellationToken.IsCancellationRequested do
+                while hasNext && not cancellationToken.IsCancellationRequested && not (failed ()) do
                     do! slots.WaitAsync cancellationToken
                     let! moved = acquired.MoveNextAsync ()
                     if moved then
@@ -134,16 +165,11 @@ module internal Observable =
                         match resolve itemIndex item with
                         // Items resolved synchronously are emitted immediately, which keeps them in the source order
                         | Immediate result ->
-                            emit result
-                            slots.Release () |> ignore
-                        | pendingResult ->
-                            pending.Add (
-                                task {
-                                    let! result = pendingResult |> AsyncVal.toTask
-                                    emit result
-                                    slots.Release () |> ignore
-                                }
-                            )
+                            try
+                                emit result
+                            finally
+                                slots.Release () |> ignore
+                        | pendingResult -> resolveInBackground pendingResult
                     else
                         slots.Release () |> ignore
                         hasNext <- false
@@ -151,8 +177,12 @@ module internal Observable =
                 failure <- ValueSome ex
             // Captured items no longer need the enumerator, so it is disposed before waiting for their resolutions
             let! failure = disposeEnumerator enumerator failure
-            do! Task.WhenAll pending
-            match failure with
+            // Resolutions still in flight neither need the enumerator nor the loop, only their slots
+            lock sync (fun () ->
+                enumerationEnded.Value <- true
+                if inFlight.Value = 0 then drained.TrySetResult () |> ignore)
+            do! drained.Task
+            match failure |> ValueOption.orElse resolutionFailure.Value with
             // A failure caused by disposing the subscription has no observer left to be delivered to
             | ValueSome ex when not cancellationToken.IsCancellationRequested -> emit (onFailure ex)
             | _ -> ()
