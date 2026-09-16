@@ -275,7 +275,7 @@ let ``Resolver error`` () =
         ]
     let expectedDeferred =
         DeferredErrors (
-            ValueNone,
+            null,
             [ GQLProblemDetails.CreateWithKind ("Resolver error!", Execution, [ box "testData"; "resolverError"; "value" ]) ],
             [ "testData"; "resolverError" ]
         )
@@ -292,7 +292,7 @@ let ``Resolver error`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
-        sub.Received |> single |> equals expectedDeferred
+        (sub.Received |> withoutCompleted) |> single |> equals expectedDeferred
 
 [<Fact>]
 let ``Resolver list error`` () =
@@ -304,13 +304,13 @@ let ``Resolver list error`` () =
         ]
     let expectedDeferred1 =
         DeferredErrors (
-            ValueNone,
+            null,
             [ GQLProblemDetails.CreateWithKind ("Resolver error!", Execution, [ box "testData"; "resolverListError"; 0; "value" ]) ],
             [ box "testData"; "resolverListError"; 0 ]
         )
     let expectedDeferred2 =
         DeferredErrors (
-            ValueNone,
+            null,
             [ GQLProblemDetails.CreateWithKind ("Resolver error!", Execution, [ box "testData"; "resolverListError"; 1; "value" ]) ],
             [ box "testData"; "resolverListError"; 1 ]
         )
@@ -327,7 +327,7 @@ let ``Resolver list error`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted(2)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -343,7 +343,7 @@ let ``Nullable error`` () =
         ]
     let expectedDeferred =
         DeferredErrors (
-            ValueNone,
+            null,
             [ GQLProblemDetails.CreateWithKind ("Non-Null field value resolved as a null!", Execution, [ box "testData"; "nullableError"; "value" ]) ],
             [ "testData"; "nullableError" ]
         )
@@ -360,7 +360,7 @@ let ``Nullable error`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
-        sub.Received |> single |> equals expectedDeferred
+        (sub.Received |> withoutCompleted) |> single |> equals expectedDeferred
 
 [<Fact>]
 let ``Single Root object field - Defer and Stream`` () =
@@ -392,7 +392,7 @@ let ``Single Root object field - Defer and Stream`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
-        sub.Received |> single |> equals expectedDeferred
+        (sub.Received |> withoutCompleted) |> single |> equals expectedDeferred
 
 [<Fact>]
 let ``Single Root object list field - Defer`` () =
@@ -429,7 +429,7 @@ let ``Single Root object list field - Defer`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
-        sub.Received |> single |> equals expectedDeferred
+        (sub.Received |> withoutCompleted) |> single |> equals expectedDeferred
 
 [<Fact>]
 let ``Single Root object list field - Stream`` () =
@@ -471,7 +471,7 @@ let ``Single Root object list field - Stream`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted(2)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -503,7 +503,7 @@ let ``Interface field - Defer`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
-        sub.Received |> single |> equals expectedDeferred
+        (sub.Received |> withoutCompleted) |> single |> equals expectedDeferred
 
 [<Fact>]
 let ``Interface list field - Defer`` () =
@@ -538,7 +538,7 @@ let ``Interface list field - Defer`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted(2)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -577,8 +577,8 @@ let ``Each live result should be sent as soon as it is computed`` () =
         empty errors
         data |> equals (upcast expectedDirect)
         use sub = deferred |> Observer.createWithCallback (fun sub _ ->
-            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
-            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
+            if Seq.length (sub.Received |> withoutCompleted) = 1 then mre1.Set() |> ignore
+            elif Seq.length (sub.Received |> withoutCompleted) = 2 then mre2.Set() |> ignore)
         waitFor hasSubscribers 10 "Timeout while waiting for subscribers on GQLResponse"
         updateLiveData()
         // The second result is a delayed async field, which is set to compute the value for 5 seconds.
@@ -588,7 +588,7 @@ let ``Each live result should be sent as soon as it is computed`` () =
         then fail "Timeout while waiting for first deferred result"
         if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> itemEquals 0 expectedLive
         |> itemEquals 1 expectedDeferred
@@ -619,7 +619,7 @@ let ``Live Query`` () =
         waitFor hasSubscribers 10 "Timeout while waiting for subscribers on GQLResponse"
         updateLiveData()
         sub.WaitForItem()
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> contains expectedLive
         |> ignore
@@ -659,7 +659,7 @@ let ``Parallel Defer`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted(2)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -711,7 +711,7 @@ let ``Parallel Stream`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted(2)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -748,7 +748,7 @@ let ``Inner Object List Defer`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
-        sub.Received |> single |> equals expectedDeferred
+        (sub.Received |> withoutCompleted) |> single |> equals expectedDeferred
 
 [<Fact>]
 let ``Inner Object List Stream`` () =
@@ -781,7 +781,7 @@ let ``Inner Object List Stream`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
-        sub.Received |> single |> equals expectedDeferred
+        (sub.Received |> withoutCompleted) |> single |> equals expectedDeferred
 
 [<Fact>]
 let ``Nested Inner Object List Defer`` () =
@@ -829,7 +829,7 @@ let ``Nested Inner Object List Defer`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted(2)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -886,7 +886,7 @@ let ``Nested Inner Object List Stream`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted(3)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -915,7 +915,7 @@ let ``Simple Defer and Stream`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
-        sub.Received |> single |> equals expectedDeferred
+        (sub.Received |> withoutCompleted) |> single |> equals expectedDeferred
 
 [<Fact>]
 let ``List Defer``() =
@@ -961,7 +961,7 @@ let ``List Defer``() =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
-        sub.Received |> single |> equals expectedDeferred
+        (sub.Received |> withoutCompleted) |> single |> equals expectedDeferred
 
 [<Fact>]
 let ``List Fragment Defer and Stream - Exclusive``() =
@@ -1003,7 +1003,7 @@ let ``List Fragment Defer and Stream - Exclusive``() =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
-        sub.Received |> single |> equals expectedDeferred
+        (sub.Received |> withoutCompleted) |> single |> equals expectedDeferred
 
 [<Fact>]
 let ``List Fragment Defer and Stream - Common``() =
@@ -1045,7 +1045,7 @@ let ``List Fragment Defer and Stream - Common``() =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
-        sub.Received |> single |> equals expectedDeferred
+        (sub.Received |> withoutCompleted) |> single |> equals expectedDeferred
 
 [<Fact>]
 let ``List inside root - Stream``() =
@@ -1089,7 +1089,7 @@ let ``List inside root - Stream``() =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted(2)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -1143,7 +1143,7 @@ let ``List Stream``() =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted(2)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -1193,8 +1193,8 @@ let ``Should buffer stream list correctly by timing information``() =
         empty errors
         data |> equals (upcast expectedDirect)
         use sub = deferred |> Observer.createWithCallback (fun sub _ ->
-            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
-            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
+            if Seq.length (sub.Received |> withoutCompleted) = 1 then mre1.Set() |> ignore
+            elif Seq.length (sub.Received |> withoutCompleted) = 2 then mre2.Set() |> ignore)
         // The first result is a delayed async field, which is set to compute the value for 5 seconds.
         // The second result is also a delayed async field, computed for 1 second.
         // Third result is a instant returning async field.
@@ -1207,7 +1207,7 @@ let ``Should buffer stream list correctly by timing information``() =
         if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second Deferred GQLResponse"
         sub.WaitCompleted(timeout = ms 10)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
@@ -1254,8 +1254,8 @@ let ``Should buffer stream list correctly by count information``() =
         empty errors
         data |> equals (upcast expectedDirect)
         use sub = deferred |> Observer.createWithCallback (fun sub _ ->
-            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
-            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
+            if Seq.length (sub.Received |> withoutCompleted) = 1 then mre1.Set() |> ignore
+            elif Seq.length (sub.Received |> withoutCompleted) = 2 then mre2.Set() |> ignore)
         // The first result is a delayed async field, which is set to compute the value for 5 seconds.
         // The second result is also a delayed async field, computed for 1 second.
         // Third result is a instant returning async field.
@@ -1269,7 +1269,7 @@ let ``Should buffer stream list correctly by count information``() =
         if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second Deferred GQLResponse"
         sub.WaitCompleted(timeout = ms 10)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
@@ -1312,7 +1312,7 @@ let ``Union Defer`` () =
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
-        sub.Received |> single |> equals expectedDeferred
+        (sub.Received |> withoutCompleted) |> single |> equals expectedDeferred
 
 [<Fact>]
 let ``Each deferred result should be sent as soon as it is computed``() =
@@ -1341,8 +1341,8 @@ let ``Each deferred result should be sent as soon as it is computed``() =
         empty errors
         data |> equals (upcast expectedDirect)
         use sub = deferred |> Observer.createWithCallback (fun sub _ ->
-            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
-            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
+            if Seq.length (sub.Received |> withoutCompleted) = 1 then mre1.Set() |> ignore
+            elif Seq.length (sub.Received |> withoutCompleted) = 2 then mre2.Set() |> ignore)
         // The second result is a delayed async field, which is set to compute the value for 5 seconds.
         // The first result should come almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 3 seconds, the test has failed.
@@ -1351,7 +1351,7 @@ let ``Each deferred result should be sent as soon as it is computed``() =
         if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
         sub.WaitCompleted(timeout = ms 10)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
@@ -1388,8 +1388,8 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
         empty errors
         data |> equals (upcast expectedDirect)
         use sub = deferred |> Observer.createWithCallback (fun sub _ ->
-            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
-            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
+            if Seq.length (sub.Received |> withoutCompleted) = 1 then mre1.Set() |> ignore
+            elif Seq.length (sub.Received |> withoutCompleted) = 2 then mre2.Set() |> ignore)
         // The first result is a delayed async field, which is set to compute the value for 5 seconds.
         // The second result should come first, almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 4 seconds, the test has failed.
@@ -1398,7 +1398,7 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
         if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
         sub.WaitCompleted(timeout = ms 10)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
@@ -1430,8 +1430,8 @@ let ``Each streamed result should be sent as soon as it is computed - async seq`
         empty errors
         data |> equals (upcast expectedDirect)
         use sub = deferred |> Observer.createWithCallback (fun sub _ ->
-            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
-            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
+            if Seq.length (sub.Received |> withoutCompleted) = 1 then mre1.Set() |> ignore
+            elif Seq.length (sub.Received |> withoutCompleted) = 2 then mre2.Set() |> ignore)
         // The first result is a delayed async field, which is set to compute the value for 5 seconds.
         // The second result should come first, almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 4 seconds, test has failed.
@@ -1440,7 +1440,7 @@ let ``Each streamed result should be sent as soon as it is computed - async seq`
         if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
         sub.WaitCompleted(timeout = ms 10)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2

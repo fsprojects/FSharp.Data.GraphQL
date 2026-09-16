@@ -364,44 +364,24 @@ type GraphQLWebSocketMiddleware<'Root>
                     SubscriptionExecutionResult.Create (output, errors)
                     |> sendOutput id
 
-        // Incremental payloads are sent as soon as they are produced, with their path inside the initial result,
-        // so a client can merge them. The completion marker becomes a final payload with hasNext set to false.
-        // A batched payload (path ending in a list of indices) is split into one payload per item first, since a
-        // client cannot merge a payload that isn't addressed by a single index.
-        let sendDeferredResponseOutput id deferredResult : Task = task {
-            match deferredResult with
-            | ValueSome (DeferredResult (data, BatchPath (fieldPath, indices))) ->
-                for itemData, _, itemPath in splitBatch fieldPath indices data [] do
-                    do!
-                        SubscriptionExecutionResult.CreateIncremental (itemData, [], itemPath)
-                        |> sendOutput id
-            | ValueSome (DeferredResult (data, path)) ->
-                do!
-                    SubscriptionExecutionResult.CreateIncremental (data, [], path)
-                    |> sendOutput id
-            | ValueSome (DeferredErrors (ValueSome data, errors, BatchPath (fieldPath, indices))) ->
+        // Incremental payloads are sent as soon as they are produced, translated to the pending/incremental/
+        // completed/hasNext wire format by an IncrementalDelivery scoped to this one subscription.
+        let sendDeferredResponseOutput (delivery : IncrementalDelivery) id event : Task = task {
+            match event with
+            | ValueSome (DeferredErrors (_, errors, _) as event) ->
                 logger.LogWarning (
                     "Deferred response errors: {deferredErrors}",
                     // TODO: Use StringBuilder
                     (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
                 )
-                for itemData, itemErrors, itemPath in splitBatch fieldPath indices data errors do
-                    do!
-                        SubscriptionExecutionResult.CreateIncremental (itemData, itemErrors, itemPath)
-                        |> sendOutput id
-            | ValueSome (DeferredErrors (data, errors, path)) ->
-                logger.LogWarning (
-                    "Deferred response errors: {deferredErrors}",
-                    // TODO: Use StringBuilder
-                    (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
-                )
-                do!
-                    SubscriptionExecutionResult.CreateIncremental (data |> ValueOption.toObj, errors, path)
-                    |> sendOutput id
-            | ValueNone ->
-                do!
-                    SubscriptionExecutionResult.CreateCompleted ()
-                    |> sendOutput id
+                match delivery.Apply event with
+                | ValueSome payload -> do! sendOutput id payload
+                | ValueNone -> ()
+            | ValueSome event ->
+                match delivery.Apply event with
+                | ValueSome payload -> do! sendOutput id payload
+                | ValueNone -> ()
+            | ValueNone -> do! delivery.Finish () |> sendOutput id
         }
 
         let applyPlanExecutionResult (id : SubscriptionId) (socket) (executionResult : GQLExecutionResult) : Task = task {
@@ -410,11 +390,14 @@ type GraphQLWebSocketMiddleware<'Root>
                 (subscriptions, observableOutput, sendMsg)
                 |> addClientSubscription id sendSubscriptionResponseOutput
             | Deferred (data, errors, observableOutput) ->
+                // No field is pre-announced: a client accepts a pending entry in any payload, not only the initial
+                // one, so every field is instead announced lazily, in the same payload as its first delivery.
+                let delivery = IncrementalDelivery ()
                 do!
-                    SubscriptionExecutionResult.CreateInitial (data, errors)
+                    SubscriptionExecutionResult.CreateInitial (data, errors, [])
                     |> sendOutput id
                 (subscriptions, observableOutput |> Observable.withCompletionMarker, sendMsg)
-                |> addClientSubscription id sendDeferredResponseOutput
+                |> addClientSubscription id (sendDeferredResponseOutput delivery)
             | Direct (data, errors) ->
                 // An execution result, whose data is null when a non-null root field failed during execution;
                 // still a result, so it is sent as Next + Complete like any other, not as the terminal Error

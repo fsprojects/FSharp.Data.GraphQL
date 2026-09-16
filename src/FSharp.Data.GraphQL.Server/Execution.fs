@@ -154,17 +154,30 @@ let private streamListError name tyName path ctx = resolverError path ctx (GQLMe
 
 let private resolved name v : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = KeyValuePair(name, box v) |> ResolverResult.data |> AsyncVal.wrap
 
-let deferResults path (res : ResolverResult<obj>) : IObservable<GQLDeferredResponseContent> =
+/// The result at path itself, not including any of its own nested deferred/streamed fields.
+let private ownDeferredResult path (res : ResolverResult<obj>) : IObservable<GQLDeferredResponseContent> * IObservable<GQLDeferredResponseContent> option =
     let formattedPath = normalizeErrorPath path
     match res with
-    | Ok (data, deferred, errs) ->
-        let deferredData =
+    | Ok (data, nested, errs) ->
+        let ownResult =
             match errs with
             | [] -> DeferredResult (data, formattedPath)
-            | _ -> DeferredErrors (data |> ValueOption.ofObj, errs, formattedPath)
+            | _ -> DeferredErrors (data, errs, formattedPath)
             |> Observable.singleton
-        Option.foldBack Observable.concat deferred deferredData
-    | Error errs -> Observable.singleton <| DeferredErrors (ValueNone, errs, formattedPath)
+        ownResult, nested
+    | Error errs -> Observable.singleton (DeferredErrors (null, errs, formattedPath)), None
+
+let deferResults path (res : ResolverResult<obj>) : IObservable<GQLDeferredResponseContent> =
+    let ownResult, nested = ownDeferredResult path res
+    Option.foldBack Observable.concat nested ownResult
+
+/// As <see cref="deferResults"/>, followed by a <see cref="DeferredCompleted"/> for path once its own result and
+/// all of its nested deferred/streamed fields have been delivered.
+let private deferResultsCompleted path (res : ResolverResult<obj>) : IObservable<GQLDeferredResponseContent> =
+    let ownResult, nested = ownDeferredResult path res
+    let completed = Observable.singleton (DeferredCompleted (normalizeErrorPath path))
+    let ownResultCompleted = ownResult |> Observable.concat completed
+    Option.foldBack Observable.concat nested ownResultCompleted
 
 /// Collect together an array of results using the appropriate execution strategy.
 let collectFields (strategy : ExecutionStrategy) (rs : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> []) : AsyncVal<ResolverResult<KeyValuePair<string, obj> []>> = asyncVal {
@@ -282,7 +295,7 @@ and deferred (inputContext : InputExecutionContextProvider) (ctx : ResolveFieldC
     let deferred =
         executeResolvers inputContext ctx path parent (toOption value |> AsyncVal.wrap)
         |> Observable.ofAsyncVal
-        |> Observable.bind(ResolverResult.mapValue(_.Value) >> deferResults path)
+        |> Observable.bind(ResolverResult.mapValue(_.Value) >> deferResultsCompleted path)
     ResolverResult.defered (KeyValuePair (info.Identifier, null)) deferred |> AsyncVal.wrap
 
 and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (inputContext : InputExecutionContextProvider) (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
@@ -327,7 +340,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
             ||> List.foldBack (fun event struct (items, failures) ->
                 match event with
                 | StreamedItem (index, result) -> struct (index, result) :: items, failures
-                | StreamFailure error -> items, DeferredErrors (ValueNone, resolverError path ctx error, normalizeErrorPath path) :: failures)
+                | StreamFailure error -> items, DeferredErrors (null, resolverError path ctx error, normalizeErrorPath path) :: failures)
         match failures with
         | [] -> collectItems items
         | failures -> collectItems items |> Observable.concat (Observable.ofSeq failures)
@@ -341,6 +354,10 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
             | ValueNone, ValueNone -> Observable.map(List.singleton) events
         buffered
         |> Observable.bind collectBuffered
+
+    /// A DeferredCompleted for path once every item, or the source's own failure, has been delivered.
+    let withStreamCompleted (events : IObservable<GQLDeferredResponseContent>) =
+        events |> Observable.concat (Observable.singleton (DeferredCompleted (normalizeErrorPath path)))
 
     let resolveItem index item = asyncVal {
         let! result = executeResolvers inputContext innerCtx (box index :: path) parent (toOption item |> AsyncVal.wrap)
@@ -356,6 +373,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
             // each emitted as soon as it is resolved; a failure of the source itself is emitted last
             |> Observable.ofAsyncEnumerableResolved fieldValue.MaxConcurrency resolveStreamedItem StreamFailure
             |> buffer
+            |> withStreamCompleted
         ResolverResult.defered (KeyValuePair (name, box [])) stream |> AsyncVal.wrap
     | :? System.Collections.IEnumerable as enumerable ->
         let stream : IObservable<GQLDeferredResponseContent> =
@@ -366,6 +384,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
             |> Observable.ofAsyncValSeq
             |> Observable.map StreamedItem
             |> buffer
+            |> withStreamCompleted
         ResolverResult.defered (KeyValuePair (name, box [])) stream |> AsyncVal.wrap
     | _ -> raise <| GQLMessageException (ErrorMessages.expectedEnumerableValue ctx.ExecutionInfo.Identifier (value.GetType()))
 

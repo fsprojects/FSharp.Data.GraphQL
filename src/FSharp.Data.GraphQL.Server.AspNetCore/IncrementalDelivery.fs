@@ -1,0 +1,208 @@
+namespace FSharp.Data.GraphQL.Server.AspNetCore
+
+open System.Collections.Generic
+open System.Text.Json.Serialization
+open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Shared.WebSockets
+
+/// Path helpers shared by IncrementalDelivery. Paths are written as `obj list`, not the (internal, and here
+/// inaccessible) `FieldPath` abbreviation they stand for: a type abbreviation is erased, so this is the exact
+/// same type and unifies fine with FieldPath-typed values from the engine.
+[<AutoOpen>]
+module private IncrementalDeliveryPaths =
+
+    let pathStartsWith (prefix : obj list) (path : obj list) =
+        let prefixLength = List.length prefix
+        List.length path >= prefixLength
+        && List.truncate prefixLength path = prefix
+
+    /// Matches a path ending in the list of indices of a batch of streamed items, as Execution.collectItems
+    /// produces for more than one item resolved into the same buffered event, such as ["items"; [2; 1]].
+    let (|BatchPath|_|) (path : obj list) =
+        match List.rev path with
+        | (:? (obj list) as indices) :: fieldPathRev -> Some (List.rev fieldPathRev, indices)
+        | _ -> None
+
+    /// Matches a path ending in a single streamed item's own index, such as ["items"; 0].
+    let (|ItemPath|_|) (path : obj list) =
+        match List.rev path with
+        | (:? int as index) :: fieldPathRev -> Some (List.rev fieldPathRev, index)
+        | _ -> None
+
+/// Mutable per-field bookkeeping of IncrementalDelivery, keyed by a field's own path (with any item index or
+/// batch removed).
+type private FieldState (id : string) =
+    member _.Id = id
+    member val IsStream = false with get, set
+    member val Closed = false with get, set
+    /// The index of the next streamed item this field expects, in order; irrelevant once IsStream is false.
+    member val NextIndex = 0 with get, set
+    /// Items received out of order, waiting for the item at NextIndex to fill the gap before them. `member val`,
+    /// not a plain computed `member`, so the same dictionary is reused: a computed member's body runs again on
+    /// every access, handing back a fresh, empty dictionary each time instead of the one already filled.
+    member val Buffer : SortedDictionary<int, obj * GQLProblemDetails list> = SortedDictionary ()
+
+/// <summary>
+/// Translates the engine's <see cref="GQLDeferredResponseContent"/> events into the <c>graphql-transport-ws</c>
+/// incremental delivery wire format (<c>pending</c>/<c>incremental</c>/<c>completed</c>/<c>hasNext</c>, the format
+/// used by graphql-js 17 and Apollo Client's <c>GraphQL17Alpha9Handler</c>).
+/// </summary>
+/// <remarks>
+/// <para>
+/// Every deferred or streamed field is announced once, the first time an event for it is seen (its
+/// <see cref="PendingResult"/>, in the same payload as its first delivery), and identified afterwards by a short id
+/// instead of its path. This works entirely from the events themselves: no execution plan or up-front list of
+/// fields is needed, since a client accepts a <c>pending</c> entry in any payload, not only the initial one.
+/// </para>
+/// <para>
+/// A streamed field's items are delivered to the client in list order: an item produced out of order (the engine
+/// resolves up to a field's <c>maxConcurrency</c> items at the same time) is buffered until the item before it
+/// arrives, then every contiguous run starting at the next expected index is flushed as one entry - a batch the
+/// engine grouped into a single event is simply several items of the same run.
+/// </para>
+/// <para>
+/// A stream failure - <see cref="DeferredErrors"/> at the field's own path, with no item index - is folded directly
+/// into that field's completion once at least one of its items has already been seen (so it is known to be a
+/// stream, not a <c>@defer</c> field whose own resolution failed the same way): no <c>incremental</c> entry is sent
+/// for it, and whatever was still buffered, waiting for a gap to fill, is dropped, since the engine pulls no
+/// further items after a failure. A failure before any item was ever produced cannot be told apart from a
+/// <c>@defer</c> field's own failure this way; it is delivered as an ordinary <c>incremental</c> entry instead
+/// (<c>data: null</c> with the failure's errors), still followed by a plain completion - a different, still
+/// correct shape for that one case.
+/// </para>
+/// </remarks>
+type IncrementalDelivery () =
+
+    let fields = Dictionary<obj list, FieldState>(HashIdentity.Structural)
+    let mutable nextId = 0
+
+    let stateFor (fieldPath : obj list) =
+        match fields.TryGetValue fieldPath with
+        | true, state -> state, false
+        | false, _ ->
+            let state = FieldState (string nextId)
+            nextId <- nextId + 1
+            fields[fieldPath] <- state
+            state, true
+
+    /// Flushes the contiguous run of buffered items starting at the field's next expected index, if any.
+    let flush (state : FieldState) =
+        if state.Buffer.ContainsKey state.NextIndex then
+            let items = ResizeArray ()
+            let mutable errors = []
+            while state.Buffer.ContainsKey state.NextIndex do
+                let item, itemErrors = state.Buffer[state.NextIndex]
+                items.Add item
+                errors <- errors @ itemErrors
+                state.Buffer.Remove state.NextIndex |> ignore
+                state.NextIndex <- state.NextIndex + 1
+            Some {
+                Id = state.Id
+                Data = Skip
+                Items = Include (items.ToArray ())
+                Errors = (if errors.IsEmpty then Skip else Include errors)
+            }
+        else
+            None
+
+    let pendingFor (fieldPath : obj list) (state : FieldState) (isNew : bool) =
+        if isNew then
+            [ { Id = state.Id; Path = fieldPath } ]
+        else
+            []
+
+    /// Execution.collectItems wraps a single successfully-produced item's own value in a one-element array
+    /// (deferResults itself only ever handles a value at a path, not specifically an item); an item whose
+    /// resolution failed outright instead carries data = null, already unwrapped.
+    let unwrapItem (data : obj) =
+        match data with
+        | :? (obj[]) as items -> items[0]
+        | data -> data
+
+    let itemEvent (fieldPath : obj list) (index : int) (data : obj) (errors : GQLProblemDetails list) =
+        let state, isNew = stateFor fieldPath
+        state.IsStream <- true
+        state.Buffer[index] <- (unwrapItem data, errors)
+        match pendingFor fieldPath state isNew, flush state |> Option.toList with
+        | [], [] -> ValueNone
+        | pending, incremental -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, incremental, [], true))
+
+    /// Applies one engine event, returning the payload it produces, if any (an out-of-order item that does not
+    /// complete a contiguous run, or a completion for a field already closed by a preceding stream failure,
+    /// produce none).
+    member _.Apply (event : GQLDeferredResponseContent) : SubscriptionExecutionResult voption =
+        match event with
+        | DeferredResult (data, BatchPath (fieldPath, indices)) ->
+            let items = data :?> obj[]
+            let state, isNew = stateFor fieldPath
+            state.IsStream <- true
+            (indices, List.ofArray items)
+            ||> List.iter2 (fun index item -> state.Buffer[index :?> int] <- (item, []))
+            match pendingFor fieldPath state isNew, flush state |> Option.toList with
+            | [], [] -> ValueNone
+            | pending, incremental -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, incremental, [], true))
+        | DeferredResult (data, ItemPath (fieldPath, index)) -> itemEvent fieldPath index data []
+        | DeferredErrors (data, errors, ItemPath (fieldPath, index)) -> itemEvent fieldPath index data errors
+        | DeferredErrors (data, errors, BatchPath (fieldPath, indices)) ->
+            // A batch this codebase never actually produces with a per-item error (Execution.collectItems only
+            // takes this shape for an all-success chunk), but handled the same way as a single item would be, for
+            // robustness: every error already carries the full path of the specific item it came from.
+            let items = data :?> obj[]
+            let state, isNew = stateFor fieldPath
+            state.IsStream <- true
+            (indices, List.ofArray items)
+            ||> List.iter2 (fun index item ->
+                let itemPath = fieldPath @ [ index ]
+                let itemErrors =
+                    errors
+                    |> List.filter (fun e ->
+                        e.Path
+                        |> Skippable.toValueOption
+                        |> ValueOption.map (pathStartsWith itemPath)
+                        |> ValueOption.defaultValue false)
+                state.Buffer[index :?> int] <- (item, itemErrors))
+            match pendingFor fieldPath state isNew, flush state |> Option.toList with
+            | [], [] -> ValueNone
+            | pending, incremental -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, incremental, [], true))
+        | DeferredResult (data, fieldPath) ->
+            // A plain (non-indexed) path: a @defer field's own value.
+            let state, isNew = stateFor fieldPath
+            let incremental = { Id = state.Id; Data = Include data; Items = Skip; Errors = Skip }
+            ValueSome (SubscriptionExecutionResult.CreateSubsequent (pendingFor fieldPath state isNew, [ incremental ], [], true))
+        | DeferredErrors (data, errors, fieldPath) ->
+            match fields.TryGetValue fieldPath with
+            | true, state when state.IsStream && not state.Closed ->
+                // Known to already be a stream (an item was seen at this path before): the failure of the source
+                // itself, folded directly into its completion. Anything still buffered, waiting for a gap that will
+                // now never be filled (the engine pulls no further items after a failure), is dropped.
+                state.Closed <- true
+                state.Buffer.Clear ()
+                ValueSome (SubscriptionExecutionResult.CreateSubsequent ([], [], [ { Id = state.Id; Errors = Include errors } ], true))
+            | _ ->
+                // Either a @defer field's own failure, or a stream that failed before ever producing an item -
+                // indistinguishable from one another this way. Reported as an ordinary incremental entry; still
+                // followed by a plain completion when the DeferredCompleted for the same path arrives.
+                let state, isNew = stateFor fieldPath
+                let incremental = { Id = state.Id; Data = Include data; Items = Skip; Errors = Include errors }
+                ValueSome (SubscriptionExecutionResult.CreateSubsequent (pendingFor fieldPath state isNew, [ incremental ], [], true))
+        | DeferredCompleted fieldPath ->
+            match fields.TryGetValue fieldPath with
+            | true, state when not state.Closed ->
+                state.Closed <- true
+                ValueSome (SubscriptionExecutionResult.CreateSubsequent ([], [], [ { Id = state.Id; Errors = Skip } ], true))
+            | _ ->
+                // Already closed by a preceding stream failure (or, if this is ever reached for an unknown path,
+                // there is nothing to report: no pending was ever announced for it).
+                ValueNone
+
+    /// The final payload of the delivery: completes every field that has not completed on its own (normally none -
+    /// a @live field is the only field this codebase produces that never completes by itself) and reports that no
+    /// further payloads follow.
+    member _.Finish () : SubscriptionExecutionResult =
+        let stillOpen =
+            fields.Values
+            |> Seq.filter (fun state -> not state.Closed)
+            |> Seq.map (fun state -> { Id = state.Id; Errors = Skip })
+            |> List.ofSeq
+        SubscriptionExecutionResult.CreateSubsequent ([], [], stillOpen, false)

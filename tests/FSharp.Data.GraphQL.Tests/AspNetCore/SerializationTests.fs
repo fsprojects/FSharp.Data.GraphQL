@@ -129,36 +129,78 @@ let private hasProperty (name : string) (element : JsonElement) =
     element.TryGetProperty (name, &ignored)
 
 [<Fact>]
-let ``Serializes incremental payload with path and hasNext`` () =
-    let json =
-        serializePayload (SubscriptionExecutionResult.CreateIncremental (box [| box 1 |], [], [ box "numbers"; box 0 ]))
+let ``Serializes initial incremental payload with pending and hasNext, but no top-level errors`` () =
+    let pending = [ { Id = "0"; Path = [ box "numbers" ] } ]
+    let json = serializePayload (SubscriptionExecutionResult.CreateInitial (NameValueLookup.ofList [ "numbers", upcast [] ], [], pending))
     use document = JsonDocument.Parse json
     let payload = document.RootElement.GetProperty "payload"
-    let data = payload.GetProperty "data"
-    Assert.Equal (JsonValueKind.Array, data.ValueKind)
-    Assert.Equal (1, data[0].GetInt32())
-    let path = payload.GetProperty "path"
-    Assert.Equal ("numbers", path[0].GetString())
-    Assert.Equal (0, path[1].GetInt32())
-    Assert.True (payload.GetProperty("hasNext").GetBoolean(), $"Expected hasNext to be true in {json}")
+    Assert.True (payload.GetProperty("hasNext").GetBoolean (), $"Expected hasNext to be true in {json}")
+    let pendingElement = payload.GetProperty "pending"
+    Assert.Equal ("0", pendingElement[0].GetProperty("id").GetString ())
+    Assert.Equal ("numbers", pendingElement[0].GetProperty("path").EnumerateArray() |> Seq.head |> fun element -> element.GetString ())
+    Assert.True (hasProperty "errors" payload, $"Expected errors (even empty) in the initial payload in {json}")
 
 [<Fact>]
-let ``Serializes final incremental payload with hasNext only`` () =
-    let json = serializePayload (SubscriptionExecutionResult.CreateCompleted ())
+let ``Serializes initial incremental payload without pending when no field is announced yet`` () =
+    let json = serializePayload (SubscriptionExecutionResult.CreateInitial (NameValueLookup.ofList [ "numbers", upcast [] ], [], []))
     use document = JsonDocument.Parse json
     let payload = document.RootElement.GetProperty "payload"
-    Assert.False (payload.GetProperty("hasNext").GetBoolean(), $"Expected hasNext to be false in {json}")
-    Assert.False (hasProperty "data" payload, $"Expected no data in {json}")
-    Assert.False (hasProperty "path" payload, $"Expected no path in {json}")
+    Assert.False (hasProperty "pending" payload, $"Expected no pending in {json}")
 
 [<Fact>]
-let ``Serializes complete payload without path and hasNext`` () =
-    let json =
-        serializePayload (SubscriptionExecutionResult.Create (NameValueLookup.ofList [ "name", upcast "R2-D2" ], []))
+let ``Serializes a subsequent payload with an incremental entry's items, and no top-level data or errors`` () =
+    let incremental = [ { Id = "0"; Data = Skip; Items = Include [| box 1 |]; Errors = Skip } ]
+    let json = serializePayload (SubscriptionExecutionResult.CreateSubsequent ([], incremental, [], true))
     use document = JsonDocument.Parse json
     let payload = document.RootElement.GetProperty "payload"
-    Assert.Equal ("R2-D2", payload.GetProperty("data").GetProperty("name").GetString())
-    Assert.False (hasProperty "path" payload, $"Expected no path in {json}")
+    let entry = payload.GetProperty("incremental")[0]
+    Assert.Equal ("0", entry.GetProperty("id").GetString ())
+    Assert.Equal (1, entry.GetProperty("items").EnumerateArray() |> Seq.head |> fun element -> element.GetInt32 ())
+    Assert.False (hasProperty "data" entry, $"Expected no data on an item entry in {json}")
+    Assert.True (payload.GetProperty("hasNext").GetBoolean (), $"Expected hasNext to be true in {json}")
+    Assert.False (hasProperty "data" payload, $"Expected no top-level data in {json}")
+    Assert.False (hasProperty "errors" payload, $"Expected no top-level errors in {json}")
+
+[<Fact>]
+let ``Serializes a subsequent payload's newly announced pending alongside its incremental entry`` () =
+    let pending = [ { Id = "1"; Path = [ box "testData"; box "a" ] } ]
+    let incremental = [ { Id = "1"; Data = Include (box "value"); Items = Skip; Errors = Skip } ]
+    let json = serializePayload (SubscriptionExecutionResult.CreateSubsequent (pending, incremental, [], true))
+    use document = JsonDocument.Parse json
+    let payload = document.RootElement.GetProperty "payload"
+    let pendingEntry = payload.GetProperty("pending")[0]
+    let incrementalEntry = payload.GetProperty("incremental")[0]
+    Assert.Equal ("1", pendingEntry.GetProperty("id").GetString ())
+    Assert.Equal ("value", incrementalEntry.GetProperty("data").GetString ())
+
+[<Fact>]
+let ``Serializes a subsequent payload's completed entry with its errors`` () =
+    let completed = [ { Id = "0"; Errors = Include [ GQLProblemDetails.CreateWithKind ("Boom", Execution, [ box "items" ]) ] } ]
+    let json = serializePayload (SubscriptionExecutionResult.CreateSubsequent ([], [], completed, true))
+    use document = JsonDocument.Parse json
+    let payload = document.RootElement.GetProperty "payload"
+    let entry = payload.GetProperty("completed")[0]
+    let errorEntry = entry.GetProperty("errors")[0]
+    Assert.Equal ("0", entry.GetProperty("id").GetString ())
+    Assert.Equal ("Boom", errorEntry.GetProperty("message").GetString ())
+
+[<Fact>]
+let ``Serializes the final subsequent payload with hasNext false and no other entries`` () =
+    let json = serializePayload (SubscriptionExecutionResult.CreateSubsequent ([], [], [], false))
+    use document = JsonDocument.Parse json
+    let payload = document.RootElement.GetProperty "payload"
+    Assert.False (payload.GetProperty("hasNext").GetBoolean (), $"Expected hasNext to be false in {json}")
+    Assert.False (hasProperty "pending" payload, $"Expected no pending in {json}")
+    Assert.False (hasProperty "incremental" payload, $"Expected no incremental in {json}")
+    Assert.False (hasProperty "completed" payload, $"Expected no completed in {json}")
+
+[<Fact>]
+let ``Serializes complete payload without pending, incremental, completed or hasNext`` () =
+    let json = serializePayload (SubscriptionExecutionResult.Create (NameValueLookup.ofList [ "name", upcast "R2-D2" ], []))
+    use document = JsonDocument.Parse json
+    let payload = document.RootElement.GetProperty "payload"
+    Assert.Equal ("R2-D2", payload.GetProperty("data").GetProperty("name").GetString ())
+    Assert.False (hasProperty "pending" payload, $"Expected no pending in {json}")
     Assert.False (hasProperty "hasNext" payload, $"Expected no hasNext in {json}")
 
 [<Fact>]

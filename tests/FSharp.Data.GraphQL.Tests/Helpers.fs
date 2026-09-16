@@ -171,6 +171,14 @@ module Observer =
     let createWithCallback (onReceive : TestObserver<'T> -> 'T -> unit) (sub : IObservable<'T>) =
         new TestObserver<'T>(sub, onReceive)
 
+/// Drops every DeferredCompleted marker from a sequence of deferred/streamed/live results. Tests written before
+/// DeferredCompleted existed assert exact positions and counts of DeferredResult/DeferredErrors payloads;
+/// filtering the new marker out before those assertions keeps them unchanged and correct, since it never carries
+/// data of its own. Tests of the completion marker itself, or of the graphql-transport-ws translation that relies
+/// on it, do not use this helper.
+let withoutCompleted (events : GQLDeferredResponseContent seq) =
+    events |> Seq.filter (function DeferredCompleted _ -> false | _ -> true)
+
 open System.Runtime.CompilerServices
 
 [<Extension>]

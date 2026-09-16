@@ -71,9 +71,18 @@ and GQLResponseContent =
     | Deferred of Data : Output * Errors : GQLProblemDetails list * Defer : IObservable<GQLDeferredResponseContent>
     | Stream of Stream : IObservable<GQLSubscriptionResponseContent>
 
+/// <summary>
+/// One event of a <c>@defer</c> or <c>@stream</c> field's own delivery.
+/// </summary>
+/// <remarks>
+/// <see cref="DeferredCompleted"/> fires once after a <c>@defer</c> field's own payload, and once after all of a
+/// <c>@stream</c> field's items - whether they all succeeded or the source failed partway through - but never for
+/// a <c>@live</c> field, which has no end of its own.
+/// </remarks>
 and GQLDeferredResponseContent =
     | DeferredResult of Data : obj * Path : FieldPath
-    | DeferredErrors of Data : obj voption * Errors : GQLProblemDetails list * Path : FieldPath
+    | DeferredErrors of Data : obj * Errors: GQLProblemDetails list * Path : FieldPath
+    | DeferredCompleted of Path : FieldPath
 
 and GQLSubscriptionResponseContent =
     | SubscriptionResult of Data : Output
