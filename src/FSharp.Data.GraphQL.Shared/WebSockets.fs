@@ -77,7 +77,7 @@ type SubscriptionExecutionResult = {
 
 type ServerRawPayload =
     | ExecutionResult of SubscriptionExecutionResult
-    | ErrorMessages of NameValueLookup list
+    | ErrorMessages of GQLProblemDetails list
     | CustomResponse of JsonDocument
 
 type RawServerMessage = { Id : string voption; Type : string; Payload : ServerRawPayload voption }
@@ -96,7 +96,7 @@ type ServerMessage =
     | ServerPing
     | ServerPong of JsonDocument voption
     | Next of id : string * payload : SubscriptionExecutionResult
-    | Error of id : string * err : NameValueLookup list
+    | Error of id : string * err : GQLProblemDetails list
     | Complete of id : string
 
 module CustomWebSocketStatus =

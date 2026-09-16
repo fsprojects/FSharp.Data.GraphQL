@@ -36,4 +36,8 @@
     <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
   </ItemGroup>
 
+  <ItemGroup Label="InternalsVisibleTo">
+    <InternalsVisibleTo Include="FSharp.Data.GraphQL.Tests" />
+  </ItemGroup>
+
 </Project>

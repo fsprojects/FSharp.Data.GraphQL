@@ -155,3 +155,29 @@ let ``Serializes errors payload with null data as before`` () =
     let payload = document.RootElement.GetProperty "payload"
     Assert.Equal (JsonValueKind.Null, payload.GetProperty("data").ValueKind)
     Assert.Equal ("Boom", (payload.GetProperty "errors").Item(0).GetProperty("message").GetString ())
+
+[<Fact>]
+let ``Serializes an error message with its problem details as the payload`` () =
+    // Regression test: RawServerMessageConverter used to write the ErrorMessages payload without a preceding
+    // WritePropertyName ("payload"), which Utf8JsonWriter rejects, so every "error" message failed to serialize
+    let message : RawServerMessage =
+        { Id = ValueSome "1"; Type = "error"; Payload = ValueSome (ErrorMessages [ GQLProblemDetails.Create "Boom" ]) }
+    let json = JsonSerializer.Serialize (message, serializerOptions)
+    use document = JsonDocument.Parse json
+    let root = document.RootElement
+    Assert.Equal ("error", root.GetProperty("type").GetString ())
+    Assert.Equal ("1", root.GetProperty("id").GetString ())
+    let payload = root.GetProperty "payload"
+    Assert.Equal (JsonValueKind.Array, payload.ValueKind)
+    Assert.Equal ("Boom", payload[0].GetProperty("message").GetString ())
+
+[<Fact>]
+let ``Serializes a pong message with its payload`` () =
+    // Regression test: the same missing WritePropertyName ("payload") affected a pong carrying a custom response
+    use responseDocument = JsonDocument.Parse "\"pong!\""
+    let message : RawServerMessage = { Id = ValueNone; Type = "pong"; Payload = ValueSome (CustomResponse responseDocument) }
+    let json = JsonSerializer.Serialize (message, serializerOptions)
+    use document = JsonDocument.Parse json
+    let root = document.RootElement
+    Assert.Equal ("pong", root.GetProperty("type").GetString ())
+    Assert.Equal ("pong!", root.GetProperty("payload").GetString ())
