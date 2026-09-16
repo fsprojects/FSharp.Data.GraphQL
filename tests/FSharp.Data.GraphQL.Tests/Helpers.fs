@@ -128,7 +128,7 @@ let ms x =
         | _ -> 20
     x * factor
 
-type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> 'T -> unit) as this =
+type TestObserver<'T>(obs : IObservable<'T>, [<Struct>] ?onReceived : TestObserver<'T> -> 'T -> unit) as this =
     let received = List<'T>()
     let mutable isCompleted = false
     let mre = new ManualResetEvent(false)
@@ -157,7 +157,7 @@ type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> '
         member _.OnError (error) = error.Reraise()
         member _.OnNext (value) =
             received.Add (value)
-            onReceived |> Option.iter (fun evt -> evt this value)
+            onReceived |> ValueOption.iter (fun evt -> evt this value)
     interface IDisposable with
         member _.Dispose () =
             subscription.Dispose ()
@@ -220,3 +220,93 @@ module MockInputContext =
     let mockInputContextInstance = MockInputExecutionContext()
 
 let getMockInputContext = fun () -> MockInputContext.mockInputContextInstance :> IInputExecutionContext
+
+open System.Threading.Tasks
+
+/// <summary>
+/// An asynchronous sequence that produces each item through a task created on demand.
+/// </summary>
+/// <remarks>
+/// Tests use it instead of a <c>taskSeq</c> block for sequences that really suspend, because <c>taskSeq</c> code compiled
+/// without optimizations, as in Debug builds of this project, does not resume correctly after an await.
+/// </remarks>
+type SuspendingAsyncEnumerable<'T> (produceItem : CancellationToken -> int -> Task<'T voption>, [<Struct>] ?onDisposed : unit -> unit) =
+    interface IAsyncEnumerable<'T> with
+        member _.GetAsyncEnumerator cancellationToken =
+            let index = ref 0
+            let current = ref Unchecked.defaultof<'T>
+            { new IAsyncEnumerator<'T> with
+                member _.Current = current.Value
+                member _.MoveNextAsync () =
+                    // The ValueTask wraps a Task, because the test project does not reference IcedTasks
+                    ValueTask<bool> (
+                        task {
+                            match! produceItem cancellationToken index.Value with
+                            | ValueSome item ->
+                                current.Value <- item
+                                index.Value <- index.Value + 1
+                                return true
+                            | ValueNone -> return false
+                        }
+                    )
+              interface IAsyncDisposable with
+                member _.DisposeAsync () =
+                    onDisposed |> ValueOption.iter (fun onDisposed -> onDisposed ())
+                    ValueTask.CompletedTask
+            }
+
+/// Awaits the task without blocking the test thread and fails the test with the message when the task does not complete in time
+let waitForTask (timeout : TimeSpan) (message : string) (awaited : Task) : Task = task {
+    let! completed = Task.WhenAny (awaited, Task.Delay timeout)
+    if not (obj.ReferenceEquals (completed, awaited)) then
+        fail message
+}
+
+open FSharp.Control
+
+/// Returns the value after the scaled delay
+let delay time x = async {
+    do! Async.Sleep (ms time)
+    return x
+}
+
+/// An asynchronous sequence of the items, safe to use as a taskSeq in Debug builds because it never awaits
+let asyncItems (items : 'T list) = taskSeq {
+    for item in items do
+        yield item
+}
+
+/// A source whose GetAsyncEnumerator throws instead of returning an enumerator
+type ThrowingAsyncEnumerable<'T> (message : string) =
+    interface IAsyncEnumerable<'T> with
+        member _.GetAsyncEnumerator _ = failwith message
+
+/// Produces the item, then fails while pulling the next one
+let itemThenFailure (item : 'T) =
+    SuspendingAsyncEnumerable<'T> (fun _ index ->
+        task {
+            match index with
+            | 0 -> return ValueSome item
+            | _ -> return failwith "Boom during enumeration"
+        })
+    :> IAsyncEnumerable<'T>
+
+/// Produces the item, then completes, and throws from DisposeAsync
+let itemThenDisposalFailure (item : 'T) =
+    SuspendingAsyncEnumerable<'T> (
+        (fun _ index -> task { return if index = 0 then ValueSome item else ValueNone }),
+        fun () -> failwith "Boom disposing"
+    )
+    :> IAsyncEnumerable<'T>
+
+/// Produces numbers forever with a small delay, recording how many were pulled and signalling disposal
+let endlessNumbers (pulled : int ref) (disposed : TaskCompletionSource) =
+    SuspendingAsyncEnumerable<int> (
+        (fun _ index -> task {
+            pulled.Value <- index + 1
+            do! Task.Delay 20
+            return ValueSome (index + 1)
+        }),
+        fun () -> disposed.TrySetResult () |> ignore
+    )
+    :> IAsyncEnumerable<int>

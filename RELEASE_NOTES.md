@@ -288,6 +288,24 @@
 
 * **Breaking Change** Migrated to .NET 10
 * **Breaking Change** Made Relay `Edge` a read-only struct
+* **Breaking Change** `SubscriptionExecutionResult.Data` is now `obj Skippable`, and the record has new `Path` and `HasNext` fields for incremental delivery
+* **Breaking Change** `BufferedStreamOptions.Interval` and `BufferedStreamOptions.PreferredBatchSize` are now `int voption`
 * Added case-insensitive string comparison support to `ObjectListFilter`, including comparer-aware filter cases and GraphQL filter suffix handling
 * Improved Relay XML documentation comments
 * Changed query planning to throw `MalformedGQLQueryException` for invalid queries, `NotSupportedException` for unsupported type definition implementations and `InvalidOperationException` for internal planning errors instead of `System.Exception`, with messages naming the affected field, type and execution kind
+* Added `Define.TaskSeqField` for list fields resolved from `IAsyncEnumerable<'T>`, such as `taskSeq { }` or Azure SDK `AsyncPageable<T>`. Without directives the sequence is enumerated into a list, `@defer` delivers the whole list, and `@stream` delivers every item as soon as it is produced and its fields are resolved
+* Added cancellation of a streamed `Define.TaskSeqField` enumeration when the client unsubscribes, and delivery of a failure raised acquiring the sequence's enumerator, while enumerating, or disposing it, as a deferred error for the field, after every item already pulled has been resolved and delivered, so a slower item can never be overtaken by the error that follows it; an item resolution that throws stops the enumeration and is delivered the same way, while an item whose own fields fail is delivered as that item's deferred errors and streaming continues, exactly as for `@stream` on an ordinary list; a concurrency slot is never leaked even if delivering an item's result fails
+* Added `maxConcurrency` to `Define.TaskSeqField`, bounding how many items of a streamed sequence are pulled and resolved at the same time; defaults to `Environment.ProcessorCount`
+* Added `StreamBatching` to group streamed items of a `Define.TaskSeqField` into batches of a fixed size or of a size computed from the sequence, such as a page size kept with a paged SDK sequence. The `preferredBatchSize` argument of `@stream` takes precedence, and the batching function itself is evaluated lazily, only for a `@stream` query that does not supply its own `preferredBatchSize`
+* Added `Microsoft.Bcl.AsyncInterfaces` dependency of `FSharp.Data.GraphQL.Shared` for `netstandard2.0`
+* Added `Human.friendsStream` field to the Star Wars sample to demonstrate `@stream`
+* Fixed `graphql-transport-ws` delivery of `@defer` and `@stream` results, which are now sent as soon as they are produced with `path` and `hasNext` instead of after a fixed 5 second delay, followed by a final payload with `hasNext: false`
+* Fixed `graphql-transport-ws` failure on deferred and streamed results that are not objects, such as streamed list items and scalars
+* Fixed `graphql-transport-ws` dropping errors of the initial payload of a deferred result together with all its deferred results
+* Fixed `graphql-transport-ws` discarding the partial `data` of a subscription result that also had field errors, sending `null` instead
+* Fixed `graphql-transport-ws` discarding the field errors of a `Direct` (non-subscription) result, sending an empty error list instead
+* Fixed `graphql-transport-ws` stranding a subscription id forever when its deferred result completed synchronously, before it was registered
+* Fixed `Define.TaskSeqField` streaming retaining a task for every item already delivered until the sequence ends
+* Fixed `graphql-transport-ws` leaving a subscription id occupied when subscribing to its result failed synchronously
+* Fixed `graphql-transport-ws` addressing a batch of streamed items (grouped by `preferredBatchSize` or `StreamBatching`) with a `path` ending in the list of the batch's own indices, such as `["numbers", [0, 1]]`, which no client can merge into the response tree; a batch is now sent as one independently addressed payload per item instead, in the batch's own order
+* Fixed `graphql-transport-ws` never sending `complete` after the `next` of a query or mutation result, as the protocol requires
