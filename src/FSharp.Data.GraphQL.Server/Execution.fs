@@ -516,46 +516,60 @@ let private (|String|Other|) (o : obj) =
     | _ -> Other
 
 let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objDef: ObjectDef) (rootValue : obj) : AsyncVal<GQLExecutionResult> =
-    let executeRootOperation (name, info) =
+    let executeRootOperation (name, info) (args : Map<string, obj>) =
         let fDef = info.Definition
-        let argDefs = ctx.FieldExecuteMap.GetArgs(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
-        match getArgumentValues argDefs info.Ast.Arguments ctx.GetInputContext ctx.Variables with
-        | Error errs -> asyncVal { return Error (errs |> List.map GQLProblemDetails.OfError) }
-        | Ok args ->
-            let path = [ box info.Identifier ]
-            let fieldCtx =
-                { ExecutionInfo = info
-                  Context = ctx
-                  ReturnType = fDef.TypeDef
-                  ParentType = objDef
-                  Schema = ctx.Schema
-                  Args = args
-                  Variables = ctx.Variables
-                  Path = normalizeErrorPath path }
-            let execute = ctx.FieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
-            asyncVal {
-                let! result =
-                    executeResolvers ctx.GetInputContext fieldCtx path rootValue (resolveField execute fieldCtx rootValue)
-                    |> AsyncVal.rescue path ctx.Schema.ParseError
-                let result =
-                    match result with
-                    | Ok (Ok value) -> Ok value
-                    | Ok (Error errs)
-                    | Error errs -> Error errs
+        let path = [ box info.Identifier ]
+        let fieldCtx =
+            { ExecutionInfo = info
+              Context = ctx
+              ReturnType = fDef.TypeDef
+              ParentType = objDef
+              Schema = ctx.Schema
+              Args = args
+              Variables = ctx.Variables
+              Path = normalizeErrorPath path }
+        let execute = ctx.FieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
+        asyncVal {
+            let! result =
+                executeResolvers ctx.GetInputContext fieldCtx path rootValue (resolveField execute fieldCtx rootValue)
+                |> AsyncVal.rescue path ctx.Schema.ParseError
+            let result =
                 match result with
-                | Error errs when info.IsNullable -> return Ok (KeyValuePair(name, null), None, errs)
-                | Error errs -> return Error errs
-                | Ok r -> return Ok r
-            }
+                | Ok (Ok value) -> Ok value
+                | Ok (Error errs)
+                | Error errs -> Error errs
+            match result with
+            | Error errs when info.IsNullable -> return Ok (KeyValuePair(name, null), None, errs)
+            | Error errs -> return Error errs
+            | Ok r -> return Ok r
+        }
 
     asyncVal {
         let documentId = ctx.ExecutionPlan.DocumentId
-        match! resultSet |> Array.map executeRootOperation |> collectFields ctx.ExecutionPlan.Strategy with
-        | Ok (data, Some deferred, errs) -> return GQLExecutionResult.Deferred(documentId, NameValueLookup(data), errs, deferred, ctx.Metadata)
-        | Ok (data, None, errs) -> return GQLExecutionResult.Direct(documentId, NameValueLookup(data), errs, ctx.Metadata)
-        // A failed non-null root field is an execution result whose data is null, as the spec requires: the
-        // response must carry data (null), unlike a request error, which is rejected before execution
-        | Error errs -> return GQLExecutionResult.Direct(documentId, null, errs, ctx.Metadata)
+        // Inline argument coercion is request validation, the same as variable coercion in Executor.eval's
+        // coerceVariables: it rejects the request before any root resolver runs, so its errors must never be
+        // reported as an execution result with null data
+        let coerced = SortedDictionary<int, struct (Map<string, obj> * IGQLError list)> ()
+        resultSet
+        |> Array.iteri (fun i (_, info) ->
+            let argDefs = ctx.FieldExecuteMap.GetArgs(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
+            match getArgumentValues argDefs info.Ast.Arguments ctx.GetInputContext ctx.Variables with
+            | Ok args -> coerced.Add(i, struct (args, []))
+            | Error errs -> coerced.Add(i, struct (Map.empty, errs)))
+        let coercionErrors = coerced.Values |> Seq.collect (fun struct (_, errs) -> errs) |> List.ofSeq
+        if not coercionErrors.IsEmpty then
+            return GQLExecutionResult.Error(documentId, coercionErrors, ctx.Metadata)
+        else
+            let operations =
+                coerced
+                |> Seq.map (fun (KeyValue (i, struct (args, _))) -> executeRootOperation resultSet[i] args)
+                |> Array.ofSeq
+            match! operations |> collectFields ctx.ExecutionPlan.Strategy with
+            | Ok (data, Some deferred, errs) -> return GQLExecutionResult.Deferred(documentId, NameValueLookup(data), errs, deferred, ctx.Metadata)
+            | Ok (data, None, errs) -> return GQLExecutionResult.Direct(documentId, NameValueLookup(data), errs, ctx.Metadata)
+            // Only a non-null root field failing during execution reaches this branch: an execution result whose
+            // data is null, as the spec requires, unlike the request error returned above for a coercion failure
+            | Error errs -> return GQLExecutionResult.Direct(documentId, null, errs, ctx.Metadata)
     }
 
 let private executeSubscription (resultSet: (string * ExecutionInfo) []) (inputContext : InputExecutionContextProvider) (ctx: ExecutionContext) (objDef: SubscriptionObjectDef) value = result {
