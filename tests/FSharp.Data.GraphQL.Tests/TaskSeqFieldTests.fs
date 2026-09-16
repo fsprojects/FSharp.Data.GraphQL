@@ -458,6 +458,31 @@ let ``Streamed TaskSeq field emits a slower earlier item before the enumeration 
         ]
 
 [<Fact>]
+let ``Streamed TaskSeq field delivers an item's own resolver error and keeps streaming the items after it`` () =
+    // Regression test: an item whose own field resolution fails is a normal (non-throwing) result as far as the
+    // streaming operator is concerned, so it must not be mistaken for a failure of the source or of the enumeration
+    // itself: the item's error is delivered on its own path and later items keep streaming, exactly like @stream on
+    // an ordinary list (see DeferredTests."Resolver list error")
+    let items = [ { Id = 1; Value = async { return failwith "Boom resolving the item" } }; { Id = 2; Value = async { return "two" } } ]
+    let executor =
+        executorFor [
+            Define.TaskSeqField ("items", ListOf StreamItemType, (fun _ _ -> asyncItems items), maxConcurrency = 1)
+        ]
+    let result = executeQuery executor "{ items @stream { id value } }"
+    ensureDeferred result
+    <| fun _ errors deferred ->
+        empty errors
+        waitForCompletion deferred
+        |> seqEquals [
+            DeferredErrors (
+                null,
+                [ GQLProblemDetails.CreateWithKind ("Boom resolving the item", Execution, [ box "items"; box 0; box "value" ]) ],
+                [ box "items"; box 0 ]
+            )
+            DeferredResult ([| box (NameValueLookup.ofList [ "id", upcast 2; "value", upcast "two" ]) |], [ box "items"; box 1 ])
+        ]
+
+[<Fact>]
 let ``Disposing the stream subscription stops the enumeration of the TaskSeq field`` () : Task = task {
     let pulled = ref 0
     let disposed = TaskCompletionSource ()
