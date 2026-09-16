@@ -117,7 +117,9 @@ let ``Execution must propagate error when non-nullable list field throws during 
                 ]))
     let expectedError = GQLProblemDetails.CreateWithKind ("Boom during enumeration", Execution, [ box "tags" ])
     let result = sync <| Executor(schema).AsyncExecute(parse "{ tags }", getMockInputContext, ())
-    ensureRequestError result <| fun [ error ] -> error |> equals expectedError
+    ensureDirect result <| fun data [ error ] ->
+        Assert.Null data
+        error |> equals expectedError
 
 [<Fact>]
 let ``Execution must return null with field error when nullable list of objects throws KeyNotFoundException during lazy enumeration`` () =

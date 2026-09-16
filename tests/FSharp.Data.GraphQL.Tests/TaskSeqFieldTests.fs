@@ -393,8 +393,9 @@ let ``Non-nullable TaskSeq field that fails during enumeration propagates the er
     let executor =
         executorFor [ Define.TaskSeqField ("numbers", ListOf IntType, fun _ _ -> failingNumbers ()) ]
     let result = executeQuery executor "{ numbers }"
-    ensureRequestError result
-    <| fun errors ->
+    ensureDirect result
+    <| fun data errors ->
+        Assert.Null data
         errors
         |> single
         |> equals (fieldError "Boom during enumeration" "numbers")
@@ -547,5 +548,7 @@ let ``TaskSeq field resolved as null reports a non-null field error`` () =
             Define.TaskSeqField ("numbers", ListOf IntType, fun _ _ -> Unchecked.defaultof<IAsyncEnumerable<int>>)
         ]
     let result = executeQuery executor "{ numbers }"
-    ensureRequestError result
-    <| fun errors -> hasError "Non-Null field numbers resolved as a null!" errors
+    ensureDirect result
+    <| fun data errors ->
+        Assert.Null data
+        hasError "Non-Null field numbers resolved as a null!" errors
