@@ -120,7 +120,7 @@ With `@stream`, at most `maxConcurrency` items are pulled from the sequence and 
 Define.TaskSeqField("orders", ListOf Order, (fun _ customer -> getOrders customer.Id), maxConcurrency = 4)
 ```
 
-An error raised while enumerating the source is delivered after every item already pulled has been resolved and delivered, so a slow item can never be overtaken by a failure that follows it.
+An error raised while enumerating the source is delivered after every item already pulled has been resolved and delivered, so a slow item can never be overtaken by a failure that follows it. An item whose own fields fail is delivered as that item's deferred errors, and the following items are still streamed, exactly as for `@stream` on an ordinary list; only an exception that escapes the item's resolution, or the source itself, ends the stream.
 
 Resolvers are captured as F# quotations. A `taskSeq { }` block that uses `let!` or `yield!` cannot be written inline in the resolver lambda, so define it in a separate function as shown above. Fields defined this way do not support `WithResolveMiddleware`.
 
