@@ -17,6 +17,9 @@ open FSharp.Data.GraphQL.Shared
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Validation
+open FSharp.Data.GraphQL.Validation.ValidationResult
+open ErrorHelpers
 
 type TestSubject = {
     a: string
@@ -452,6 +455,32 @@ let ``Execution handles errors: exceptions`` () =
     ensureDirect result <| fun data [ error ] ->
         Assert.Null data
         error |> equals expectedError
+
+type CoercionGuardInput = { Country : string }
+
+let CoercionGuardInputType =
+    Define.InputObject<CoercionGuardInput> (
+        "CoercionGuardInput",
+        [ Define.Input ("country", StringType) ],
+        fun input ->
+            match input.Country with
+            | "US" -> Success
+            | _ -> ValidationError [ { new IGQLError with member _.Message = "Unsupported country" } ])
+
+[<Fact>]
+let ``Execution rejects inline argument coercion failures on one root field before running another root field's resolver`` () =
+    let boomCalls = ref 0
+    let schema =
+        Schema(Define.Object<unit>(
+            "Query", [
+                Define.Field("boom", StringType, (fun _ _ -> boomCalls.Value <- boomCalls.Value + 1; failwith "Resolver Error!"))
+                Define.Field("bad", Nullable StringType, [ Define.Input("input", CoercionGuardInputType) ], fun _ _ -> None)
+            ]))
+    let query = """query Test { boom bad(input: { country: "FR" }) }"""
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, ())
+    ensureRequestError result <| fun [ error ] ->
+        error |> ensureInputObjectValidationError (Argument "input") "Unsupported country" [] "CoercionGuardInput!"
+    Assert.Equal(0, boomCalls.Value)
 
 [<Fact>]
 let ``Execution handles errors: nullable list fields`` () =

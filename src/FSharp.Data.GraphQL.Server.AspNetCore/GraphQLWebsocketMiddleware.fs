@@ -277,8 +277,9 @@ type GraphQLWebSocketMiddleware<'Root>
                 (subscriptions, socket, observableOutput |> Observable.withCompletionMarker, serializerOptions)
                 |> addClientSubscription id sendDeferredResponseOutput
             | Direct (data, errors) ->
-                // An execution result, whose data is null when a non-null root field failed; still a result, so
-                // it is sent as Next + Complete like any other, not as the terminal Error message below
+                // An execution result, whose data is null when a non-null root field failed during execution;
+                // still a result, so it is sent as Next + Complete like any other, not as the terminal Error
+                // message below
                 if not errors.IsEmpty then
                     logger.LogWarning ("Execution errors:\n{errors}", errors)
                 do! SubscriptionExecutionResult.Create (data, errors) |> sendOutput id
