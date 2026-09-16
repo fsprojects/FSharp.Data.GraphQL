@@ -36,7 +36,7 @@ open FSharp.Data.GraphQL.Shared.WebSockets
 /// resolved items) while addressing every item the same way a field that streams one item at a time already does: a
 /// one-element data array at a path ending in that item's own index.
 /// </remarks>
-module IncrementalPayloadSplitting =
+module internal IncrementalPayloadSplitting =
 
     // Written as `obj list`, not the (internal, and here inaccessible) `FieldPath` abbreviation it stands for:
     // a type abbreviation is erased, so this is the exact same type and unifies fine with FieldPath-typed values.
@@ -58,7 +58,7 @@ module IncrementalPayloadSplitting =
         let items = data :?> obj[]
         (indices, List.ofArray items)
         ||> List.map2 (fun index item ->
-            let itemPath = fieldPath @ [ index ]
+            let itemPath = [ yield! fieldPath; yield index ]
             let itemErrors =
                 errors
                 |> List.filter (fun error ->
@@ -284,8 +284,10 @@ type GraphQLWebSocketMiddleware<'Root>
                 do! sendMsg (Complete id)
             | RequestError problemDetails ->
                 logger.LogWarning("Request errors:\n{errors}", problemDetails)
-                do! SubscriptionExecutionResult.CreateErrors problemDetails |> sendOutput id
-                do! sendMsg (Complete id)
+                // A request (validation) error is not a result: the protocol requires it to be sent as the
+                // terminal Error message instead of a Next followed by Complete, or a client would read it as a
+                // successful result with null data
+                do! sendMsg (Error (id, problemDetails))
         }
 
         let logMsgReceivedWithOptionalPayload optionalPayload (msgAsStr : string) =
@@ -353,7 +355,7 @@ type GraphQLWebSocketMiddleware<'Root>
                                     do! planExecutionResult |> applyPlanExecutionResult id socket
                             with ex ->
                                 logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
-                                do! sendMsg (Error (id, [NameValueLookup([ ("subscription", "Unexpected error during subscription" :> obj) ])]))
+                                do! sendMsg (Error (id, [ GQLProblemDetails.Create "Unexpected error during subscription" ]))
                         | ClientComplete id ->
                             "ClientComplete" |> logMsgWithIdReceived id
                             subscriptions

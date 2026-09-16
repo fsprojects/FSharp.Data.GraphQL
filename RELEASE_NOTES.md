@@ -290,6 +290,7 @@
 * **Breaking Change** Made Relay `Edge` a read-only struct
 * **Breaking Change** `SubscriptionExecutionResult.Data` is now `obj Skippable`, and the record has new `Path` and `HasNext` fields for incremental delivery
 * **Breaking Change** `BufferedStreamOptions.Interval` and `BufferedStreamOptions.PreferredBatchSize` are now `int voption`
+* **Breaking Change** `ServerMessage.Error` and `ServerRawPayload.ErrorMessages` now carry `GQLProblemDetails list` instead of `NameValueLookup list`, so an `error` message's `payload` is a standard GraphQL error array as the `graphql-transport-ws` protocol requires
 * Added case-insensitive string comparison support to `ObjectListFilter`, including comparer-aware filter cases and GraphQL filter suffix handling
 * Improved Relay XML documentation comments
 * Changed query planning to throw `MalformedGQLQueryException` for invalid queries, `NotSupportedException` for unsupported type definition implementations and `InvalidOperationException` for internal planning errors instead of `System.Exception`, with messages naming the affected field, type and execution kind
@@ -309,3 +310,5 @@
 * Fixed `graphql-transport-ws` leaving a subscription id occupied when subscribing to its result failed synchronously
 * Fixed `graphql-transport-ws` addressing a batch of streamed items (grouped by `preferredBatchSize` or `StreamBatching`) with a `path` ending in the list of the batch's own indices, such as `["numbers", [0, 1]]`, which no client can merge into the response tree; a batch is now sent as one independently addressed payload per item instead, in the batch's own order
 * Fixed `graphql-transport-ws` never sending `complete` after the `next` of a query or mutation result, as the protocol requires
+* Fixed `graphql-transport-ws` sending a request (validation) error as a `next` result with `data: null` followed by `complete`, instead of the terminal `error` message the protocol requires for it
+* Fixed `graphql-transport-ws` throwing while serializing an `error` message or a `pong` carrying a payload, since neither was written under the `payload` property name `Utf8JsonWriter` requires

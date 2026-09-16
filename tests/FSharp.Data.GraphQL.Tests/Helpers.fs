@@ -222,6 +222,7 @@ module MockInputContext =
 let getMockInputContext = fun () -> MockInputContext.mockInputContextInstance :> IInputExecutionContext
 
 open System.Threading.Tasks
+open IcedTasks
 
 /// <summary>
 /// An asynchronous sequence that produces each item through a task created on demand.
@@ -238,17 +239,14 @@ type SuspendingAsyncEnumerable<'T> (produceItem : CancellationToken -> int -> Ta
             { new IAsyncEnumerator<'T> with
                 member _.Current = current.Value
                 member _.MoveNextAsync () =
-                    // The ValueTask wraps a Task, because the test project does not reference IcedTasks
-                    ValueTask<bool> (
-                        task {
-                            match! produceItem cancellationToken index.Value with
-                            | ValueSome item ->
-                                current.Value <- item
-                                index.Value <- index.Value + 1
-                                return true
-                            | ValueNone -> return false
-                        }
-                    )
+                    valueTask {
+                        match! produceItem cancellationToken index.Value with
+                        | ValueSome item ->
+                            current.Value <- item
+                            index.Value <- index.Value + 1
+                            return true
+                        | ValueNone -> return false
+                    }
               interface IAsyncDisposable with
                 member _.DisposeAsync () =
                     onDisposed |> ValueOption.iter (fun onDisposed -> onDisposed ())

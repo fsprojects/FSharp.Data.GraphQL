@@ -130,7 +130,11 @@ type RawServerMessageConverter () =
             | ExecutionResult output ->
                 writer.WritePropertyName ("payload")
                 JsonSerializer.Serialize (writer, output, options)
-            | ErrorMessages msgs -> JsonSerializer.Serialize (writer, msgs, options)
-            | CustomResponse jsonDocument -> jsonDocument.WriteTo (writer)
+            | ErrorMessages msgs ->
+                writer.WritePropertyName ("payload")
+                JsonSerializer.Serialize (writer, msgs, options)
+            | CustomResponse jsonDocument ->
+                writer.WritePropertyName ("payload")
+                jsonDocument.WriteTo (writer)
 
         writer.WriteEndObject ()
