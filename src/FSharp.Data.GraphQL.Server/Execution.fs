@@ -553,7 +553,9 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         match! resultSet |> Array.map executeRootOperation |> collectFields ctx.ExecutionPlan.Strategy with
         | Ok (data, Some deferred, errs) -> return GQLExecutionResult.Deferred(documentId, NameValueLookup(data), errs, deferred, ctx.Metadata)
         | Ok (data, None, errs) -> return GQLExecutionResult.Direct(documentId, NameValueLookup(data), errs, ctx.Metadata)
-        | Error errs -> return GQLExecutionResult.RequestError(documentId, errs, ctx.Metadata)
+        // A failed non-null root field is an execution result whose data is null, as the spec requires: the
+        // response must carry data (null), unlike a request error, which is rejected before execution
+        | Error errs -> return GQLExecutionResult.Direct(documentId, null, errs, ctx.Metadata)
     }
 
 let private executeSubscription (resultSet: (string * ExecutionInfo) []) (inputContext : InputExecutionContextProvider) (ctx: ExecutionContext) (objDef: SubscriptionObjectDef) value = result {
