@@ -307,3 +307,5 @@
 * Fixed `graphql-transport-ws` stranding a subscription id forever when its deferred result completed synchronously, before it was registered
 * Fixed `Define.TaskSeqField` streaming retaining a task for every item already delivered until the sequence ends
 * Fixed `graphql-transport-ws` leaving a subscription id occupied when subscribing to its result failed synchronously
+* Fixed `graphql-transport-ws` addressing a batch of streamed items (grouped by `preferredBatchSize` or `StreamBatching`) with a `path` ending in the list of the batch's own indices, such as `["numbers", [0, 1]]`, which no client can merge into the response tree; a batch is now sent as one independently addressed payload per item instead, in the batch's own order
+* Fixed `graphql-transport-ws` never sending `complete` after the `next` of a query or mutation result, as the protocol requires
