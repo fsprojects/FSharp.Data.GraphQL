@@ -44,3 +44,19 @@ let ``splitBatch attributes each error only to the item whose path it belongs to
         |> fun (_, errors, _) -> errors
     errorsOf 0 |> seqEquals [ itemError ]
     errorsOf 1 |> empty
+
+[<Fact>]
+let ``splitBatch handles a batch containing a failed item's null data slot`` () =
+    // Regression test for the tenth Copilot review thread PRRT_kwDOA0s7t86i5Vu-: Execution.collectItems leaves a
+    // null slot in `data` for a failed item, but still keeps its index in `indices` at the same position (see
+    // Execution.fs's `merge`, whose Error arm only skips `Array.set data i`, not the index) - so `indices` and
+    // `data` are always the same length and List.map2 does not throw. This pins the null slot's shape.
+    let itemError = GQLProblemDetails.CreateWithKind ("Boom", Execution, [ box "items"; box 0; box "value" ])
+    let data = box [| null; box "one" |]
+    let split = splitBatch [ box "items" ] [ box 0; box 1 ] data [ itemError ]
+    split
+    |> List.map (fun (itemData, errors, path) -> (itemData :?> obj[]), errors, path)
+    |> seqEquals [
+        [| null |], [ itemError ], [ box "items"; box 0 ]
+        [| box "one" |], [], [ box "items"; box 1 ]
+    ]

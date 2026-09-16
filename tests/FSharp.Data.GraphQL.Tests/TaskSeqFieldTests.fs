@@ -192,8 +192,13 @@ let ``TaskSeq field with stream directive delivers items before the sequence com
 
 [<Fact>]
 let ``TaskSeq field with stream directive emits each item as soon as its fields are resolved`` () =
+    // maxConcurrency is explicit (rather than the Environment.ProcessorCount default) so the fast item is
+    // guaranteed a concurrent slot alongside the slow one and the assertion below does not depend on the runner's
+    // CPU count
     let executor =
-        executorFor [ Define.TaskSeqField ("items", ListOf StreamItemType, fun _ _ -> asyncItems slowAndFastItems) ]
+        executorFor [
+            Define.TaskSeqField ("items", ListOf StreamItemType, (fun _ _ -> asyncItems slowAndFastItems), maxConcurrency = 2)
+        ]
     let result = executeQuery executor "{ items @stream { id value } }"
     ensureDeferred result
     <| fun _ errors deferred ->
@@ -481,6 +486,31 @@ let ``Streamed TaskSeq field delivers an item's own resolver error and keeps str
                 [ box "items"; box 0 ]
             )
             DeferredResult ([| box (NameValueLookup.ofList [ "id", upcast 2; "value", upcast "two" ]) |], [ box "items"; box 1 ])
+        ]
+
+[<Fact>]
+let ``A batch containing a failed item alongside a succeeding one is delivered as one DeferredErrors event`` () =
+    // Regression test for the tenth Copilot review thread PRRT_kwDOA0s7t86i5Vu-, which claimed that
+    // Execution.collectItems' chunk branch omits a failed item's index from `indicies` while still reserving its
+    // slot in `data`, so GraphQLWebsocketMiddleware.splitBatch's List.map2 would throw on a mixed success/error
+    // batch. It does not: both arms of `merge` prepend the item's index, so `indicies` and `data` always end up the
+    // same length as the chunk, with the failed item's slot left null. This pins that shape end to end.
+    let items = [ { Id = 1; Value = async { return failwith "Boom resolving item 0" } }; { Id = 2; Value = async { return "two" } } ]
+    let executor =
+        executorFor [
+            Define.TaskSeqField ("items", ListOf StreamItemType, (fun _ _ -> asyncItems items), batching = StreamBatching.Fixed 2, maxConcurrency = 1)
+        ]
+    let result = executeQuery executor "{ items @stream { id value } }"
+    ensureDeferred result
+    <| fun _ errors deferred ->
+        empty errors
+        waitForCompletion deferred
+        |> seqEquals [
+            DeferredErrors (
+                [| null; box (NameValueLookup.ofList [ "id", upcast 2; "value", upcast "two" ]) |],
+                [ GQLProblemDetails.CreateWithKind ("Boom resolving item 0", Execution, [ box "items"; box 0; box "value" ]) ],
+                [ box "items"; box [ box 0; box 1 ] ]
+            )
         ]
 
 [<Fact>]
