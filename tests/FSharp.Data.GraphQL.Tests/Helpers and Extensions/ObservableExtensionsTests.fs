@@ -431,6 +431,34 @@ let ``ofAsyncEnumerableResolved should not pull another item after a resolution 
     sub.Received |> seqEquals [ -1 ]
 
 [<Fact>]
+let ``ofAsyncEnumerableResolved should not resolve an item pulled after a resolution failed while the source produced it`` () =
+    // Regression test: a background resolution can fail while MoveNextAsync for the next item is still suspended;
+    // when that move completed the code used to go straight to resolving it without rechecking the failure, so a
+    // synchronously resolved item 2 was pulled and emitted before the failure that already happened
+    let source =
+        SuspendingAsyncEnumerable<int> (fun _ index ->
+            task {
+                match index with
+                | 0 -> return ValueSome 1
+                | 1 ->
+                    do! Task.Delay (ms 150)
+                    return ValueSome 2
+                | _ -> return ValueNone
+            })
+    let resolve _ (n : int) =
+        if n = 1 then
+            async {
+                do! Async.Sleep (ms 50)
+                return failwith "Boom resolving"
+            }
+            |> AsyncVal.ofAsync
+        else
+            AsyncVal.wrap n
+    use sub = Observable.ofAsyncEnumerableResolved 2 resolve (fun _ -> -1) source |> Observer.create
+    sub.WaitCompleted (timeout = ms 10)
+    sub.Received |> seqEquals [ -1 ]
+
+[<Fact>]
 let ``ofAsyncEnumerableResolved should release the slot and not hang when the observer throws`` () : Task = task {
     // Regression test: an observer throwing while a background resolution is delivered used to skip the slot
     // release entirely, deadlocking the enumeration the same way a failed resolution did. System.Reactive tears

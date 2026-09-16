@@ -98,8 +98,10 @@ module internal Observable =
     /// A result produced synchronously is emitted immediately, keeping it in the order it was pulled. An exception
     /// raised by the source, when acquiring or disposing its enumerator as well as while enumerating, is turned into
     /// a result with <paramref name="onFailure"/> and emitted only after every item pulled before it, so it can never
-    /// overtake a result that is still being resolved. A resolution that fails the same way stops the enumeration and
-    /// is delivered through <paramref name="onFailure"/> once every resolution already started has settled.
+    /// overtake a result that is still being resolved. A resolution whose computation throws — as opposed to
+    /// returning a result that merely carries errors, which <paramref name="resolve"/> is free to keep resolving
+    /// items after — stops the enumeration the same way and is delivered through <paramref name="onFailure"/> once
+    /// every resolution already started has settled; no item pulled after such a failure is resolved.
     /// Only the resolutions in flight are tracked, so a long-running source does not retain what it already delivered.
     /// An observer whose <see cref="IObserver{T}.OnNext"/> throws while a result is delivered always has its
     /// concurrency slot released, so the enumeration never deadlocks over it, but nothing further is delivered to it:
@@ -128,6 +130,7 @@ module internal Observable =
             let drained = TaskCompletionSource ()
             let resolutionFailure = ref ValueNone
             let failed () = lock sync (fun () -> resolutionFailure.Value.IsSome)
+            let stopped () = cancellationToken.IsCancellationRequested || failed ()
             let settle () =
                 lock sync (fun () ->
                     inFlight.Value <- inFlight.Value - 1
@@ -158,16 +161,21 @@ module internal Observable =
                 let mutable index = 0
                 let mutable hasNext = true
                 // The token is checked explicitly, because a sequence is not obliged to observe the token it was given
-                while hasNext && not cancellationToken.IsCancellationRequested && not (failed ()) do
+                while hasNext && not (stopped ()) do
                     do! slots.WaitAsync cancellationToken
-                    // A resolution may have failed, or the subscription been disposed, while this waited for a
-                    // slot; rechecked here so no further item is pulled, let alone emitted, after that
-                    if cancellationToken.IsCancellationRequested || failed () then
+                    // A resolution may have failed, or the subscription been disposed, while this waited for a slot
+                    // or while the source was producing the next item; rechecked after each await so nothing pulled
+                    // after that is resolved, let alone emitted (an item the source already produced is dropped:
+                    // the failure ends the stream anyway)
+                    if stopped () then
                         slots.Release () |> ignore
                         hasNext <- false
                     else
                         let! moved = acquired.MoveNextAsync ()
-                        if moved then
+                        if not moved || stopped () then
+                            slots.Release () |> ignore
+                            hasNext <- false
+                        else
                             let itemIndex = index
                             let item = acquired.Current
                             index <- index + 1
@@ -179,9 +187,6 @@ module internal Observable =
                                 finally
                                     slots.Release () |> ignore
                             | pendingResult -> resolveInBackground pendingResult
-                        else
-                            slots.Release () |> ignore
-                            hasNext <- false
             with ex ->
                 failure <- ValueSome ex
             // Captured items no longer need the enumerator, so it is disposed before waiting for their resolutions
