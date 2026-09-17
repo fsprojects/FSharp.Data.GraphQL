@@ -1060,17 +1060,20 @@ module SchemaDefinitions =
                      Metadata = Metadata.Empty }
 
         /// <summary>
-        /// <para>Creates a list field defined inside object type, which items are produced by an asynchronous sequence.</para>
+        /// Creates a list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
         /// <para>
         /// Without directives the sequence is enumerated completely and returned as a list.
         /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
         /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
         /// </para>
         /// <para>
-        /// The resolver is captured as a quotation, so a <c>taskSeq</c> block that uses <c>let!</c> or <c>yield!</c>
-        /// must be defined in a separate function called from the resolver.
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
         /// </para>
-        /// </summary>
+        /// </remarks>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="resolve">Expression used to resolve the asynchronous sequence from defining object.</param>
@@ -1094,17 +1097,20 @@ module SchemaDefinitions =
                      Metadata = Metadata.Empty }
 
         /// <summary>
-        /// <para>Creates a list field defined inside object type, which items are produced by an asynchronous sequence.</para>
+        /// Creates a list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
         /// <para>
         /// Without directives the sequence is enumerated completely and returned as a list.
         /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
         /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
         /// </para>
         /// <para>
-        /// The resolver is captured as a quotation, so a <c>taskSeq</c> block that uses <c>let!</c> or <c>yield!</c>
-        /// must be defined in a separate function called from the resolver.
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
         /// </para>
-        /// </summary>
+        /// </remarks>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Field description. Useful for generating documentation.</param>
@@ -1129,17 +1135,20 @@ module SchemaDefinitions =
                      Metadata = Metadata.Empty }
 
         /// <summary>
-        /// <para>Creates a list field defined inside object type, which items are produced by an asynchronous sequence.</para>
+        /// Creates a list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
         /// <para>
         /// Without directives the sequence is enumerated completely and returned as a list.
         /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
         /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
         /// </para>
         /// <para>
-        /// The resolver is captured as a quotation, so a <c>taskSeq</c> block that uses <c>let!</c> or <c>yield!</c>
-        /// must be defined in a separate function called from the resolver.
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
         /// </para>
-        /// </summary>
+        /// </remarks>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
@@ -1164,17 +1173,20 @@ module SchemaDefinitions =
                      Metadata = Metadata.Empty }
 
         /// <summary>
-        /// <para>Creates a list field defined inside object type, which items are produced by an asynchronous sequence.</para>
+        /// Creates a list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
         /// <para>
         /// Without directives the sequence is enumerated completely and returned as a list.
         /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
         /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
         /// </para>
         /// <para>
-        /// The resolver is captured as a quotation, so a <c>taskSeq</c> block that uses <c>let!</c> or <c>yield!</c>
-        /// must be defined in a separate function called from the resolver.
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
         /// </para>
-        /// </summary>
+        /// </remarks>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Field description. Useful for generating documentation.</param>
@@ -1200,17 +1212,20 @@ module SchemaDefinitions =
                      Metadata = Metadata.Empty }
 
         /// <summary>
-        /// <para>Creates a nullable list field defined inside object type, which items are produced by an asynchronous sequence.</para>
+        /// Creates a nullable list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
         /// <para>
         /// Without directives the sequence is enumerated completely and returned as a list.
         /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
         /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
         /// </para>
         /// <para>
-        /// The resolver is captured as a quotation, so a <c>taskSeq</c> block that uses <c>let!</c> or <c>yield!</c>
-        /// must be defined in a separate function called from the resolver.
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
         /// </para>
-        /// </summary>
+        /// </remarks>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="resolve">Expression used to resolve the asynchronous sequence from defining object.</param>
@@ -1234,17 +1249,20 @@ module SchemaDefinitions =
                      Metadata = Metadata.Empty }
 
         /// <summary>
-        /// <para>Creates a nullable list field defined inside object type, which items are produced by an asynchronous sequence.</para>
+        /// Creates a nullable list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
         /// <para>
         /// Without directives the sequence is enumerated completely and returned as a list.
         /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
         /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
         /// </para>
         /// <para>
-        /// The resolver is captured as a quotation, so a <c>taskSeq</c> block that uses <c>let!</c> or <c>yield!</c>
-        /// must be defined in a separate function called from the resolver.
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
         /// </para>
-        /// </summary>
+        /// </remarks>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Field description. Useful for generating documentation.</param>
@@ -1269,17 +1287,20 @@ module SchemaDefinitions =
                      Metadata = Metadata.Empty }
 
         /// <summary>
-        /// <para>Creates a nullable list field defined inside object type, which items are produced by an asynchronous sequence.</para>
+        /// Creates a nullable list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
         /// <para>
         /// Without directives the sequence is enumerated completely and returned as a list.
         /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
         /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
         /// </para>
         /// <para>
-        /// The resolver is captured as a quotation, so a <c>taskSeq</c> block that uses <c>let!</c> or <c>yield!</c>
-        /// must be defined in a separate function called from the resolver.
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
         /// </para>
-        /// </summary>
+        /// </remarks>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
@@ -1304,17 +1325,20 @@ module SchemaDefinitions =
                      Metadata = Metadata.Empty }
 
         /// <summary>
-        /// <para>Creates a nullable list field defined inside object type, which items are produced by an asynchronous sequence.</para>
+        /// Creates a nullable list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
         /// <para>
         /// Without directives the sequence is enumerated completely and returned as a list.
         /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
         /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
         /// </para>
         /// <para>
-        /// The resolver is captured as a quotation, so a <c>taskSeq</c> block that uses <c>let!</c> or <c>yield!</c>
-        /// must be defined in a separate function called from the resolver.
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
         /// </para>
-        /// </summary>
+        /// </remarks>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Field description. Useful for generating documentation.</param>
