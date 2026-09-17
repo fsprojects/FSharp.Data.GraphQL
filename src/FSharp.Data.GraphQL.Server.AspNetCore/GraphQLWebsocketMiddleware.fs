@@ -312,68 +312,71 @@ type GraphQLWebSocketMiddleware<'Root>
         // ------->
         task {
             try
-                while not cancellationToken.IsCancellationRequested
-                      && socket |> isSocketOpen do
-                    let! receivedMessage = rcv ()
-                    match receivedMessage with
-                    | Result.Error failureMessages ->
-                        nameof InvalidMessage
-                        |> logMsgReceivedWithOptionalPayload ValueNone
-                        match failureMessages with
-                        | InvalidMessage (code, explanation) -> do! socket.CloseAsync (enum code, explanation, CancellationToken.None)
-                    | Ok ValueNone -> logger.LogTrace ("WebSocket received empty message! State = '{socketState}'", socket.State)
-                    | Ok (ValueSome msg) ->
-                        match msg with
-                        | ConnectionInit p ->
-                            nameof ConnectionInit |> logMsgReceivedWithOptionalPayload p
-                            do!
-                                socket.CloseAsync (
-                                    enum CustomWebSocketStatus.TooManyInitializationRequests,
-                                    "Too many initialization requests",
-                                    CancellationToken.None
-                                )
-                        | ClientPing p ->
-                            nameof ClientPing |> logMsgReceivedWithOptionalPayload p
-                            match pingHandler with
-                            | ValueSome func ->
-                                let! customP = p |> func serviceProvider
-                                do! ServerPong customP |> sendMsg
-                            | ValueNone -> do! ServerPong p |> sendMsg
-                        | ClientPong p -> nameof ClientPong |> logMsgReceivedWithOptionalPayload p
-                        | Subscribe (id, query) ->
-                            try
-                                nameof Subscribe |> logMsgWithIdReceived id
-                                if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
-                                    do!
-                                        let warningMsg : FormattableString = $"Subscriber for Id = '{id}' already exists"
-                                        logger.LogWarning (String.Format (warningMsg.Format, "id"), id)
-                                        socket.CloseAsync (
-                                            enum CustomWebSocketStatus.SubscriberAlreadyExists,
-                                            warningMsg.ToString (),
-                                            CancellationToken.None
-                                        )
-                                else
-                                    let variables = query.Variables |> Skippable.toValueOption
-                                    let getInputContext() = httpContext.RequestServices.GetRequiredService<IInputExecutionContext>()
-                                    let! planExecutionResult =
-                                        let root = options.RootFactory httpContext
-                                        options.SchemaExecutor.AsyncExecute (query.Query, getInputContext, root, ?variables = variables)
-                                    do! planExecutionResult |> applyPlanExecutionResult id socket
-                            with ex ->
-                                logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
-                                do! sendMsg (Error (id, [ GQLProblemDetails.Create "Unexpected error during subscription" ]))
-                        | ClientComplete id ->
-                            "ClientComplete" |> logMsgWithIdReceived id
-                            subscriptions
-                            |> GraphQLSubscriptionsManagement.removeSubscription (id)
-                logger.LogTrace "Leaving the 'graphql-ws' connection loop..."
-                do! socket |> tryToGracefullyCloseSocketWithDefaultBehavior
-            with ex ->
-                logger.LogError (ex, "Cannot handle a message; dropping a websocket connection")
-                // At this point, only something really weird must have happened.
-                // In order to avoid faulty state scenarios and unimagined damages,
-                // just close the socket without further ado.
-                do! socket |> tryToGracefullyCloseSocketWithDefaultBehavior
+                try
+                    while not cancellationToken.IsCancellationRequested
+                          && socket |> isSocketOpen do
+                        let! receivedMessage = rcv ()
+                        match receivedMessage with
+                        | Result.Error failureMessages ->
+                            nameof InvalidMessage
+                            |> logMsgReceivedWithOptionalPayload ValueNone
+                            match failureMessages with
+                            | InvalidMessage (code, explanation) -> do! socket.CloseAsync (enum code, explanation, CancellationToken.None)
+                        | Ok ValueNone -> logger.LogTrace ("WebSocket received empty message! State = '{socketState}'", socket.State)
+                        | Ok (ValueSome msg) ->
+                            match msg with
+                            | ConnectionInit p ->
+                                nameof ConnectionInit |> logMsgReceivedWithOptionalPayload p
+                                do!
+                                    socket.CloseAsync (
+                                        enum CustomWebSocketStatus.TooManyInitializationRequests,
+                                        "Too many initialization requests",
+                                        CancellationToken.None
+                                    )
+                            | ClientPing p ->
+                                nameof ClientPing |> logMsgReceivedWithOptionalPayload p
+                                match pingHandler with
+                                | ValueSome func ->
+                                    let! customP = p |> func serviceProvider
+                                    do! ServerPong customP |> sendMsg
+                                | ValueNone -> do! ServerPong p |> sendMsg
+                            | ClientPong p -> nameof ClientPong |> logMsgReceivedWithOptionalPayload p
+                            | Subscribe (id, query) ->
+                                try
+                                    nameof Subscribe |> logMsgWithIdReceived id
+                                    if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
+                                        do!
+                                            let warningMsg : FormattableString = $"Subscriber for Id = '{id}' already exists"
+                                            logger.LogWarning (String.Format (warningMsg.Format, "id"), id)
+                                            socket.CloseAsync (
+                                                enum CustomWebSocketStatus.SubscriberAlreadyExists,
+                                                warningMsg.ToString (),
+                                                CancellationToken.None
+                                            )
+                                    else
+                                        let variables = query.Variables |> Skippable.toValueOption
+                                        let getInputContext() = httpContext.RequestServices.GetRequiredService<IInputExecutionContext>()
+                                        let! planExecutionResult =
+                                            let root = options.RootFactory httpContext
+                                            options.SchemaExecutor.AsyncExecute (query.Query, getInputContext, root, ?variables = variables)
+                                        do! planExecutionResult |> applyPlanExecutionResult id socket
+                                with ex ->
+                                    logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
+                                    do! sendMsg (Error (id, [ GQLProblemDetails.Create "Unexpected error during subscription" ]))
+                            | ClientComplete id ->
+                                "ClientComplete" |> logMsgWithIdReceived id
+                                subscriptions
+                                |> GraphQLSubscriptionsManagement.removeSubscription (id)
+                    logger.LogTrace "Leaving the 'graphql-ws' connection loop..."
+                    do! socket |> tryToGracefullyCloseSocketWithDefaultBehavior
+                with ex ->
+                    logger.LogError (ex, "Cannot handle a message; dropping a websocket connection")
+                    // At this point, only something really weird must have happened.
+                    // In order to avoid faulty state scenarios and unimagined damages,
+                    // just close the socket without further ado.
+                    do! socket |> tryToGracefullyCloseSocketWithDefaultBehavior
+            finally
+                subscriptions |> GraphQLSubscriptionsManagement.removeAllSubscriptions
         }
 
     // <--------
