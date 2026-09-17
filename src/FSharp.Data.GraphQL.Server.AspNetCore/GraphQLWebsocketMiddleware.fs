@@ -146,7 +146,7 @@ type GraphQLWebSocketMiddleware<'Root>
                 let message =
                     completeMessage
                     |> Seq.filter (fun x -> x > 0uy)
-                    |> Array.ofSeq
+                    |> Seq.toArray
                     |> System.Text.Encoding.UTF8.GetString
                 logger.LogInformation ("-> Request: {request}", message)
             if completeMessage.All(fun b -> b = 0uy) then
@@ -164,7 +164,7 @@ type GraphQLWebSocketMiddleware<'Root>
         else
             // TODO: Allocate string only if a debugger is attached
             let! serializedMessage = message |> serializeServerMessage jsonSerializerOptions
-            let segment = ArraySegment<byte>(System.Text.Encoding.UTF8.GetBytes (serializedMessage))
+            let segment = ArraySegment<byte>(System.Text.Encoding.UTF8.GetBytes serializedMessage)
             if not (socket.State = WebSocketState.Open) then
                 logger.LogTrace ($"Ignoring message to be sent via socket, since its state is not '{nameof WebSocketState.Open}', but '{{state}}'", socket.State)
             else
@@ -234,6 +234,7 @@ type GraphQLWebSocketMiddleware<'Root>
             match subscriptionResult with
             | SubscriptionResult output -> SubscriptionExecutionResult.Create (output, []) |> sendOutput id
             | SubscriptionErrors (output, errors) ->
+                // TODO: Use StringBuilder
                 logger.LogWarning ("Subscription errors: {subscriptionErrors}", (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}"))))
                 // The executor may still have resolved partial data alongside the field errors; forward it as-is
                 match output with
@@ -254,6 +255,7 @@ type GraphQLWebSocketMiddleware<'Root>
             | ValueSome (DeferredErrors (data, errors, BatchPath (fieldPath, indices))) ->
                 logger.LogWarning (
                     "Deferred response errors: {deferredErrors}",
+                    // TODO: Use StringBuilder
                     (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
                 )
                 for itemData, itemErrors, itemPath in splitBatch fieldPath indices data errors do
@@ -261,6 +263,7 @@ type GraphQLWebSocketMiddleware<'Root>
             | ValueSome (DeferredErrors (data, errors, path)) ->
                 logger.LogWarning (
                     "Deferred response errors: {deferredErrors}",
+                    // TODO: Use StringBuilder
                     (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
                 )
                 do! SubscriptionExecutionResult.CreateIncremental (data, errors, path) |> sendOutput id
