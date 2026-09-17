@@ -66,7 +66,9 @@ module internal Observable =
     /// is delivered through <see cref="IObserver{T}.OnError"/>.
     /// </remarks>
     let ofAsyncEnumerable (source : IAsyncEnumerable<'T>) : IObservable<'T> =
-        let enumerate (observer : IObserver<'T>) (cancellationToken : CancellationToken) : Task = task {
+        // backgroundTask, not task: the enumeration is started by Observable.Create on the subscriber's thread, and
+        // a subscriber's synchronization context must neither be captured by the loop nor be needed to pump it
+        let enumerate (observer : IObserver<'T>) (cancellationToken : CancellationToken) : Task = backgroundTask {
             let mutable enumerator = ValueNone
             let mutable failure = ValueNone
             try
@@ -95,20 +97,29 @@ module internal Observable =
     /// many resolutions are in flight, pulling the next item waits for one of them to be emitted.
     /// </summary>
     /// <remarks>
-    /// A result produced synchronously is emitted immediately, keeping it in the order it was pulled. An exception
-    /// raised by the source, when acquiring or disposing its enumerator as well as while enumerating, is turned into
-    /// a result with <paramref name="onFailure"/> and emitted only after every item pulled before it, so it can never
-    /// overtake a result that is still being resolved. A resolution whose computation throws — as opposed to
-    /// returning a result that merely carries errors, which <paramref name="resolve"/> is free to keep resolving
-    /// items after — stops the enumeration the same way and is delivered through <paramref name="onFailure"/> once
-    /// every resolution already started has settled; no item pulled after such a failure is resolved.
-    /// Only the resolutions in flight are tracked, so a long-running source does not retain what it already delivered.
+    /// <para>
+    /// A result produced synchronously is emitted immediately, keeping it in the order it was pulled.
+    /// </para>
+    /// <para>
+    /// An exception raised by the source, when acquiring or disposing its enumerator as well as while enumerating,
+    /// is turned into a result with <paramref name="onFailure"/> and emitted only after every item pulled before it,
+    /// so it can never overtake a result that is still being resolved. A resolution whose computation throws — as
+    /// opposed to returning a result that merely carries errors, which <paramref name="resolve"/> is free to keep
+    /// resolving items after — stops the enumeration the same way and is delivered through
+    /// <paramref name="onFailure"/> once every resolution already started has settled; no item pulled after such a
+    /// failure is resolved. Only the resolutions in flight are tracked, so a long-running source does not retain
+    /// what it already delivered.
+    /// </para>
+    /// <para>
     /// An observer whose <see cref="IObserver{T}.OnNext"/> throws while a result is delivered always has its
-    /// concurrency slot released, so the enumeration never deadlocks over it, but nothing further is delivered to it:
-    /// per the observable contract, the subscription is torn down by the caller as soon as <c>OnNext</c> throws, same
-    /// as for any other observer.
+    /// concurrency slot released, so the enumeration never deadlocks over it, but nothing further is delivered to
+    /// it: per the observable contract, the subscription is torn down by the caller as soon as <c>OnNext</c>
+    /// throws, same as for any other observer.
+    /// </para>
+    /// <para>
     /// Disposing the subscription cancels the enumeration; resolutions already started are still awaited and, if
     /// still relevant, emitted, but no further item is pulled.
+    /// </para>
     /// </remarks>
     let ofAsyncEnumerableResolved
         (maxConcurrency : int)
@@ -116,7 +127,10 @@ module internal Observable =
         (onFailure : exn -> 'Result)
         (source : IAsyncEnumerable<'T>)
         : IObservable<'Result> =
-        let enumerate (observer : IObserver<'Result>) (cancellationToken : CancellationToken) : Task = task {
+        // backgroundTask, not task: besides the reasons that apply to ofAsyncEnumerable, the loop awaits a
+        // concurrency slot and, at the end, the resolutions still draining on the thread pool - a subscriber's
+        // synchronization context that has to be pumped for those continuations would be a deadlock waiting to happen
+        let enumerate (observer : IObserver<'Result>) (cancellationToken : CancellationToken) : Task = backgroundTask {
             use slots = new SemaphoreSlim (maxConcurrency, maxConcurrency)
             // Observer calls are not required to be thread-safe, but resolutions complete on arbitrary threads
             let sync = obj ()
@@ -137,7 +151,10 @@ module internal Observable =
                     if enumerationEnded.Value && inFlight.Value = 0 then drained.TrySetResult () |> ignore)
             let resolveInBackground (pendingResult : AsyncVal<'Result>) =
                 lock sync (fun () -> inFlight.Value <- inFlight.Value + 1)
-                task {
+                // backgroundTask, not task: a resolution must never resume on a caller's synchronization context,
+                // and its synchronous prefix must not run on the enumeration loop's thread, which is pulling the
+                // next item in parallel
+                backgroundTask {
                     try
                         try
                             let! result = pendingResult |> AsyncVal.toTask
@@ -206,7 +223,7 @@ module internal Observable =
         Observable.Create<'Result> (Func<IObserver<'Result>, CancellationToken, Task> (fun observer cancellationToken -> enumerate observer cancellationToken))
 
     /// <summary>
-    /// Wraps every element into <see langword="ValueSome"/> and emits <see langword="ValueNone"/> when the source completes.
+    /// Wraps every element into <see cref="ValueSome"/> and emits <see cref="ValueNone"/> when the source completes.
     /// </summary>
     /// <remarks>
     /// A consumer can handle the completion like a regular element, for example to send a final message
@@ -218,14 +235,16 @@ module internal Observable =
 /// <summary>
 /// Functions for consuming <see cref="IAsyncEnumerable{T}"/> from <see cref="Async"/> computations.
 /// </summary>
-module internal AsyncEnumerableExtensions =
+module internal AsyncEnumerable =
 
     /// <summary>
     /// Enumerates the whole asynchronous sequence into an array using the cancellation token of the current computation.
     /// </summary>
     let toArrayAsync (source : IAsyncEnumerable<'T>) : Async<'T[]> = async {
         let! cancellationToken = Async.CancellationToken
-        let enumerate () : Task<Result<'T[], exn>> = task {
+        // backgroundTask, not task: the async workflow around it may have been started on a caller's synchronization
+        // context, which the drain has no reason to capture
+        let enumerate () : Task<Result<'T[], exn>> = backgroundTask {
             let items = ResizeArray<'T> ()
             let mutable enumerator = ValueNone
             let mutable failure = ValueNone
@@ -241,8 +260,8 @@ module internal AsyncEnumerableExtensions =
                     else hasNext <- false
             with ex ->
                 failure <- ValueSome ex
-            let! failure = Observable.disposeEnumerator enumerator failure
-            match failure with
+
+            match! Observable.disposeEnumerator enumerator failure with
             | ValueSome ex -> return Error ex
             | ValueNone -> return Ok (items.ToArray ())
         }
@@ -251,6 +270,6 @@ module internal AsyncEnumerableExtensions =
         match! enumerate () |> Async.AwaitTask with
         | Ok items -> return items
         | Error ex ->
-            ExceptionDispatchInfo.Capture(ex).Throw ()
+            ex.Reraise ()
             return Array.empty
     }

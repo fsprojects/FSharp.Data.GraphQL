@@ -221,7 +221,7 @@ let rec private direct (returnDef : OutputDef) (inputContext : InputExecutionCon
             items
             |> Array.mapi resolveItem
             |> collectFields Parallel
-            |> AsyncVal.map(ResolverResult.mapValue(fun items -> KeyValuePair(name, items |> Array.map(fun d -> d.Value) |> box)))
+            |> AsyncVal.map(ResolverResult.mapValue(fun items -> KeyValuePair(name, items |> Array.map _.Value |> box)))
         match value with
         | :? IAsyncEnumerableFieldValue as fieldValue ->
             async {
@@ -229,7 +229,7 @@ let rec private direct (returnDef : OutputDef) (inputContext : InputExecutionCon
                 // Enumeration errors are caught inside the computation, because resolveWith only catches synchronous exceptions.
                 let! drained = async {
                     try
-                        let! items = AsyncEnumerableExtensions.toArrayAsync fieldValue.Items
+                        let! items = AsyncEnumerable.toArrayAsync fieldValue.Items
                         return Ok items
                     with e ->
                         return Error (resolverError path ctx e)
@@ -302,15 +302,15 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
             { options with PreferredBatchSize = fieldValue.GetPreferredBatchSize () }
         | _ -> options
 
-    let collectItems : (int * ResolverResult<KeyValuePair<string, obj>>) list -> IObservable<GQLDeferredResponseContent> = function
+    let collectItems : struct (int * ResolverResult<KeyValuePair<string, obj>>) list -> IObservable<GQLDeferredResponseContent> = function
         | [] -> Observable.empty
-        | [(index, result)] ->
+        | [struct (index, result)] ->
             result
             |> ResolverResult.mapValue(fun d -> box [|d.Value|])
             |> deferResults (box index :: path)
         | chunk ->
             let data = Array.zeroCreate (chunk.Length)
-            let merge (index, r : ResolverResult<KeyValuePair<string, obj>>) (i, indicies, deferred, errs) =
+            let merge struct (index, r : ResolverResult<KeyValuePair<string, obj>>) (i, indicies, deferred, errs) =
                 match r with
                 | Ok (item, d, e) ->
                     Array.set data i item.Value
@@ -320,18 +320,14 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
             deferResults (box indicies :: path) (Ok (box data, deferred, errs))
 
     let collectBuffered (events : StreamEvent list) : IObservable<GQLDeferredResponseContent> =
-        let items =
-            events
-            |> List.vchoose (function
-                | StreamedItem (index, result) -> ValueSome (index, result)
-                | StreamFailure _ -> ValueNone)
         // An enumeration failure is delivered as a value after the items of the same buffer,
         // so it neither loses buffered items nor terminates sibling deferred streams
-        let failures =
-            events
-            |> List.vchoose (function
-                | StreamFailure error -> ValueSome (DeferredErrors (null, resolverError path ctx error, normalizeErrorPath path))
-                | StreamedItem _ -> ValueNone)
+        let struct (items, failures) =
+            (events, struct ([], []))
+            ||> List.foldBack (fun event struct (items, failures) ->
+                match event with
+                | StreamedItem (index, result) -> struct (index, result) :: items, failures
+                | StreamFailure error -> items, DeferredErrors (null, resolverError path ctx error, normalizeErrorPath path) :: failures)
         match failures with
         | [] -> collectItems items
         | failures -> collectItems items |> Observable.concat (Observable.ofSeq failures)
@@ -563,7 +559,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             let operations =
                 coerced
                 |> Seq.map (fun (KeyValue (i, struct (args, _))) -> executeRootOperation resultSet[i] args)
-                |> Array.ofSeq
+                |> Seq.toArray
             match! operations |> collectFields ctx.ExecutionPlan.Strategy with
             | Ok (data, Some deferred, errs) -> return GQLExecutionResult.Deferred(documentId, NameValueLookup(data), errs, deferred, ctx.Metadata)
             | Ok (data, None, errs) -> return GQLExecutionResult.Direct(documentId, NameValueLookup(data), errs, ctx.Metadata)
