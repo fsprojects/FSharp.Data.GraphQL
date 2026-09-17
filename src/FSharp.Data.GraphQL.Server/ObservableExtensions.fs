@@ -13,32 +13,33 @@ module internal Observable =
 
     let ofAsyncVal x = x |> AsyncVal.toAsync |> ofAsync
 
-    let toSeq (o : IObservable<'T>) : 'T seq = Observable.ToEnumerable(o)
+    let toSeq (o : IObservable<'T>) : 'T seq = Observable.ToEnumerable (o)
 
     /// Projects each element of an observable sequence into consecutive non-overlapping buffers
     /// which are produced based on timing information.
     let bufferMilliseconds (ms : int) x =
-        let span = TimeSpan.FromMilliseconds(float ms)
-        Observable.Buffer(x, span)
+        let span = TimeSpan.FromMilliseconds (float ms)
+        Observable.Buffer (x, span)
 
     /// Projects each element of an observable sequence into consecutive non-overlapping buffers
     /// which are produced based on timing and element count information.
     let bufferMillisecondsCount (ms : int) (count : int) x =
-        let span = TimeSpan.FromMilliseconds(float ms)
-        Observable.Buffer(x, span, count)
+        let span = TimeSpan.FromMilliseconds (float ms)
+        Observable.Buffer (x, span, count)
 
-    let ofAsyncSeq (items : Async<'Item> seq) =
-        items |> Seq.map ofAsync |> Observable.Merge
+    let ofAsyncSeq (items : Async<'Item> seq) = items |> Seq.map ofAsync |> Observable.Merge
 
-    let ofAsyncValSeq (items : AsyncVal<'Item> seq) =
-        items |> Seq.map ofAsyncVal |> Observable.Merge
+    let ofAsyncValSeq (items : AsyncVal<'Item> seq) = items |> Seq.map ofAsyncVal |> Observable.Merge
 
     let singleton (value : 'T) = {
         new IObservable<'T> with
-            member _.Subscribe(observer) =
+            member _.Subscribe (observer) =
                 observer.OnNext value
-                observer.OnCompleted()
-                { new IDisposable with member _.Dispose() = () }
+                observer.OnCompleted ()
+                {
+                    new IDisposable with
+                        member _.Dispose () = ()
+                }
     }
 
     /// <summary>
@@ -79,8 +80,10 @@ module internal Observable =
                 // The token is checked explicitly, because a sequence is not obliged to observe the token it was given
                 while hasNext && not cancellationToken.IsCancellationRequested do
                     let! moved = acquired.MoveNextAsync ()
-                    if moved then observer.OnNext acquired.Current
-                    else hasNext <- false
+                    if moved then
+                        observer.OnNext acquired.Current
+                    else
+                        hasNext <- false
             with ex ->
                 failure <- ValueSome ex
             let! failure = disposeEnumerator enumerator failure
@@ -89,7 +92,7 @@ module internal Observable =
             | ValueSome ex when not cancellationToken.IsCancellationRequested -> observer.OnError ex
             | _ -> ()
         }
-        Observable.Create<'T> (Func<IObserver<'T>, CancellationToken, Task> (fun observer cancellationToken -> enumerate observer cancellationToken))
+        Observable.Create<'T>(Func<IObserver<'T>, CancellationToken, Task>(fun observer cancellationToken -> enumerate observer cancellationToken))
 
     /// <summary>
     /// Enumerates the sequence, resolving each item into a result with <paramref name="resolve"/>. At most
@@ -131,11 +134,14 @@ module internal Observable =
         // concurrency slot and, at the end, the resolutions still draining on the thread pool - a subscriber's
         // synchronization context that has to be pumped for those continuations would be a deadlock waiting to happen
         let enumerate (observer : IObserver<'Result>) (cancellationToken : CancellationToken) : Task = backgroundTask {
+            use enumerationCancellation = CancellationTokenSource.CreateLinkedTokenSource cancellationToken
             use slots = new SemaphoreSlim (maxConcurrency, maxConcurrency)
             // Observer calls are not required to be thread-safe, but resolutions complete on arbitrary threads
             let sync = obj ()
             let emit (result : 'Result) =
-                lock sync (fun () -> if not cancellationToken.IsCancellationRequested then observer.OnNext result)
+                lock sync (fun () ->
+                    if not cancellationToken.IsCancellationRequested then
+                        observer.OnNext result)
             // Only the number of resolutions still in flight is tracked, not the tasks themselves, so a long-running
             // source does not retain one task per item; the last resolution to settle after the enumeration has ended
             // completes drained. Ref cells, because the resolutions run on other threads.
@@ -145,10 +151,22 @@ module internal Observable =
             let resolutionFailure = ref ValueNone
             let failed () = lock sync (fun () -> resolutionFailure.Value.IsSome)
             let stopped () = cancellationToken.IsCancellationRequested || failed ()
+            let recordResolutionFailure (ex : exn) =
+                let shouldCancelEnumeration =
+                    lock sync (fun () ->
+                        if resolutionFailure.Value.IsNone then
+                            resolutionFailure.Value <- ValueSome ex
+                            true
+                        else
+                            false)
+
+                if shouldCancelEnumeration then
+                    enumerationCancellation.Cancel ()
             let settle () =
                 lock sync (fun () ->
                     inFlight.Value <- inFlight.Value - 1
-                    if enumerationEnded.Value && inFlight.Value = 0 then drained.TrySetResult () |> ignore)
+                    if enumerationEnded.Value && inFlight.Value = 0 then
+                        drained.TrySetResult () |> ignore)
             let resolveInBackground (pendingResult : AsyncVal<'Result>) =
                 lock sync (fun () -> inFlight.Value <- inFlight.Value + 1)
                 // backgroundTask, not task: a resolution must never resume on a caller's synchronization context,
@@ -161,7 +179,7 @@ module internal Observable =
                             emit result
                         with ex ->
                             // The first failure stops the enumeration; it is delivered once every started resolution has settled
-                            lock sync (fun () -> if resolutionFailure.Value.IsNone then resolutionFailure.Value <- ValueSome ex)
+                            recordResolutionFailure ex
                     finally
                         // Released whatever happened, otherwise the enumeration would wait for this slot forever.
                         // Released before settling, because settling lets the enumeration finish and dispose the semaphore.
@@ -173,7 +191,7 @@ module internal Observable =
             let mutable failure = ValueNone
             try
                 // Acquired inside the try, because a source may throw when asked for its enumerator
-                let acquired = source.GetAsyncEnumerator cancellationToken
+                let acquired = source.GetAsyncEnumerator enumerationCancellation.Token
                 enumerator <- ValueSome acquired
                 let mutable index = 0
                 let mutable hasNext = true
@@ -205,13 +223,16 @@ module internal Observable =
                                     slots.Release () |> ignore
                             | pendingResult -> resolveInBackground pendingResult
             with ex ->
-                failure <- ValueSome ex
+                match ex with
+                | :? OperationCanceledException when failed () && not cancellationToken.IsCancellationRequested -> ()
+                | _ -> failure <- ValueSome ex
             // Captured items no longer need the enumerator, so it is disposed before waiting for their resolutions
             let! failure = disposeEnumerator enumerator failure
             // Resolutions still in flight neither need the enumerator nor the loop, only their slots
             lock sync (fun () ->
                 enumerationEnded.Value <- true
-                if inFlight.Value = 0 then drained.TrySetResult () |> ignore)
+                if inFlight.Value = 0 then
+                    drained.TrySetResult () |> ignore)
             do! drained.Task
             match failure |> ValueOption.orElse resolutionFailure.Value with
             // A failure caused by disposing the subscription has no observer left to be delivered to
@@ -220,7 +241,9 @@ module internal Observable =
             if not cancellationToken.IsCancellationRequested then
                 lock sync (fun () -> observer.OnCompleted ())
         }
-        Observable.Create<'Result> (Func<IObserver<'Result>, CancellationToken, Task> (fun observer cancellationToken -> enumerate observer cancellationToken))
+        Observable.Create<'Result>(
+            Func<IObserver<'Result>, CancellationToken, Task>(fun observer cancellationToken -> enumerate observer cancellationToken)
+        )
 
     /// <summary>
     /// Wraps every element into <see cref="ValueSome"/> and emits <see cref="ValueNone"/> when the source completes.
@@ -245,7 +268,7 @@ module internal AsyncEnumerable =
         // backgroundTask, not task: the async workflow around it may have been started on a caller's synchronization
         // context, which the drain has no reason to capture
         let enumerate () : Task<Result<'T[], exn>> = backgroundTask {
-            let items = ResizeArray<'T> ()
+            let items = ResizeArray<'T>()
             let mutable enumerator = ValueNone
             let mutable failure = ValueNone
             try
@@ -256,8 +279,10 @@ module internal AsyncEnumerable =
                 while hasNext do
                     cancellationToken.ThrowIfCancellationRequested ()
                     let! moved = acquired.MoveNextAsync ()
-                    if moved then items.Add acquired.Current
-                    else hasNext <- false
+                    if moved then
+                        items.Add acquired.Current
+                    else
+                        hasNext <- false
             with ex ->
                 failure <- ValueSome ex
 
