@@ -191,6 +191,22 @@ let ``TaskSeq field with defer directive delivers the whole list in one deferred
         |> equals (DeferredResult ([| box 1; box 2; box 3 |], [ box "numbers" ]))
 
 [<Fact>]
+let ``TaskSeq field with defer directive supports struct nullable lists`` () =
+    let executor =
+        executorFor [
+            Define.TaskSeqField ("numbers", StructNullable (ListOf IntType), fun _ _ -> ValueSome (asyncItems [ 1; 2; 3 ]))
+        ]
+    let expectedData = NameValueLookup.ofList [ "numbers", null ]
+    let result = executeQuery executor "{ numbers @defer }"
+    ensureDeferred result
+    <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedData)
+        waitForCompletion deferred
+        |> single
+        |> equals (DeferredResult ([| box 1; box 2; box 3 |], [ box "numbers" ]))
+
+[<Fact>]
 let ``TaskSeq field with stream directive delivers items before the sequence completes`` () =
     let gate = TaskCompletionSource ()
     let executor =

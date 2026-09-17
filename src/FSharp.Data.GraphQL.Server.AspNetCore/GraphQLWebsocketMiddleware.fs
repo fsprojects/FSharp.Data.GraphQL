@@ -184,7 +184,11 @@ type GraphQLWebSocketMiddleware<'Root>
         let observer =
             new Reactive.AnonymousObserver<'ResponseContent> (
                 onNext = (fun theOutput -> (howToSendDataOnNext id theOutput).Wait ()),
-                onError = (fun ex -> logger.LogError (ex, "Error on subscription with Id = '{id}'", id)),
+                onError =
+                    (fun ex ->
+                        logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
+                        subscriptions
+                        |> GraphQLSubscriptionsManagement.removeSubscription (id)),
                 onCompleted =
                     (fun () ->
                         (sendMessageViaSocket jsonSerializerOptions socket (Complete id)).Wait ()
