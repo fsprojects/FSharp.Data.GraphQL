@@ -171,29 +171,31 @@ module Helpers =
 
     let rec internal moduleType = ReflectionHelper.getModuleType <@ moduleType @>
 
-    /// <summary>
-    /// Casts a <see cref="System.Object"/> to a <see cref="option{System.Object}"/>.
-    /// </summary>
-    let optionCast (value: obj) =
-        if isNull value then None
+    let private objectOptionCast (value: obj) =
+        if isNull value then ValueNone
         else
             let t = value.GetType()
             if t.FullName.StartsWith ReflectionHelper.OptionTypeName then
                 let p = t.GetProperty("Value")
-                Some (p.GetValue(value, [||]))
+                ValueSome (p.GetValue(value, [||]))
             elif t.FullName.StartsWith ReflectionHelper.ValueOptionTypeName then
-                if value = Activator.CreateInstance t then None
+                if value = Activator.CreateInstance t then ValueNone
                 else
                     let p = t.GetProperty("Value")
-                    Some (p.GetValue(value, [||]))
-            else None
+                    ValueSome (p.GetValue(value, [||]))
+            else ValueNone
+
+    /// <summary>
+    /// Casts a <see cref="System.Object"/> to a <see cref="option{System.Object}"/>.
+    /// </summary>
+    let optionCast (value: obj) = objectOptionCast value |> ValueOption.toOption
 
     /// <summary>
     /// Matches a System.Object with an option.
     /// If the object is an <see cref="Option{T}", returns it as Some, otherwise, return <see cref="None"/>.
     /// </summary>
     [<return: Struct>]
-    let (|ObjectOption|_|) (value : obj) = optionCast value |> ValueOption.ofOption
+    let (|ObjectOption|_|) (value : obj) = objectOptionCast value
 
     /// <summary>
     /// Lifts a <see cref="System.Object"/> to an <see cref="option{System.Object}"/>, unless it is already an <see cref="option{System.Object}"/>.

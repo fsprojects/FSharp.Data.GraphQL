@@ -24,6 +24,10 @@ module ReflectionPatterns =
     let isOption (t : Type) =
         t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ option>
 
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="t"/> is an F# <c>voption</c> type.
+    /// </summary>
+    /// <param name="t">Type to inspect.</param>
     let isValueOption (t : Type) =
         t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ voption>
 
@@ -95,6 +99,10 @@ module ReflectionPatterns =
         if isOption t then ValueSome (Option (t.GetGenericArguments().[0]))
         else ValueNone
 
+    /// <summary>
+    /// Matches F# <c>voption</c> types and extracts their generic value type.
+    /// </summary>
+    /// <param name="t">Type to inspect.</param>
     [<return: Struct>]
     let (|ValueOption|_|) t =
         if isValueOption t then ValueSome (ValueOption (t.GetGenericArguments().[0]))
