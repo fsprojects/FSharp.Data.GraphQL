@@ -224,7 +224,12 @@ module internal Observable =
                 enumerationEnded.Value <- true
                 if inFlight.Value = 0 then drained.TrySetResult () |> ignore)
             do! drained.Task
-            match failure |> ValueOption.orElse resolutionFailure.Value with
+            let failureToReport =
+                match resolutionFailure.Value, failure with
+                | ValueSome resolutionFailure, ValueSome (:? OperationCanceledException) when not cancellationToken.IsCancellationRequested ->
+                    ValueSome resolutionFailure
+                | _ -> failure |> ValueOption.orElse resolutionFailure.Value
+            match failureToReport with
             // A failure caused by disposing the subscription has no observer left to be delivered to
             | ValueSome ex when not cancellationToken.IsCancellationRequested -> emit (onFailure ex)
             | _ -> ()
