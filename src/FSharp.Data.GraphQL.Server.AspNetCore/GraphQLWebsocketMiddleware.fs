@@ -78,6 +78,7 @@ module internal ObservableErrorHandling =
         match ex with
         | :? AggregateException as aggregate ->
             aggregate.Flatten().InnerExceptions
+            |> Seq.distinct
             |> Seq.toList
             |> List.collect problemDetailsOfObservableError
         | _ ->
