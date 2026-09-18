@@ -69,7 +69,24 @@ module internal IncrementalPayloadSplitting =
                     |> ValueOption.defaultValue false)
             box [| item |], itemErrors, itemPath)
 
+module internal ObservableErrorHandling =
+
+    [<Literal>]
+    let UnexpectedObservableErrorMessage = "Unexpected error during subscription"
+
+    let rec problemDetailsOfObservableError (ex : exn) =
+        match ex with
+        | :? AggregateException as aggregate ->
+            aggregate.Flatten().InnerExceptions
+            |> Seq.toList
+            |> List.collect problemDetailsOfObservableError
+        | _ ->
+            match box ex with
+            | :? IGQLError as error -> [ GQLProblemDetails.OfError error ]
+            | _ -> [ GQLProblemDetails.Create UnexpectedObservableErrorMessage ]
+
 open IncrementalPayloadSplitting
+open ObservableErrorHandling
 
 type GraphQLWebSocketMiddleware<'Root>
     (
@@ -200,17 +217,6 @@ type GraphQLWebSocketMiddleware<'Root>
             streamSource : IObservable<'ResponseContent>,
             jsonSerializerOptions : JsonSerializerOptions
         ) =
-        let rec problemDetailsOfObservableError (ex : exn) =
-            match ex with
-            | :? AggregateException as aggregate ->
-                aggregate.Flatten().InnerExceptions
-                |> Seq.toList
-                |> List.collect problemDetailsOfObservableError
-            | _ ->
-                match box ex with
-                | :? IGQLError as error -> [ GQLProblemDetails.OfError error ]
-                | _ -> [ GQLProblemDetails.Create (ex.Message, ex) ]
-
         let sendTerminalError (ex : exn) =
             sendMessageViaSocket jsonSerializerOptions socket (Error (id, problemDetailsOfObservableError ex))
 
@@ -432,7 +438,7 @@ type GraphQLWebSocketMiddleware<'Root>
                                         do! planExecutionResult |> applyPlanExecutionResult id socket
                                 with ex ->
                                     logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
-                                    do! sendMsg (Error (id, [ GQLProblemDetails.Create "Unexpected error during subscription" ]))
+                                    do! sendMsg (Error (id, [ GQLProblemDetails.Create UnexpectedObservableErrorMessage ]))
                             | ClientComplete id ->
                                 "ClientComplete" |> logMsgWithIdReceived id
                                 subscriptions
