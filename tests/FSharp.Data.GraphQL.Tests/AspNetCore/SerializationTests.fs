@@ -1,6 +1,7 @@
 module FSharp.Data.GraphQL.Tests.AspNetCore.SerializationTests
 
 open System
+open System.Collections.Generic
 open Xunit
 open System.Text.Json
 open FSharp.Data.GraphQL.Ast
@@ -218,7 +219,10 @@ let ``Observable error details preserve GraphQL-facing messages inside aggregate
 [<Fact>]
 let ``Observable error details do not duplicate repeated aggregate errors`` () =
     let actual =
-        AggregateException [| GQLMessageException "Visible to client" :> exn; GQLMessageException "Visible to client" :> exn |]
+        AggregateException [|
+            GQLMessageException ("Visible to client", Dictionary<string, obj>(dict [ "code", box "FIRST" ])) :> exn
+            GQLMessageException ("Visible to client", Dictionary<string, obj>(dict [ "code", box "SECOND" ])) :> exn
+        |]
         |> problemDetailsOfObservableError
 
     let error = Assert.Single actual
