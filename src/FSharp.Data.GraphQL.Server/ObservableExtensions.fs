@@ -217,8 +217,6 @@ module internal Observable =
             // A failure caused by disposing the subscription has no observer left to be delivered to
             | ValueSome ex when not cancellationToken.IsCancellationRequested -> emit (onFailure ex)
             | _ -> ()
-            if not cancellationToken.IsCancellationRequested then
-                lock sync (fun () -> observer.OnCompleted ())
         }
         Observable.Create<'Result> (Func<IObserver<'Result>, CancellationToken, Task> (fun observer cancellationToken -> enumerate observer cancellationToken))
 

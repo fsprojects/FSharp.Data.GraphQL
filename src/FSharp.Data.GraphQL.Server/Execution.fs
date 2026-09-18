@@ -310,14 +310,14 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
             |> deferResults (box index :: path)
         | chunk ->
             let data = Array.zeroCreate (chunk.Length)
-            let merge struct (index, r : ResolverResult<KeyValuePair<string, obj>>) (i, indicies, deferred, errs) =
+            let merge struct (index, r : ResolverResult<KeyValuePair<string, obj>>) (i, indices, deferred, errs) =
                 match r with
                 | Ok (item, d, e) ->
                     Array.set data i item.Value
-                    (i - 1, box index :: indicies, Option.mergeWith Observable.merge deferred d, e @ errs)
-                | Error e -> (i - 1, box index :: indicies, deferred, e @ errs)
-            let (_, indicies, deferred, errs) = List.foldBack merge chunk (chunk.Length - 1, [], None, [])
-            deferResults (box indicies :: path) (Ok (box data, deferred, errs))
+                    (i - 1, box index :: indices, Option.mergeWith Observable.merge deferred d, e @ errs)
+                | Error e -> (i - 1, box index :: indices, deferred, e @ errs)
+            let (_, indices, deferred, errs) = List.foldBack merge chunk (chunk.Length - 1, [], None, [])
+            deferResults (box indices :: path) (Ok (box data, deferred, errs))
 
     let collectBuffered (events : StreamEvent list) : IObservable<GQLDeferredResponseContent> =
         // An enumeration failure is delivered as a value after the items of the same buffer,

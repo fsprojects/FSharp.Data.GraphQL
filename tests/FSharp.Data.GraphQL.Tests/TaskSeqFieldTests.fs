@@ -491,9 +491,9 @@ let ``Streamed TaskSeq field delivers an item's own resolver error and keeps str
 [<Fact>]
 let ``A batch containing a failed item alongside a succeeding one is delivered as one DeferredErrors event`` () =
     // Regression test for the tenth Copilot review thread PRRT_kwDOA0s7t86i5Vu-, which claimed that
-    // Execution.collectItems' chunk branch omits a failed item's index from `indicies` while still reserving its
+    // Execution.collectItems' chunk branch omits a failed item's index from `indices` while still reserving its
     // slot in `data`, so GraphQLWebsocketMiddleware.splitBatch's List.map2 would throw on a mixed success/error
-    // batch. It does not: both arms of `merge` prepend the item's index, so `indicies` and `data` always end up the
+    // batch. It does not: both arms of `merge` prepend the item's index, so `indices` and `data` always end up the
     // same length as the chunk, with the failed item's slot left null. This pins that shape end to end.
     let items = [ { Id = 1; Value = async { return failwith "Boom resolving item 0" } }; { Id = 2; Value = async { return "two" } } ]
     let executor =

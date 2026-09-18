@@ -40,9 +40,14 @@ module internal IncrementalPayloadSplitting =
 
     // Written as `obj list`, not the (internal, and here inaccessible) `FieldPath` abbreviation it stands for:
     // a type abbreviation is erased, so this is the exact same type and unifies fine with FieldPath-typed values.
-    let pathStartsWith (prefix : obj list) (path : obj list) =
-        let prefixLength = List.length prefix
-        List.length path >= prefixLength && List.truncate prefixLength path = prefix
+    let trySkipPathPrefix (prefix : obj list) (path : obj list) =
+        let rec loop prefix path =
+            match prefix, path with
+            | [], remainingPath -> ValueSome remainingPath
+            | _ :: _, [] -> ValueNone
+            | prefixHead :: prefixTail, pathHead :: pathTail when prefixHead = pathHead -> loop prefixTail pathTail
+            | _ -> ValueNone
+        loop prefix path
 
     /// Matches a path ending in a list of indices, such as the path of a batched deferred payload, returning the
     /// path of the batch's own field and the indices of its items.
@@ -56,16 +61,20 @@ module internal IncrementalPayloadSplitting =
     /// item) into one <c>(data, errors, path)</c> triple per item, addressed at that item's own path.
     let splitBatch (fieldPath : obj list) (indices : obj list) (data : obj) (errors : GQLProblemDetails list) =
         let items = data :?> obj[]
+        let errorsByIndex =
+            errors
+            |> Seq.vchoose (fun error ->
+                error.Path
+                |> Skippable.toValueOption
+                |> ValueOption.bind (trySkipPathPrefix fieldPath)
+                |> ValueOption.bind (function
+                    | itemIndex :: _ -> ValueSome struct (itemIndex, error)
+                    | [] -> ValueNone))
+            |> _.ToLookup((fun struct (itemIndex, _) -> itemIndex), (fun struct (_, error) -> error))
         (indices, List.ofArray items)
         ||> List.map2 (fun index item ->
             let itemPath = [ yield! fieldPath; yield index ]
-            let itemErrors =
-                errors
-                |> List.filter (fun error ->
-                    error.Path
-                    |> Skippable.toValueOption
-                    |> ValueOption.map (pathStartsWith itemPath)
-                    |> ValueOption.defaultValue false)
+            let itemErrors = errorsByIndex[index] |> List.ofSeq
             box [| item |], itemErrors, itemPath)
 
 open IncrementalPayloadSplitting
