@@ -90,9 +90,9 @@ module internal ObservableErrorHandling =
         match ex with
         | :? AggregateException as aggregate ->
             aggregate.Flatten().InnerExceptions
+            |> Seq.collect problemDetailsOfObservableError
+            |> Seq.distinctBy deduplicationKey
             |> Seq.toList
-            |> List.collect problemDetailsOfObservableError
-            |> List.distinctBy deduplicationKey
         | _ ->
             match box ex with
             | :? IGQLError as error -> [ GQLProblemDetails.OfError error ]
