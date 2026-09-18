@@ -58,6 +58,19 @@ module internal Observable =
     }
 
     /// <summary>
+    /// Matches an <see cref="OperationCanceledException"/> that was not requested on
+    /// <paramref name="cancellationToken"/>.
+    /// </summary>
+    /// <remarks>
+    /// Distinguishes a linked-token cancellation, typically caused by a resolution failure, from the
+    /// subscription itself being disposed.
+    /// </remarks>
+    let (|CanceledIndependently|_|) (cancellationToken : CancellationToken) (ex : exn) =
+        match ex with
+        | :? OperationCanceledException when not cancellationToken.IsCancellationRequested -> Some ()
+        | _ -> None
+
+    /// <summary>
     /// Creates a cold observable, which enumerates the asynchronous sequence for every subscription.
     /// </summary>
     /// <remarks>
@@ -215,7 +228,7 @@ module internal Observable =
                                     slots.Release () |> ignore
                             | pendingResult -> resolveInBackground pendingResult
             with
-            | :? OperationCanceledException when not cancellationToken.IsCancellationRequested && failed () -> ()
+            | CanceledIndependently cancellationToken when failed () -> ()
             | ex -> failure <- ValueSome ex
             // Captured items no longer need the enumerator, so it is disposed before waiting for their resolutions
             let! failure = disposeEnumerator enumerator failure
@@ -226,7 +239,7 @@ module internal Observable =
             do! drained.Task
             let failureToReport =
                 match resolutionFailure.Value, failure with
-                | ValueSome resolutionFailure, ValueSome (:? OperationCanceledException) when not cancellationToken.IsCancellationRequested ->
+                | ValueSome resolutionFailure, ValueSome (CanceledIndependently cancellationToken) ->
                     ValueSome resolutionFailure
                 | _ -> failure |> ValueOption.orElse resolutionFailure.Value
             match failureToReport with
