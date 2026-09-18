@@ -288,7 +288,7 @@
 
 * **Breaking Change** Migrated to .NET 10
 * **Breaking Change** Made Relay `Edge` a read-only struct
-* **Breaking Change** `SubscriptionExecutionResult.Data` is now `obj Skippable`, and the record has new `Path` and `HasNext` fields for incremental delivery
+* **Breaking Change** `SubscriptionExecutionResult.Data` is now `obj voption Skippable`, and the record has new `Path` and `HasNext` fields for incremental delivery
 * **Breaking Change** `BufferedStreamOptions.Interval` and `BufferedStreamOptions.PreferredBatchSize` are now `int voption`
 * **Breaking Change** `ServerMessage.Error` and `ServerRawPayload.ErrorMessages` now carry `GQLProblemDetails list` instead of `NameValueLookup list`, so an `error` message's `payload` is a standard GraphQL error array as the `graphql-transport-ws` protocol requires
 * **Breaking Change** A query or mutation whose non-null root field fails during execution now produces a `Direct` (execution) result with `null` data instead of a `RequestError`, which is now only ever produced for a request rejected before execution (validation, planning, variable or inline argument coercion, a middleware, or the executor itself failing); HTTP and `graphql-transport-ws` responses for such a failure now carry `data: null` as the spec requires, instead of omitting `data` entirely
