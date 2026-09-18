@@ -192,7 +192,7 @@ module Helpers =
 
     /// <summary>
     /// Matches a <see cref="System.Object"/> containing a boxed <see cref="Option{T}"/> or <see cref="ValueOption{T}"/>.
-    /// Returns the wrapped value for <c>Some</c> and <c>ValueSome</c>, and does not match for <c>None</c>, <c>ValueNone</c>, or non-option values.
+    /// Returns the wrapped value for <see cref="Some"/> and <see cref="ValueSome"/>, and does not match for <see cref="None"/>, <see cref="ValueNone"/>, or non-option values.
     /// </summary>
     [<return: Struct>]
     let (|ObjectOption|_|) (value : obj) = objectOptionCast value
