@@ -220,8 +220,8 @@ let ``Observable error details preserve GraphQL-facing messages inside aggregate
 let ``Observable error details do not duplicate repeated aggregate errors`` () =
     let actual =
         AggregateException [|
-            GQLMessageException ("Visible to client", Dictionary<string, obj>(dict [ "code", box "FIRST" ])) :> exn
-            GQLMessageException ("Visible to client", Dictionary<string, obj>(dict [ "code", box "SECOND" ])) :> exn
+            GQLMessageException ("Visible to client", Dictionary<string, obj>(dict [ "a", box 1; "b", box 2 ])) :> exn
+            GQLMessageException ("Visible to client", Dictionary<string, obj>(dict [ "b", box 2; "a", box 1 ])) :> exn
         |]
         |> problemDetailsOfObservableError
 

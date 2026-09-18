@@ -74,13 +74,25 @@ module internal ObservableErrorHandling =
     [<Literal>]
     let UnexpectedObservableErrorMessage = "Unexpected error during subscription"
 
+    let private deduplicationKey (problem : GQLProblemDetails) =
+        let extensions =
+            problem.Extensions
+            |> Skippable.toValueOption
+            |> ValueOption.map (
+                Seq.sortBy _.Key
+                >> Seq.map (fun kvp -> kvp.Key, kvp.Value)
+                >> Seq.toList
+            )
+
+        problem.Message, problem.Path, problem.Locations, extensions
+
     let rec problemDetailsOfObservableError (ex : exn) =
         match ex with
         | :? AggregateException as aggregate ->
             aggregate.Flatten().InnerExceptions
             |> Seq.toList
             |> List.collect problemDetailsOfObservableError
-            |> List.distinctBy _.Message
+            |> List.distinctBy deduplicationKey
         | _ ->
             match box ex with
             | :? IGQLError as error -> [ GQLProblemDetails.OfError error ]
