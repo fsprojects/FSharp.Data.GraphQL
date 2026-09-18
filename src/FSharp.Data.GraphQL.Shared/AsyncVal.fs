@@ -211,11 +211,31 @@ type AsyncValBuilder () =
     member _.Return v = AsyncVal.wrap v
     member _.ReturnFrom (v : AsyncVal<_>) = v
     member _.ReturnFrom (a : Async<_>) = AsyncVal.ofAsync a
+    member _.ReturnFrom (t : Task<'T>) = Async (Async.AwaitTask t)
+    member _.ReturnFrom (t : Task) = Async (async { do! Async.AwaitTask t })
     member _.Bind (v : AsyncVal<'T>, binder : 'T -> AsyncVal<'U>) = AsyncVal.bind binder v
     member _.Bind (a : Async<'T>, binder : 'T -> AsyncVal<'U>) =
         Async (async {
             let! value = a
             let bound = binder value
+            match bound with
+            | Value v -> return v
+            | Async a -> return! a
+            | Failure f -> return f.Reraise ()
+        })
+    member _.Bind (t : Task<'T>, binder : 'T -> AsyncVal<'U>) =
+        Async (async {
+            let! value = Async.AwaitTask t
+            let bound = binder value
+            match bound with
+            | Value v -> return v
+            | Async a -> return! a
+            | Failure f -> return f.Reraise ()
+        })
+    member _.Bind (t : Task, binder : unit -> AsyncVal<'U>) =
+        Async (async {
+            do! Async.AwaitTask t
+            let bound = binder ()
             match bound with
             | Value v -> return v
             | Async a -> return! a
