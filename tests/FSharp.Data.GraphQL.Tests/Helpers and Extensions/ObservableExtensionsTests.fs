@@ -528,22 +528,25 @@ let ``ofAsyncEnumerableResolved should not resolve an item pulled after a resolu
     // Regression test: a background resolution can fail while MoveNextAsync for the next item is still suspended;
     // when that move completed the code used to go straight to resolving it without rechecking the failure, so a
     // synchronously resolved item 2 was pulled and emitted before the failure that already happened
+    let secondMoveEntered = TaskCompletionSource ()
+    let secondMoveCanceled = TaskCompletionSource ()
     let source =
-        SuspendingAsyncEnumerable<int>(fun _ index -> task {
+        SuspendingAsyncEnumerable<int>(fun cancellationToken index -> task {
             match index with
             | 0 -> return ValueSome 1
             | 1 ->
-                do! Task.Delay (ms 150)
+                use _ = cancellationToken.Register (fun () -> secondMoveCanceled.TrySetResult () |> ignore)
+                secondMoveEntered.TrySetResult () |> ignore
+                do! secondMoveCanceled.Task
                 return ValueSome 2
             | _ -> return ValueNone
         })
     let resolve _ (n : int) =
         if n = 1 then
-            async {
-                do! Async.Sleep (ms 50)
+            asyncVal {
+                do! secondMoveEntered.Task
                 return failwith "Boom resolving"
             }
-            |> AsyncVal.ofAsync
         else
             AsyncVal.wrap n
     use sub =
