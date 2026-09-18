@@ -2384,8 +2384,11 @@ type internal AsyncEnumerableFieldValue<'Item> (source : IAsyncEnumerable<'Item>
         }
 
     interface IAsyncEnumerableFieldValue with
+        /// <inheritdoc/>
         member _.Items = items
+        /// <inheritdoc/>
         member _.MaxConcurrency = streaming.MaxConcurrency
+        /// <inheritdoc/>
         member _.GetPreferredBatchSize () =
             match streaming.Batching with
             | StreamBatchingPolicy.NoBatching -> ValueNone
@@ -2486,17 +2489,17 @@ module Resolve =
         let methods = typeof<Marker>.DeclaringType.GetRuntimeMethods ()
         methods |> Seq.find (fun m -> m.Name.Equals name)
 
-    let private runtimeBoxify = getRuntimeMethod "boxify"
+    let private runtimeBoxify = getRuntimeMethod (nameof boxify)
 
-    let private runtimeBoxifyAsync = getRuntimeMethod "boxifyAsync"
+    let private runtimeBoxifyAsync = getRuntimeMethod (nameof boxifyAsync)
 
-    let private runtimeBoxifyFilter = getRuntimeMethod "boxifyFilter"
+    let private runtimeBoxifyFilter = getRuntimeMethod (nameof boxifyFilter)
 
-    let private runtimeBoxifyAsyncFilter = getRuntimeMethod "boxifyAsyncFilter"
+    let private runtimeBoxifyAsyncFilter = getRuntimeMethod (nameof boxifyAsyncFilter)
 
-    let private runtimeBoxifyTaskSeq = getRuntimeMethod "boxifyTaskSeq"
+    let private runtimeBoxifyTaskSeq = getRuntimeMethod (nameof boxifyTaskSeq)
 
-    let private runtimeBoxifyTaskSeqOption = getRuntimeMethod "boxifyTaskSeqOption"
+    let private runtimeBoxifyTaskSeqOption = getRuntimeMethod (nameof boxifyTaskSeqOption)
 
     let private unwrapExpr =
         function
