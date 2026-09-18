@@ -216,11 +216,9 @@ let ``Observable error details preserve GraphQL-facing messages inside aggregate
     Assert.DoesNotContain ("sensitive backend failure", actual)
 
 [<Fact>]
-let ``Observable error details do not duplicate repeated aggregate exceptions`` () =
-    let repeated = GQLMessageException "Visible to client"
-
+let ``Observable error details do not duplicate repeated aggregate errors`` () =
     let actual =
-        AggregateException [| repeated :> exn; repeated :> exn |]
+        AggregateException [| GQLMessageException "Visible to client" :> exn; GQLMessageException "Visible to client" :> exn |]
         |> problemDetailsOfObservableError
 
     let error = Assert.Single actual

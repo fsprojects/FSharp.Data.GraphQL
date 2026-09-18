@@ -78,9 +78,9 @@ module internal ObservableErrorHandling =
         match ex with
         | :? AggregateException as aggregate ->
             aggregate.Flatten().InnerExceptions
-            |> Seq.distinct
             |> Seq.toList
             |> List.collect problemDetailsOfObservableError
+            |> List.distinct
         | _ ->
             match box ex with
             | :? IGQLError as error -> [ GQLProblemDetails.OfError error ]
