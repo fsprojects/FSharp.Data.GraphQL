@@ -138,9 +138,10 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType> (reportToMetada
                 | Error errs -> Error errs
                 | Ok acc -> collectArgs path acc xs
         let ctxResult = result {
+            let! args = collectArgs [] [] ctx.ExecutionPlan.Fields
+
             match reportToMetadata with
             | true ->
-                let! args = collectArgs [] [] ctx.ExecutionPlan.Fields
                 let filters = ImmutableDictionary.CreateRange args
                 return { ctx with Metadata = ctx.Metadata.Add ("filters", filters) }
             | false -> return ctx

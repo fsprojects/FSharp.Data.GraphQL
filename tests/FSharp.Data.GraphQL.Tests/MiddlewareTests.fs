@@ -87,7 +87,18 @@ type Property =
     | Building of Building
     | Community of Community
 
-let getExecutor (expectedFilter : ObjectListFilter voption) =
+let private getFilterMiddlewares (reportToMetadata : bool voption) =
+    match reportToMetadata with
+    | ValueSome reportToMetadata -> [
+        Define.ObjectListFilterMiddleware<A, Subject option>(reportToMetadata)
+        Define.ObjectListFilterMiddleware<B, Subject option>(reportToMetadata)
+      ]
+    | ValueNone -> [
+        Define.ObjectListFilterMiddleware<A, Subject option>()
+        Define.ObjectListFilterMiddleware<B, Subject option>()
+      ]
+
+let getExecutor (expectedFilter : ObjectListFilter voption) (reportToMetadata : bool voption) =
     let a1 : A = {
         Id = 1
         Value = "A1"
@@ -292,23 +303,24 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
             ]
         )
     let schema = Schema (Query)
-    let middleware = [
-        Define.QueryWeightMiddleware (2.0, true)
-        Define.ObjectListFilterMiddleware<A, Subject option>(true)
-        Define.ObjectListFilterMiddleware<B, Subject option>(true)
-    ]
+    let middleware = [ Define.QueryWeightMiddleware (2.0, true); yield! getFilterMiddlewares reportToMetadata ]
     Executor (schema, middleware)
 
-let executor = getExecutor (ValueNone)
+let executor = getExecutor ValueNone (ValueSome true)
+let executorWithDefaultFilterMetadataSetting = getExecutor ValueNone ValueNone
 
 let execute (query : Document) = executor.AsyncExecute (query, getMockInputContext) |> sync
+
+let executeWithDefaultFilterMetadataSetting (query : Document) =
+    executorWithDefaultFilterMetadataSetting.AsyncExecute (query, getMockInputContext)
+    |> sync
 
 let executeWithVariables (query : Document, variables : ImmutableDictionary<string, JsonElement>) =
     executor.AsyncExecute (ast = query, getInputContext = getMockInputContext, variables = variables)
     |> sync
 
 let executeAndVerifyFilter (query : Document, variables : ImmutableDictionary<string, JsonElement>, filterToVerify : ObjectListFilter) =
-    let ex = getExecutor (ValueSome filterToVerify)
+    let ex = getExecutor (ValueSome filterToVerify) (ValueSome true)
     ex.AsyncExecute (ast = query, getInputContext = getMockInputContext, variables = variables)
     |> sync
 
@@ -703,7 +715,7 @@ let ``Object list filter: inline coercion failure is request error`` () =
                 }
         }"""
 
-    let result = execute query
+    let result = executeWithDefaultFilterMetadataSetting query
 
     ensureRequestError result
     <| fun errors -> Assert.Single errors |> ignore

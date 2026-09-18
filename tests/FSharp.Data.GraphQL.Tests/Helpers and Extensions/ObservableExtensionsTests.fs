@@ -557,22 +557,23 @@ let ``ofAsyncEnumerableResolved should cancel a pending MoveNextAsync after a re
     // Regression test: with maxConcurrency > 1 the loop can already be suspended in MoveNextAsync for the next item
     // when an earlier background resolution fails. That failure must cancel the in-progress move so the stream can
     // finish with onFailure instead of hanging forever in the source.
+    let secondMoveEntered = TaskCompletionSource ()
     let source =
         SuspendingAsyncEnumerable<int>(fun cancellationToken index -> task {
             match index with
             | 0 -> return ValueSome 1
             | 1 ->
+                secondMoveEntered.TrySetResult () |> ignore
                 do! Task.Delay (Timeout.Infinite, cancellationToken)
                 return ValueSome 2
             | _ -> return ValueNone
         })
     let resolve _ (n : int) =
         if n = 1 then
-            async {
-                do! Async.Sleep (ms 50)
+            asyncVal {
+                do! secondMoveEntered.Task
                 return failwith "Boom resolving"
             }
-            |> AsyncVal.ofAsync
         else
             AsyncVal.wrap n
     use sub =
@@ -586,12 +587,14 @@ let ``ofAsyncEnumerableResolved should preserve a resolution failure over Dispos
     // Regression test: a resolution failure can cancel an in-progress MoveNextAsync, whose cancellation is suppressed
     // as expected; if DisposeAsync then throws, the original resolution failure must still win over the later
     // disposal failure because it is what stopped the stream.
+    let secondMoveEntered = TaskCompletionSource ()
     let source =
         SuspendingAsyncEnumerable<int>(
             (fun cancellationToken index -> task {
                 match index with
                 | 0 -> return ValueSome 1
                 | 1 ->
+                    secondMoveEntered.TrySetResult () |> ignore
                     do! Task.Delay (Timeout.Infinite, cancellationToken)
                     return ValueSome 2
                 | _ -> return ValueNone
@@ -601,7 +604,7 @@ let ``ofAsyncEnumerableResolved should preserve a resolution failure over Dispos
     let resolve _ (n : int) =
         if n = 1 then
             async {
-                do! Async.Sleep (ms 50)
+                do! secondMoveEntered.Task |> Async.AwaitTask
                 return failwith "Boom resolving"
             }
             |> AsyncVal.ofAsync
@@ -626,12 +629,14 @@ let ``ofAsyncEnumerableResolved should preserve a resolution failure over a late
     // Regression test: once a resolution failure has already stopped the stream, a source that reacts to the linked
     // cancellation by throwing a different exception from MoveNextAsync must not replace that original failure.
     let moveFailed = TaskCompletionSource ()
+    let secondMoveEntered = TaskCompletionSource ()
     let source =
         SuspendingAsyncEnumerable<int>(fun cancellationToken index -> task {
             match index with
             | 0 -> return ValueSome 1
             | 1 ->
                 use _ = cancellationToken.Register (fun () -> moveFailed.TrySetResult () |> ignore)
+                secondMoveEntered.TrySetResult () |> ignore
                 do! moveFailed.Task
                 return failwith "Boom during enumeration"
             | _ -> return ValueNone
@@ -639,7 +644,7 @@ let ``ofAsyncEnumerableResolved should preserve a resolution failure over a late
     let resolve _ (n : int) =
         if n = 1 then
             async {
-                do! Async.Sleep (ms 50)
+                do! secondMoveEntered.Task |> Async.AwaitTask
                 return failwith "Boom resolving"
             }
             |> AsyncVal.ofAsync
