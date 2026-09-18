@@ -412,8 +412,8 @@ and private executeResolvers (inputContext : InputExecutionContextProvider) (ctx
 
     let rec innerListDef = function
         | Nullable (Output innerDef) -> innerListDef innerDef
-        | List (Output innerDef) -> Some innerDef
-        | _ -> None
+        | List (Output innerDef) -> ValueSome innerDef
+        | _ -> ValueNone
 
     let (|HasList|_|) = innerListDef
 

@@ -2405,39 +2405,43 @@ module Resolve =
         class
         end
 
+    [<return: Struct>]
     let private (|FSharpFunc|_|) (typ : Type) =
         if FSharpType.IsFunction typ then
             let d, c = FSharpType.GetFunctionElements typ
-            Some (d, c)
+            ValueSome (d, c)
         else
-            None
+            ValueNone
 
+    [<return: Struct>]
     let private (|FSharpOption|_|) (typ : Type) =
         if
             typ.GetTypeInfo().IsGenericType
             && typ.GetGenericTypeDefinition () = typedefof<option<_>>
         then
-            Some (typ.GenericTypeArguments |> Array.head)
+            ValueSome (typ.GenericTypeArguments |> Array.head)
         else
-            None
+            ValueNone
 
+    [<return: Struct>]
     let private (|FSharpAsync|_|) (typ : Type) =
         if
             typ.GetTypeInfo().IsGenericType
             && typ.GetGenericTypeDefinition () = typedefof<Async<_>>
         then
-            Some (typ.GenericTypeArguments |> Array.head)
+            ValueSome (typ.GenericTypeArguments |> Array.head)
         else
-            None
+            ValueNone
 
+    [<return: Struct>]
     let private (|AsyncEnumerable|_|) (typ : Type) =
         if
             typ.GetTypeInfo().IsGenericType
             && typ.GetGenericTypeDefinition () = typedefof<IAsyncEnumerable<_>>
         then
-            Some (typ.GenericTypeArguments |> Array.head)
+            ValueSome (typ.GenericTypeArguments |> Array.head)
         else
-            None
+            ValueNone
 
     let private boxify<'T, 'U> (f : ResolveFieldContext -> 'T -> 'U) : ResolveFieldContext -> obj -> obj =
         <@@ fun ctx (x : obj) -> f ctx (x :?> 'T) |> box @@>

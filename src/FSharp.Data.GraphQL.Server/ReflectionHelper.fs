@@ -24,40 +24,46 @@ type internal Methods =
 
 module internal Gen =
 
+    [<return: Struct>]
     let (|List|_|) (t: Type) =
         let typeParam = t.GetGenericArguments().[0]
         let tList = typedefof<_ list>.MakeGenericType [| typeParam |]
-        if t = tList then Some typeParam
-        else None
+        if t = tList then ValueSome typeParam
+        else ValueNone
 
+    [<return: Struct>]
     let (|Array|_|) (t: Type) =
-        if t.IsArray then Some (t.GetGenericArguments().[0])
-        else None
+        if t.IsArray then ValueSome (t.GetGenericArguments().[0])
+        else ValueNone
 
+    [<return: Struct>]
     let (|Set|_|) (t: Type) =
         let typeParam = t.GetGenericArguments().[0]
         let tArray = typedefof<Set<_>>.MakeGenericType [| typeParam |]
-        if t = tArray then Some typeParam
-        else None
+        if t = tArray then ValueSome typeParam
+        else ValueNone
 
     let inline defaultArgOnNull a b = if isNull a |> not then a else b
     let private optionType = typedefof<option<_>>
+    [<return: Struct>]
     let (|Option|_|) (t: Type) =
         if t.IsGenericType && t.GetGenericTypeDefinition() = optionType
-        then Some (t.GetGenericArguments().[0])
-        else None
+        then ValueSome (t.GetGenericArguments().[0])
+        else ValueNone
 
+    [<return: Struct>]
     let (|Enumerable|_|) t =
         if typeof<System.Collections.IEnumerable>.IsAssignableFrom t
         then
             let e = defaultArgOnNull (t.GetInterface("IEnumerable`1")) t
-            Some (e.GetGenericArguments().[0])
-        else None
+            ValueSome (e.GetGenericArguments().[0])
+        else ValueNone
 
+    [<return: Struct>]
     let (|Queryable|_|) t =
         if typeof<IQueryable>.IsAssignableFrom t
-        then Some (Queryable (t.GetInterface("IQueryable`1").GetGenericArguments().[0]))
-        else None
+        then ValueSome (Queryable (t.GetInterface("IQueryable`1").GetGenericArguments().[0]))
+        else ValueNone
 
     let genericType<'t> typeParams = typedefof<'t>.MakeGenericType typeParams
 

@@ -65,10 +65,11 @@ module internal Observable =
     /// Distinguishes a linked-token cancellation, typically caused by a resolution failure, from the
     /// subscription itself being disposed.
     /// </remarks>
+    [<return: Struct>]
     let (|CanceledIndependently|_|) (cancellationToken : CancellationToken) (ex : exn) =
         match ex with
-        | :? OperationCanceledException when not cancellationToken.IsCancellationRequested -> Some ()
-        | _ -> None
+        | :? OperationCanceledException when not cancellationToken.IsCancellationRequested -> ValueSome ()
+        | _ -> ValueNone
 
     /// <summary>
     /// Creates a cold observable, which enumerates the asynchronous sequence for every subscription.

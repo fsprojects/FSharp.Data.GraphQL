@@ -230,10 +230,12 @@ module AsyncExtensions =
     let asyncVal = AsyncValBuilder ()
 
     /// Active pattern used for checking if AsyncVal contains immediate value.
-    let (|Immediate|_|) (x : AsyncVal<'T>) = match x with | Value v -> Some v | _ -> None
+    [<return: Struct>]
+    let (|Immediate|_|) (x : AsyncVal<'T>) = match x with | Value v -> ValueSome v | _ -> ValueNone
 
     /// Active patter used for checking if AsyncVal wraps an Async computation.
-    let (|Async|_|) (x : AsyncVal<'T>) = match x with | Async a -> Some a | _ -> None
+    [<return: Struct>]
+    let (|Async|_|) (x : AsyncVal<'T>) = match x with | Async a -> ValueSome a | _ -> ValueNone
 
     type Microsoft.FSharp.Control.AsyncBuilder with
 
