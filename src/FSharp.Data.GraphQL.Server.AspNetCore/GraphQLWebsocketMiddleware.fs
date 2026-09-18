@@ -23,6 +23,62 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Shared.WebSockets
 
+/// <summary>
+/// Splits a batched deferred or streamed payload, addressed by a path whose last segment is the list of indices of
+/// the items in the batch, into one independently addressed payload per item.
+/// </summary>
+/// <remarks>
+/// <see cref="FSharp.Data.GraphQL.Execution.collectItems"/> groups several streamed items produced together (by the
+/// field's batching policy or the query's <c>preferredBatchSize</c>) into a single deferred payload, addressed by a
+/// path ending in the list of the batch's item indices, such as <c>["items"; [2; 1]]</c>. A <c>graphql-transport-ws</c>
+/// client cannot merge that into the response tree: no single index identifies where the payload belongs. Splitting
+/// it here, at the transport, keeps the engine's batching (still one buffered event, still one merge of concurrently
+/// resolved items) while addressing every item the same way a field that streams one item at a time already does: a
+/// one-element data array at a path ending in that item's own index.
+/// </remarks>
+module internal IncrementalPayloadSplitting =
+
+    // Written as `obj list`, not the (internal, and here inaccessible) `FieldPath` abbreviation it stands for:
+    // a type abbreviation is erased, so this is the exact same type and unifies fine with FieldPath-typed values.
+    let trySkipPathPrefix (prefix : obj list) (path : obj list) =
+        let rec loop prefix path =
+            match prefix, path with
+            | [], remainingPath -> ValueSome remainingPath
+            | _ :: _, [] -> ValueNone
+            | prefixHead :: prefixTail, pathHead :: pathTail when prefixHead = pathHead -> loop prefixTail pathTail
+            | _ -> ValueNone
+        loop prefix path
+
+    /// Matches a path ending in a list of indices, such as the path of a batched deferred payload, returning the
+    /// path of the batch's own field and the indices of its items.
+    let (|BatchPath|_|) (path : obj list) =
+        match List.rev path with
+        | (:? (obj list) as indices) :: fieldPathRev -> Some (List.rev fieldPathRev, indices)
+        | _ -> None
+
+    /// Splits a batch's data (an array with one element per index, in the same order) and errors (each carrying the
+    /// full path of the item it belongs to, since every error of a batch originates from resolving one specific
+    /// item) into one <c>(data, errors, path)</c> triple per item, addressed at that item's own path.
+    let splitBatch (fieldPath : obj list) (indices : obj list) (data : obj) (errors : GQLProblemDetails list) =
+        let items = data :?> obj[]
+        let errorsByIndex =
+            errors
+            |> Seq.vchoose (fun error ->
+                error.Path
+                |> Skippable.toValueOption
+                |> ValueOption.bind (trySkipPathPrefix fieldPath)
+                |> ValueOption.bind (function
+                    | itemIndex :: _ -> ValueSome struct (itemIndex, error)
+                    | [] -> ValueNone))
+            |> _.ToLookup((fun struct (itemIndex, _) -> itemIndex), (fun struct (_, error) -> error))
+        (indices, List.ofArray items)
+        ||> List.map2 (fun index item ->
+            let itemPath = [ yield! fieldPath; yield index ]
+            let itemErrors = errorsByIndex[index] |> List.ofSeq
+            box [| item |], itemErrors, itemPath)
+
+open IncrementalPayloadSplitting
+
 type GraphQLWebSocketMiddleware<'Root>
     (
         next : RequestDelegate, // must be kept for middleware signature compatibility
@@ -145,10 +201,21 @@ type GraphQLWebSocketMiddleware<'Root>
                         |> GraphQLSubscriptionsManagement.removeSubscription (id))
             )
 
-        let unsubscriber = streamSource.Subscribe (observer)
+        // Registered before subscribing, so a stream that completes synchronously (from inside Subscribe) still
+        // finds the id when its onCompleted callback above runs; only then is it safe to remove and dispose it.
+        // Assigning Disposable on an already-disposed SingleAssignmentDisposable disposes the assigned value too.
+        let placeholder = new System.Reactive.Disposables.SingleAssignmentDisposable ()
 
         subscriptions
-        |> GraphQLSubscriptionsManagement.addSubscription (id, unsubscriber, (fun _ -> ()))
+        |> GraphQLSubscriptionsManagement.addSubscription (id, placeholder, (fun _ -> ()))
+
+        try
+            placeholder.Disposable <- streamSource.Subscribe (observer)
+        with _ ->
+            // Nothing will ever complete this subscription now, so the id is freed here instead; a no-op if the
+            // synchronous completion above already removed it. Rethrown for the caller to report the failure.
+            subscriptions |> GraphQLSubscriptionsManagement.removeSubscription id
+            reraise ()
 
     let tryToGracefullyCloseSocket (code, message) theSocket =
         if theSocket |> canCloseSocket then
@@ -174,26 +241,39 @@ type GraphQLWebSocketMiddleware<'Root>
 
         let sendSubscriptionResponseOutput id subscriptionResult =
             match subscriptionResult with
-            | SubscriptionResult output -> { Data = ValueSome output; Errors = [] } |> sendOutput id
+            | SubscriptionResult output -> SubscriptionExecutionResult.Create (output, []) |> sendOutput id
             | SubscriptionErrors (output, errors) ->
                 logger.LogWarning ("Subscription errors: {subscriptionErrors}", (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}"))))
-                { Data = ValueNone; Errors = errors } |> sendOutput id
+                // The executor may still have resolved partial data alongside the field errors; forward it as-is
+                match output with
+                | null -> SubscriptionExecutionResult.CreateErrors errors |> sendOutput id
+                | output -> SubscriptionExecutionResult.Create (output, errors) |> sendOutput id
 
-        let sendDeferredResponseOutput id deferredResult =
+        // Incremental payloads are sent as soon as they are produced, with their path inside the initial result,
+        // so a client can merge them. The completion marker becomes a final payload with hasNext set to false.
+        // A batched payload (path ending in a list of indices) is split into one payload per item first, since a
+        // client cannot merge a payload that isn't addressed by a single index.
+        let sendDeferredResponseOutput id deferredResult : Task = task {
             match deferredResult with
-            | DeferredResult (obj, path) ->
-                let output = obj :?> Dictionary<string, obj>
-                { Data = ValueSome output; Errors = [] } |> sendOutput id
-            | DeferredErrors (obj, errors, _) ->
+            | ValueSome (DeferredResult (data, BatchPath (fieldPath, indices))) ->
+                for itemData, _, itemPath in splitBatch fieldPath indices data [] do
+                    do! SubscriptionExecutionResult.CreateIncremental (itemData, [], itemPath) |> sendOutput id
+            | ValueSome (DeferredResult (data, path)) ->
+                do! SubscriptionExecutionResult.CreateIncremental (data, [], path) |> sendOutput id
+            | ValueSome (DeferredErrors (data, errors, BatchPath (fieldPath, indices))) ->
                 logger.LogWarning (
                     "Deferred response errors: {deferredErrors}",
                     (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
                 )
-                { Data = ValueNone; Errors = errors } |> sendOutput id
-
-        let sendDeferredResultDelayedBy (ct : CancellationToken) (ms : int) id deferredResult : Task = task {
-            do! Task.Delay (ms, ct)
-            do! deferredResult |> sendDeferredResponseOutput id
+                for itemData, itemErrors, itemPath in splitBatch fieldPath indices data errors do
+                    do! SubscriptionExecutionResult.CreateIncremental (itemData, itemErrors, itemPath) |> sendOutput id
+            | ValueSome (DeferredErrors (data, errors, path)) ->
+                logger.LogWarning (
+                    "Deferred response errors: {deferredErrors}",
+                    (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
+                )
+                do! SubscriptionExecutionResult.CreateIncremental (data, errors, path) |> sendOutput id
+            | ValueNone -> do! SubscriptionExecutionResult.CreateCompleted () |> sendOutput id
         }
 
         let applyPlanExecutionResult (id : SubscriptionId) (socket) (executionResult : GQLExecutionResult) : Task = task {
@@ -202,16 +282,24 @@ type GraphQLWebSocketMiddleware<'Root>
                 (subscriptions, socket, observableOutput, serializerOptions)
                 |> addClientSubscription id sendSubscriptionResponseOutput
             | Deferred (data, errors, observableOutput) ->
-                do! { Data = ValueSome data; Errors = [] } |> sendOutput id
-                if errors.IsEmpty then
-                    (subscriptions, socket, observableOutput, serializerOptions)
-                    |> addClientSubscription id (sendDeferredResultDelayedBy cancellationToken 5000)
-                else
-                    ()
-            | Direct (data, _) -> do! { Data = ValueSome data; Errors = [] } |> sendOutput id
+                do! SubscriptionExecutionResult.CreateInitial (data, errors) |> sendOutput id
+                (subscriptions, socket, observableOutput |> Observable.withCompletionMarker, serializerOptions)
+                |> addClientSubscription id sendDeferredResponseOutput
+            | Direct (data, errors) ->
+                // An execution result, whose data is null when a non-null root field failed during execution;
+                // still a result, so it is sent as Next + Complete like any other, not as the terminal Error
+                // message below
+                if not errors.IsEmpty then
+                    logger.LogWarning ("Execution errors:\n{errors}", errors)
+                do! SubscriptionExecutionResult.Create (data, errors) |> sendOutput id
+                // The graphql-transport-ws protocol requires Complete after the single Next of a query or mutation
+                do! sendMsg (Complete id)
             | RequestError problemDetails ->
                 logger.LogWarning("Request errors:\n{errors}", problemDetails)
-                do! { Data = ValueNone; Errors = problemDetails } |> sendOutput id
+                // The request was rejected before execution, so it is not a result: the protocol requires it to be
+                // sent as the terminal Error message instead of a Next followed by Complete, or a client would
+                // read it as a successful result with null data
+                do! sendMsg (Error (id, problemDetails))
         }
 
         let logMsgReceivedWithOptionalPayload optionalPayload (msgAsStr : string) =
@@ -279,7 +367,7 @@ type GraphQLWebSocketMiddleware<'Root>
                                     do! planExecutionResult |> applyPlanExecutionResult id socket
                             with ex ->
                                 logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
-                                do! sendMsg (Error (id, [NameValueLookup([ ("subscription", "Unexpected error during subscription" :> obj) ])]))
+                                do! sendMsg (Error (id, [ GQLProblemDetails.Create "Unexpected error during subscription" ]))
                         | ClientComplete id ->
                             "ClientComplete" |> logMsgWithIdReceived id
                             subscriptions

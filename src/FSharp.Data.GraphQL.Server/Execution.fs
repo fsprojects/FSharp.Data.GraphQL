@@ -131,6 +131,13 @@ type StreamOutput =
     | NonBufferedList of int * (KeyValuePair<string, obj> * GQLProblemDetails list)
     | BufferedList of int list * (KeyValuePair<string, obj> * GQLProblemDetails list) list
 
+/// An event of a streamed list: a resolved item with its index in the source,
+/// or a failure raised while enumerating an asynchronous source.
+[<Struct>]
+type private StreamEvent =
+    | StreamedItem of index : int * result : ResolverResult<KeyValuePair<string, obj>>
+    | StreamFailure of error : exn
+
 let private raiseErrors errs = AsyncVal.wrap <| Error errs
 
 /// Given an error e, call ParseError in the given context's Schema to convert it into
@@ -210,14 +217,33 @@ let rec private direct (returnDef : OutputDef) (inputContext : InputExecutionCon
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
         let resolveItem index item =
             executeResolvers inputContext innerCtx (box index :: path) value (toOption item |> AsyncVal.wrap)
+        let resolveItems (items : obj[]) =
+            items
+            |> Array.mapi resolveItem
+            |> collectFields Parallel
+            |> AsyncVal.map(ResolverResult.mapValue(fun items -> KeyValuePair(name, items |> Array.map _.Value |> box)))
         match value with
+        | :? IAsyncEnumerableFieldValue as fieldValue ->
+            async {
+                // The sequence is drained first, the same way a lazy seq is materialized below.
+                // Enumeration errors are caught inside the computation, because resolveWith only catches synchronous exceptions.
+                let! drained = async {
+                    try
+                        let! items = AsyncEnumerable.toArrayAsync fieldValue.Items
+                        return Ok items
+                    with e ->
+                        return Error (resolverError path ctx e)
+                }
+                match drained with
+                | Error errs -> return Error errs
+                | Ok items -> return! resolveItems items
+            }
+            |> AsyncVal.ofAsync
         | :? System.Collections.IEnumerable as enumerable ->
             enumerable
             |> Seq.cast<obj>
             |> Seq.toArray
-            |> Array.mapi resolveItem
-            |> collectFields Parallel
-            |> AsyncVal.map(ResolverResult.mapValue(fun items -> KeyValuePair(name, items |> Array.map(fun d -> d.Value) |> box)))
+            |> resolveItems
         | _ -> raise <| GQLMessageException (ErrorMessages.expectedEnumerableValue ctx.ExecutionInfo.Identifier (value.GetType()))
 
     | Nullable (Output innerDef) ->
@@ -267,30 +293,52 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
         | ResolveCollection innerPlan -> { ctx with ExecutionInfo = innerPlan }
         | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
 
-    let collectBuffered : (int * ResolverResult<KeyValuePair<string, obj>>) list -> IObservable<GQLDeferredResponseContent> = function
+    // A batch size requested by the @stream directive takes precedence over the batching policy declared on the field.
+    // The policy is evaluated here, lazily, so it never runs for an ordinary or deferred query, and only once per
+    // streamed query even when the query itself supplies a batch size.
+    let options =
+        match options.PreferredBatchSize, value with
+        | ValueNone, (:? IAsyncEnumerableFieldValue as fieldValue) ->
+            { options with PreferredBatchSize = fieldValue.GetPreferredBatchSize () }
+        | _ -> options
+
+    let collectItems : struct (int * ResolverResult<KeyValuePair<string, obj>>) list -> IObservable<GQLDeferredResponseContent> = function
         | [] -> Observable.empty
-        | [(index, result)] ->
+        | [struct (index, result)] ->
             result
             |> ResolverResult.mapValue(fun d -> box [|d.Value|])
             |> deferResults (box index :: path)
         | chunk ->
             let data = Array.zeroCreate (chunk.Length)
-            let merge (index, r : ResolverResult<KeyValuePair<string, obj>>) (i, indicies, deferred, errs) =
+            let merge struct (index, r : ResolverResult<KeyValuePair<string, obj>>) (i, indices, deferred, errs) =
                 match r with
                 | Ok (item, d, e) ->
                     Array.set data i item.Value
-                    (i - 1, box index :: indicies, Option.mergeWith Observable.merge deferred d, e @ errs)
-                | Error e -> (i - 1, box index :: indicies, deferred, e @ errs)
-            let (_, indicies, deferred, errs) = List.foldBack merge chunk (chunk.Length - 1, [], None, [])
-            deferResults (box indicies :: path) (Ok (box data, deferred, errs))
+                    (i - 1, box index :: indices, Option.mergeWith Observable.merge deferred d, e @ errs)
+                | Error e -> (i - 1, box index :: indices, deferred, e @ errs)
+            let (_, indices, deferred, errs) = List.foldBack merge chunk (chunk.Length - 1, [], None, [])
+            deferResults (box indices :: path) (Ok (box data, deferred, errs))
 
-    let buffer (items : IObservable<int * ResolverResult<KeyValuePair<string, obj>>>) : IObservable<GQLDeferredResponseContent> =
+    let collectBuffered (events : StreamEvent list) : IObservable<GQLDeferredResponseContent> =
+        // An enumeration failure is delivered as a value after the items of the same buffer,
+        // so it neither loses buffered items nor terminates sibling deferred streams
+        let struct (items, failures) =
+            (events, struct ([], []))
+            ||> List.foldBack (fun event struct (items, failures) ->
+                match event with
+                | StreamedItem (index, result) -> struct (index, result) :: items, failures
+                | StreamFailure error -> items, DeferredErrors (null, resolverError path ctx error, normalizeErrorPath path) :: failures)
+        match failures with
+        | [] -> collectItems items
+        | failures -> collectItems items |> Observable.concat (Observable.ofSeq failures)
+
+    let buffer (events : IObservable<StreamEvent>) : IObservable<GQLDeferredResponseContent> =
         let buffered =
             match options.Interval, options.PreferredBatchSize with
-            | Some i, None -> Observable.bufferMilliseconds i items |> Observable.map List.ofSeq
-            | None, Some c -> Observable.bufferCount c items |> Observable.map List.ofSeq
-            | Some i, Some c -> Observable.bufferMillisecondsCount i c items |> Observable.map List.ofSeq
-            | None, None -> Observable.map(List.singleton) items
+            | ValueSome i, ValueNone -> Observable.bufferMilliseconds i events |> Observable.map List.ofSeq
+            | ValueNone, ValueSome c -> Observable.bufferCount c events |> Observable.map List.ofSeq
+            | ValueSome i, ValueSome c -> Observable.bufferMillisecondsCount i c events |> Observable.map List.ofSeq
+            | ValueNone, ValueNone -> Observable.map(List.singleton) events
         buffered
         |> Observable.bind collectBuffered
 
@@ -300,6 +348,15 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
     }
 
     match value with
+    | :? IAsyncEnumerableFieldValue as fieldValue ->
+        let resolveStreamedItem index item = resolveItem index item |> AsyncVal.map StreamedItem
+        let stream : IObservable<GQLDeferredResponseContent> =
+            fieldValue.Items
+            // At most fieldValue.MaxConcurrency items are pulled from the source and resolved at the same time,
+            // each emitted as soon as it is resolved; a failure of the source itself is emitted last
+            |> Observable.ofAsyncEnumerableResolved fieldValue.MaxConcurrency resolveStreamedItem StreamFailure
+            |> buffer
+        ResolverResult.defered (KeyValuePair (name, box [])) stream |> AsyncVal.wrap
     | :? System.Collections.IEnumerable as enumerable ->
         let stream : IObservable<GQLDeferredResponseContent> =
             enumerable
@@ -307,8 +364,9 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
             |> Seq.toArray
             |> Array.mapi resolveItem
             |> Observable.ofAsyncValSeq
+            |> Observable.map StreamedItem
             |> buffer
-        ResolverResult.defered (KeyValuePair (info.Identifier, box [])) stream |> AsyncVal.wrap
+        ResolverResult.defered (KeyValuePair (name, box [])) stream |> AsyncVal.wrap
     | _ -> raise <| GQLMessageException (ErrorMessages.expectedEnumerableValue ctx.ExecutionInfo.Identifier (value.GetType()))
 
 and private live (inputContext : InputExecutionContextProvider) (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
@@ -439,6 +497,10 @@ let internal compileField (fieldDef: FieldDef) : ExecuteField =
         fun resolveFieldCtx value -> asyncVal {
                 return! resolve resolveFieldCtx value
             }
+    | Resolve.BoxedTaskSeq(_, _, resolve) ->
+        fun resolveFieldCtx value ->
+            try resolve resolveFieldCtx value |> AsyncVal.wrap
+            with e -> AsyncVal.Failure(e)
     | Resolve.BoxedExpr (resolve) ->
         fun resolveFieldCtx value -> downcast resolve resolveFieldCtx value
     | _ ->
@@ -450,44 +512,60 @@ let private (|String|Other|) (o : obj) =
     | _ -> Other
 
 let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objDef: ObjectDef) (rootValue : obj) : AsyncVal<GQLExecutionResult> =
-    let executeRootOperation (name, info) =
+    let executeRootOperation (name, info) (args : Map<string, obj>) =
         let fDef = info.Definition
-        let argDefs = ctx.FieldExecuteMap.GetArgs(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
-        match getArgumentValues argDefs info.Ast.Arguments ctx.GetInputContext ctx.Variables with
-        | Error errs -> asyncVal { return Error (errs |> List.map GQLProblemDetails.OfError) }
-        | Ok args ->
-            let path = [ box info.Identifier ]
-            let fieldCtx =
-                { ExecutionInfo = info
-                  Context = ctx
-                  ReturnType = fDef.TypeDef
-                  ParentType = objDef
-                  Schema = ctx.Schema
-                  Args = args
-                  Variables = ctx.Variables
-                  Path = normalizeErrorPath path }
-            let execute = ctx.FieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
-            asyncVal {
-                let! result =
-                    executeResolvers ctx.GetInputContext fieldCtx path rootValue (resolveField execute fieldCtx rootValue)
-                    |> AsyncVal.rescue path ctx.Schema.ParseError
-                let result =
-                    match result with
-                    | Ok (Ok value) -> Ok value
-                    | Ok (Error errs)
-                    | Error errs -> Error errs
+        let path = [ box info.Identifier ]
+        let fieldCtx =
+            { ExecutionInfo = info
+              Context = ctx
+              ReturnType = fDef.TypeDef
+              ParentType = objDef
+              Schema = ctx.Schema
+              Args = args
+              Variables = ctx.Variables
+              Path = normalizeErrorPath path }
+        let execute = ctx.FieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
+        asyncVal {
+            let! result =
+                executeResolvers ctx.GetInputContext fieldCtx path rootValue (resolveField execute fieldCtx rootValue)
+                |> AsyncVal.rescue path ctx.Schema.ParseError
+            let result =
                 match result with
-                | Error errs when info.IsNullable -> return Ok (KeyValuePair(name, null), None, errs)
-                | Error errs -> return Error errs
-                | Ok r -> return Ok r
-            }
+                | Ok (Ok value) -> Ok value
+                | Ok (Error errs)
+                | Error errs -> Error errs
+            match result with
+            | Error errs when info.IsNullable -> return Ok (KeyValuePair(name, null), None, errs)
+            | Error errs -> return Error errs
+            | Ok r -> return Ok r
+        }
 
     asyncVal {
         let documentId = ctx.ExecutionPlan.DocumentId
-        match! resultSet |> Array.map executeRootOperation |> collectFields ctx.ExecutionPlan.Strategy with
-        | Ok (data, Some deferred, errs) -> return GQLExecutionResult.Deferred(documentId, NameValueLookup(data), errs, deferred, ctx.Metadata)
-        | Ok (data, None, errs) -> return GQLExecutionResult.Direct(documentId, NameValueLookup(data), errs, ctx.Metadata)
-        | Error errs -> return GQLExecutionResult.RequestError(documentId, errs, ctx.Metadata)
+        // Inline argument coercion is request validation, the same as variable coercion in Executor.eval's
+        // coerceVariables: it rejects the request before any root resolver runs, so its errors must never be
+        // reported as an execution result with null data
+        let coerced = SortedDictionary<int, struct (Map<string, obj> * IGQLError list)> ()
+        resultSet
+        |> Array.iteri (fun i (_, info) ->
+            let argDefs = ctx.FieldExecuteMap.GetArgs(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
+            match getArgumentValues argDefs info.Ast.Arguments ctx.GetInputContext ctx.Variables with
+            | Ok args -> coerced.Add(i, struct (args, []))
+            | Error errs -> coerced.Add(i, struct (Map.empty, errs)))
+        let coercionErrors = coerced.Values |> Seq.collect (fun struct (_, errs) -> errs) |> List.ofSeq
+        if not coercionErrors.IsEmpty then
+            return GQLExecutionResult.Error(documentId, coercionErrors, ctx.Metadata)
+        else
+            let operations =
+                coerced
+                |> Seq.map (fun (KeyValue (i, struct (args, _))) -> executeRootOperation resultSet[i] args)
+                |> Seq.toArray
+            match! operations |> collectFields ctx.ExecutionPlan.Strategy with
+            | Ok (data, Some deferred, errs) -> return GQLExecutionResult.Deferred(documentId, NameValueLookup(data), errs, deferred, ctx.Metadata)
+            | Ok (data, None, errs) -> return GQLExecutionResult.Direct(documentId, NameValueLookup(data), errs, ctx.Metadata)
+            // Only a non-null root field failing during execution reaches this branch: an execution result whose
+            // data is null, as the spec requires, unlike the request error returned above for a coercion failure
+            | Error errs -> return GQLExecutionResult.Direct(documentId, null, errs, ctx.Metadata)
     }
 
 let private executeSubscription (resultSet: (string * ExecutionInfo) []) (inputContext : InputExecutionContextProvider) (ctx: ExecutionContext) (objDef: SubscriptionObjectDef) value = result {

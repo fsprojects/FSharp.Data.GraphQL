@@ -71,7 +71,13 @@ type GQLExecutionResult =
 
 // TODO: Rename to PascalCase
 and GQLResponseContent =
+    /// The request was rejected before execution started: validation, planning, variable or inline argument
+    /// coercion, a middleware, or the executor itself failing. There is no data, unlike a Direct result whose
+    /// data happens to be null.
     | RequestError of Errors: GQLProblemDetails list
+    /// An execution result. Data is null when a non-null root field failed during execution and the error
+    /// propagated to the root, exactly as it would for a non-null nested field, rather than being rejected as a
+    /// RequestError.
     | Direct of Data : Output * Errors: GQLProblemDetails list
     | Deferred of Data : Output * Errors : GQLProblemDetails list * Defer : IObservable<GQLDeferredResponseContent>
     | Stream of Stream : IObservable<GQLSubscriptionResponseContent>

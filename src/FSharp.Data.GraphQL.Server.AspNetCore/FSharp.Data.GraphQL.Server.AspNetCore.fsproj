@@ -11,6 +11,10 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup Label="InternalsVisibleTo">
+    <InternalsVisibleTo Include="FSharp.Data.GraphQL.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <Compile Include="Helpers.fs" />
     <Compile Include="RequestExecutionContext.fs" />

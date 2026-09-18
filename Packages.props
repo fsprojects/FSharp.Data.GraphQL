@@ -21,6 +21,8 @@
     <PackageReference Update="FsToolkit.ErrorHandling" Version="$(FsToolkitVersion)" />
     <PackageReference Update="FsToolkit.ErrorHandling.TaskResult" Version="$(FsToolkitVersion)" />
     <PackageReference Update="Giraffe" Version="7.*" />
+    <PackageReference Update="IcedTasks" Version="0.11.*" />
+    <PackageReference Update="Microsoft.Bcl.AsyncInterfaces" Version="$(SystemVersion)" />
     <PackageReference Update="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Update="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Update="Microsoft.NETCore.Platforms" Version="$(SystemVersion)" />
@@ -67,9 +69,11 @@
     <PackageReference Update="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
   <ItemGroup Label="Tests and Samples">
+    <PackageReference Update="Azure.Core" Version="1.*" />
     <PackageReference Update="CommandLineParser" Version="2.9.*" />
     <PackageReference Update="Donald" Version="10.1.0" />
     <PackageReference Update="EntityFramework" Version="1.*" />
+    <PackageReference Update="FSharp.Control.TaskSeq" Version="1.*" />
     <PackageReference Update="FSharp.Data.TypeProviders" Version="1.*" />
     <PackageReference Update="GraphQL.Server.Ui.Altair" Version="8.*" />
     <PackageReference Update="GraphQL.Server.Ui.GraphiQL" Version="8.*" />

@@ -1060,6 +1060,310 @@ module SchemaDefinitions =
                      Metadata = Metadata.Empty }
 
         /// <summary>
+        /// Creates a list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Without directives the sequence is enumerated completely and returned as a list.
+        /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
+        /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
+        /// </para>
+        /// <para>
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
+        /// </para>
+        /// </remarks>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
+        /// <param name="resolve">Expression used to resolve the asynchronous sequence from defining object.</param>
+        /// <param name="batching">Optional grouping of streamed items into batches.</param>
+        /// <param name="maxConcurrency">
+        /// Maximum number of items resolved, and pulled from the sequence, at the same time when the field is
+        /// streamed. Defaults to <see cref="Environment.ProcessorCount"/>. Not applied outside <c>@stream</c>.
+        /// </param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
+        static member TaskSeqField(name : string, typedef : #OutputDef<'Item seq>,
+                                   [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item>>,
+                                   [<Struct>] ?batching : StreamBatching<'Item>,
+                                   [<Struct>] ?maxConcurrency : int,
+                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq> =
+            upcast { FieldDefinition.Name = name
+                     Description = None
+                     TypeDef = typedef
+                     Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
+                     Args = [||]
+                     DeprecationReason = deprecationReason
+                     Metadata = Metadata.Empty }
+
+        /// <summary>
+        /// Creates a list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Without directives the sequence is enumerated completely and returned as a list.
+        /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
+        /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
+        /// </para>
+        /// <para>
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
+        /// </para>
+        /// </remarks>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Field description. Useful for generating documentation.</param>
+        /// <param name="resolve">Expression used to resolve the asynchronous sequence from defining object.</param>
+        /// <param name="batching">Optional grouping of streamed items into batches.</param>
+        /// <param name="maxConcurrency">
+        /// Maximum number of items resolved, and pulled from the sequence, at the same time when the field is
+        /// streamed. Defaults to <see cref="Environment.ProcessorCount"/>. Not applied outside <c>@stream</c>.
+        /// </param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
+        static member TaskSeqField(name : string, typedef : #OutputDef<'Item seq>, description : string,
+                                   [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item>>,
+                                   [<Struct>] ?batching : StreamBatching<'Item>,
+                                   [<Struct>] ?maxConcurrency : int,
+                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq> =
+            upcast { FieldDefinition.Name = name
+                     Description = Some description
+                     TypeDef = typedef
+                     Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
+                     Args = [||]
+                     DeprecationReason = deprecationReason
+                     Metadata = Metadata.Empty }
+
+        /// <summary>
+        /// Creates a list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Without directives the sequence is enumerated completely and returned as a list.
+        /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
+        /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
+        /// </para>
+        /// <para>
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
+        /// </para>
+        /// </remarks>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="resolve">Expression used to resolve the asynchronous sequence from defining object.</param>
+        /// <param name="batching">Optional grouping of streamed items into batches.</param>
+        /// <param name="maxConcurrency">
+        /// Maximum number of items resolved, and pulled from the sequence, at the same time when the field is
+        /// streamed. Defaults to <see cref="Environment.ProcessorCount"/>. Not applied outside <c>@stream</c>.
+        /// </param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
+        static member TaskSeqField(name : string, typedef : #OutputDef<'Item seq>, args : InputFieldDef list,
+                                   [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item>>,
+                                   [<Struct>] ?batching : StreamBatching<'Item>,
+                                   [<Struct>] ?maxConcurrency : int,
+                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq> =
+            upcast { FieldDefinition.Name = name
+                     Description = None
+                     TypeDef = typedef
+                     Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
+                     Args = args |> List.toArray
+                     DeprecationReason = deprecationReason
+                     Metadata = Metadata.Empty }
+
+        /// <summary>
+        /// Creates a list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Without directives the sequence is enumerated completely and returned as a list.
+        /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
+        /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
+        /// </para>
+        /// <para>
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
+        /// </para>
+        /// </remarks>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Field description. Useful for generating documentation.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="resolve">Expression used to resolve the asynchronous sequence from defining object.</param>
+        /// <param name="batching">Optional grouping of streamed items into batches.</param>
+        /// <param name="maxConcurrency">
+        /// Maximum number of items resolved, and pulled from the sequence, at the same time when the field is
+        /// streamed. Defaults to <see cref="Environment.ProcessorCount"/>. Not applied outside <c>@stream</c>.
+        /// </param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
+        static member TaskSeqField(name : string, typedef : #OutputDef<'Item seq>, description : string, args : InputFieldDef list,
+                                   [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item>>,
+                                   [<Struct>] ?batching : StreamBatching<'Item>,
+                                   [<Struct>] ?maxConcurrency : int,
+                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq> =
+            upcast { FieldDefinition.Name = name
+                     Description = Some description
+                     TypeDef = typedef
+                     Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
+                     Args = args |> List.toArray
+                     DeprecationReason = deprecationReason
+                     Metadata = Metadata.Empty }
+
+        /// <summary>
+        /// Creates a nullable list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Without directives the sequence is enumerated completely and returned as a list.
+        /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
+        /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
+        /// </para>
+        /// <para>
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
+        /// </para>
+        /// </remarks>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
+        /// <param name="resolve">Expression used to resolve the asynchronous sequence from defining object.</param>
+        /// <param name="batching">Optional grouping of streamed items into batches.</param>
+        /// <param name="maxConcurrency">
+        /// Maximum number of items resolved, and pulled from the sequence, at the same time when the field is
+        /// streamed. Defaults to <see cref="Environment.ProcessorCount"/>. Not applied outside <c>@stream</c>.
+        /// </param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
+        static member TaskSeqField(name : string, typedef : #OutputDef<'Item seq option>,
+                                   [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item> option>,
+                                   [<Struct>] ?batching : StreamBatching<'Item>,
+                                   [<Struct>] ?maxConcurrency : int,
+                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq option> =
+            upcast { FieldDefinition.Name = name
+                     Description = None
+                     TypeDef = typedef
+                     Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
+                     Args = [||]
+                     DeprecationReason = deprecationReason
+                     Metadata = Metadata.Empty }
+
+        /// <summary>
+        /// Creates a nullable list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Without directives the sequence is enumerated completely and returned as a list.
+        /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
+        /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
+        /// </para>
+        /// <para>
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
+        /// </para>
+        /// </remarks>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Field description. Useful for generating documentation.</param>
+        /// <param name="resolve">Expression used to resolve the asynchronous sequence from defining object.</param>
+        /// <param name="batching">Optional grouping of streamed items into batches.</param>
+        /// <param name="maxConcurrency">
+        /// Maximum number of items resolved, and pulled from the sequence, at the same time when the field is
+        /// streamed. Defaults to <see cref="Environment.ProcessorCount"/>. Not applied outside <c>@stream</c>.
+        /// </param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
+        static member TaskSeqField(name : string, typedef : #OutputDef<'Item seq option>, description : string,
+                                   [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item> option>,
+                                   [<Struct>] ?batching : StreamBatching<'Item>,
+                                   [<Struct>] ?maxConcurrency : int,
+                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq option> =
+            upcast { FieldDefinition.Name = name
+                     Description = Some description
+                     TypeDef = typedef
+                     Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
+                     Args = [||]
+                     DeprecationReason = deprecationReason
+                     Metadata = Metadata.Empty }
+
+        /// <summary>
+        /// Creates a nullable list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Without directives the sequence is enumerated completely and returned as a list.
+        /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
+        /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
+        /// </para>
+        /// <para>
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
+        /// </para>
+        /// </remarks>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="resolve">Expression used to resolve the asynchronous sequence from defining object.</param>
+        /// <param name="batching">Optional grouping of streamed items into batches.</param>
+        /// <param name="maxConcurrency">
+        /// Maximum number of items resolved, and pulled from the sequence, at the same time when the field is
+        /// streamed. Defaults to <see cref="Environment.ProcessorCount"/>. Not applied outside <c>@stream</c>.
+        /// </param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
+        static member TaskSeqField(name : string, typedef : #OutputDef<'Item seq option>, args : InputFieldDef list,
+                                   [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item> option>,
+                                   [<Struct>] ?batching : StreamBatching<'Item>,
+                                   [<Struct>] ?maxConcurrency : int,
+                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq option> =
+            upcast { FieldDefinition.Name = name
+                     Description = None
+                     TypeDef = typedef
+                     Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
+                     Args = args |> List.toArray
+                     DeprecationReason = deprecationReason
+                     Metadata = Metadata.Empty }
+
+        /// <summary>
+        /// Creates a nullable list field defined inside object type, which items are produced by an asynchronous sequence.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Without directives the sequence is enumerated completely and returned as a list.
+        /// With the <c>@stream</c> directive each item is delivered as soon as the sequence produces it,
+        /// grouped into batches by <paramref name="batching"/> unless the directive specifies <c>preferredBatchSize</c>.
+        /// </para>
+        /// <para>
+        /// The resolver is captured as a quotation, so a <see langword="taskSeq"/> block that uses
+        /// <see langword="let!"/> or <see langword="yield!"/> must be defined in a separate function called from
+        /// the resolver.
+        /// </para>
+        /// </remarks>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Field description. Useful for generating documentation.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="resolve">Expression used to resolve the asynchronous sequence from defining object.</param>
+        /// <param name="batching">Optional grouping of streamed items into batches.</param>
+        /// <param name="maxConcurrency">
+        /// Maximum number of items resolved, and pulled from the sequence, at the same time when the field is
+        /// streamed. Defaults to <see cref="Environment.ProcessorCount"/>. Not applied outside <c>@stream</c>.
+        /// </param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
+        static member TaskSeqField(name : string, typedef : #OutputDef<'Item seq option>, description : string, args : InputFieldDef list,
+                                   [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item> option>,
+                                   [<Struct>] ?batching : StreamBatching<'Item>,
+                                   [<Struct>] ?maxConcurrency : int,
+                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq option> =
+            upcast { FieldDefinition.Name = name
+                     Description = Some description
+                     TypeDef = typedef
+                     Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
+                     Args = args |> List.toArray
+                     DeprecationReason = deprecationReason
+                     Metadata = Metadata.Empty }
+
+        /// <summary>
         /// Creates a custom defined field using a custom field execution function.
         /// </summary>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
