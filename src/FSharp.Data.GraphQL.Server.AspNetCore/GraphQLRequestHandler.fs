@@ -55,7 +55,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
             logger.LogDebug ("Produced direct GraphQL response with documentId = '{documentId}' and metadata:\n{metadata}", documentId, metadata)
 
             if logger.IsEnabled LogLevel.Trace then
-                logger.LogTrace ("GraphQL response data:\n{data}", serializeIndented data)
+                logger.LogTrace ("GraphQL response data:\n{data}", serializeIndented (data |> ValueOption.toObj))
 
             GQLResponse.Direct (documentId, data |> ValueOption.toObj, errs)
         | Deferred (data, errs, deferred) ->
