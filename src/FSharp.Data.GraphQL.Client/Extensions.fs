@@ -11,14 +11,18 @@ open System.Security.Cryptography
 /// Extensions for types used by the GraphQL client library.
 [<AutoOpen>]
 module internal Extensions =
+
+    let private changeFirstChar mapping (s : string) =
+        let span = s.AsSpan()
+        let c = mapping span[0]
+        if c = span[0] then s else string c + span.Slice(1).ToString()
+
     type String with
         /// Returns the input string with the first character in upper case.
-        member this.FirstCharUpper() =
-            this.Substring(0, 1).ToUpperInvariant() + this.Substring(1)
+        member this.FirstCharUpper () = changeFirstChar Char.ToUpperInvariant this
 
         /// Returns the input string with the first character in lower case.
-        member this.FirstCharLower() =
-            this.Substring(0, 1).ToLowerInvariant() + this.Substring(1)
+        member this.FirstCharLower () = changeFirstChar Char.ToLowerInvariant this
 
         member this.MD5Hash() =
             Encoding.UTF8.GetBytes(this)

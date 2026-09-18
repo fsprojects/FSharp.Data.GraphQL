@@ -69,6 +69,7 @@
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="System.Memory" />
   </ItemGroup>
 
   <ItemGroup>
