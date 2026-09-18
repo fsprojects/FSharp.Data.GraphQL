@@ -8,6 +8,7 @@ open System.Collections.Generic
 open System.Collections.Immutable
 open System.Net.Http
 open System.Text
+open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
 
@@ -131,7 +132,7 @@ module GraphQLClient =
                 | :? IDictionary<string, obj> as x ->
                     x
                     |> Seq.collect (fun kvp ->
-                        tryMapFileVariable (name + "." + (kvp.Key.FirstCharLower ()), kvp.Value)
+                        tryMapFileVariable (name + "." + JsonNamingPolicy.CamelCase.ConvertName kvp.Key, kvp.Value)
                         |> Option.defaultValue [||])
                     |> Array.ofSeq
                     |> Some
