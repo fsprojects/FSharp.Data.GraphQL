@@ -6,9 +6,9 @@ let addSubscription
     (id : SubscriptionId, unsubscriber : SubscriptionUnsubscriber, onUnsubscribe : OnUnsubscribeAction)
     (subscriptions : SubscriptionsDict)
     =
-    subscriptions.Add (id, (unsubscriber, onUnsubscribe))
+    lock subscriptions (fun () -> subscriptions.Add (id, (unsubscriber, onUnsubscribe)))
 
-let isIdTaken (id : SubscriptionId) (subscriptions : SubscriptionsDict) = subscriptions.ContainsKey (id)
+let isIdTaken (id : SubscriptionId) (subscriptions : SubscriptionsDict) = lock subscriptions (fun () -> subscriptions.ContainsKey (id))
 
 let executeOnUnsubscribeAndDispose (id : SubscriptionId) (subscription : SubscriptionUnsubscriber * OnUnsubscribeAction) =
     match subscription with
@@ -19,15 +19,28 @@ let executeOnUnsubscribeAndDispose (id : SubscriptionId) (subscription : Subscri
             unsubscriber.Dispose ()
 
 let removeSubscription (id : SubscriptionId) (subscriptions : SubscriptionsDict) =
-    match subscriptions.TryGetValue id with
-    | true, sub ->
-        sub |> executeOnUnsubscribeAndDispose id
-        subscriptions.Remove (id) |> ignore
-    | false, _ -> ()
+    let subscription =
+        lock subscriptions (fun () ->
+            match subscriptions.TryGetValue id with
+            | true, sub ->
+                subscriptions.Remove (id) |> ignore
+                ValueSome sub
+            | false, _ -> ValueNone)
+
+    match subscription with
+    | ValueSome sub -> sub |> executeOnUnsubscribeAndDispose id
+    | ValueNone -> ()
 
 let removeAllSubscriptions (subscriptions : SubscriptionsDict) =
-    subscriptions
-    |> Seq.iter (fun subscription ->
-        subscription.Value
-        |> executeOnUnsubscribeAndDispose subscription.Key)
-    subscriptions.Clear ()
+    let subscriptionsToDispose =
+        lock subscriptions (fun () ->
+            let snapshot =
+                subscriptions
+                |> Seq.map (fun subscription -> struct (subscription.Key, subscription.Value))
+                |> Seq.toArray
+
+            subscriptions.Clear ()
+            snapshot)
+
+    subscriptionsToDispose
+    |> Array.iter (fun struct (id, subscription) -> subscription |> executeOnUnsubscribeAndDispose id)
