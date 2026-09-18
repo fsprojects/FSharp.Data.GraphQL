@@ -24,6 +24,9 @@ module ReflectionPatterns =
     let isOption (t : Type) =
         t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ option>
 
+    let isValueOption (t : Type) =
+        t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ voption>
+
     let isMap (t : Type) =
        t = typeof<Map<string, obj>>
 
@@ -70,14 +73,37 @@ module ReflectionPatterns =
         let (_, none, _) = getOptionCases t
         FSharpValue.MakeUnion(none, [||])
 
+    let private getValueOptionCases (t : Type) =
+        let votype = typedefof<_ voption>.MakeGenericType(t)
+        let cases = FSharpType.GetUnionCases (votype)
+        let valueSome = cases |> Array.find (fun c -> c.Name = "ValueSome")
+        let valueNone = cases |> Array.find (fun c -> c.Name = "ValueNone")
+        (valueSome, valueNone, votype)
+
+    /// <summary>
+    /// Builds a boxed <c>'T voption</c> value: <see langword="null"/> becomes <c>ValueNone</c>, otherwise the value is wrapped as <c>ValueSome</c>.
+    /// </summary>
+    let makeValueOption (t : Type) (value : obj) =
+        let (valueSome, valueNone, _) = getValueOptionCases t
+        if isNull value then
+            FSharpValue.MakeUnion (valueNone, [||])
+        else
+            FSharpValue.MakeUnion (valueSome, [| value |])
+
     [<return: Struct>]
     let (|Option|_|) t =
         if isOption t then ValueSome (Option (t.GetGenericArguments().[0]))
         else ValueNone
 
+    [<return: Struct>]
+    let (|ValueOption|_|) t =
+        if isValueOption t then ValueSome (ValueOption (t.GetGenericArguments().[0]))
+        else ValueNone
+
     let isType (expected : Type) (t : Type) =
         match t with
         | Option t -> t = expected
+        | ValueOption t -> t = expected
         | _ -> t = expected
 
     let isNumericType (t : Type) =
