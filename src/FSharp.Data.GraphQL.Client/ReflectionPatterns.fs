@@ -141,11 +141,14 @@ module ReflectionPatterns =
     [<return: Struct>]
     let (|OptionValue|_|) (x : obj) =
         let xtype = x.GetType()
-        if isOption xtype
-        then
-            match FSharpValue.GetUnionFields(x, xtype) with
+        let tryGetValue optionType =
+            match FSharpValue.GetUnionFields(x, optionType) with
             | (_, [|value|]) -> ValueSome (OptionValue Some value)
             | _ -> ValueSome (OptionValue None)
+        if isOption xtype
+        then tryGetValue xtype
+        elif isValueOption xtype
+        then tryGetValue xtype
         else ValueNone
 
     [<return: Struct>]
