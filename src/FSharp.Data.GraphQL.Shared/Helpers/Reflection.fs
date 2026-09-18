@@ -191,8 +191,8 @@ module Helpers =
     let optionCast (value: obj) = objectOptionCast value |> ValueOption.toOption
 
     /// <summary>
-    /// Matches a System.Object with an option.
-    /// If the object is an <see cref="Option{T}", returns it as Some, otherwise, return <see cref="None"/>.
+    /// Matches a <see cref="System.Object"/> containing a boxed <see cref="Option{T}"/> or <see cref="ValueOption{T}"/>.
+    /// Returns the wrapped value for <c>Some</c> and <c>ValueSome</c>, and does not match for <c>None</c>, <c>ValueNone</c>, or non-option values.
     /// </summary>
     [<return: Struct>]
     let (|ObjectOption|_|) (value : obj) = objectOptionCast value
