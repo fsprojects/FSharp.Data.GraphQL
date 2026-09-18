@@ -11,8 +11,8 @@ type Output = IDictionary<string, obj>
 
 type GQLResponse = {
     DocumentId : int
-    Data : Output voption Skippable
-    Errors : GQLProblemDetails list Skippable
+    Data : Skippable<Output voption>
+    Errors : Skippable<GQLProblemDetails list>
 } with
 
     static member Direct (documentId, data : Output | null, errors) = {
