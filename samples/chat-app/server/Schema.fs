@@ -68,7 +68,7 @@ module MapFrom =
         {
             Id = x.Id
             Name = x.Name
-            Members = members |> Seq.map memberInDb_To_Member |> List.ofSeq
+            Members = members |> Seq.map memberInDb_To_Member |> Seq.toList
             ChatRooms =
                 FakePersistence.ChatRooms.Values
                 |> Seq.filter (fun c -> x.ChatRooms |> List.contains c.Id)
@@ -512,7 +512,7 @@ module Schema =
                     fun _ _ ->
                         FakePersistence.Organizations.Values
                         |> Seq.map MapFrom.organizationInDb_To_Organization
-                        |> List.ofSeq
+                        |> Seq.toList
                 )
             ]
         )

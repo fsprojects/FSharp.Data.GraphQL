@@ -102,7 +102,7 @@ module internal ProvidedEnum =
                     Expr.NewObject(ctor, [ <@@ name @@>; <@@ item @@> ])
                 ProvidedProperty(item, tdef, getterCode, isStatic = true))
             |> Seq.cast<MemberInfo>
-            |> List.ofSeq)
+            |> Seq.toList)
         tdef
 
 type internal ProvidedTypeMetadata =
@@ -743,7 +743,7 @@ module internal Provider =
 
                         let schemaProvidedTypes = getSchemaProvidedTypes(schema, uploadInputTypeName, explicitOptionalParameters)
                         let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
-                        typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
+                        typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> Seq.toList)
                         let operationWrapper = ProvidedTypeDefinition("Operations", None, isSealed = true)
                         let getContextMethodDef =
                             let methodParameters =

@@ -152,7 +152,7 @@ let rec private coerceObjectListFilterInput (variables : Variables) inputValue :
             |> splitSeqErrorsList
         match filterResults with
         | Error errs -> Error errs
-        | Ok filters -> filters |> Seq.vchoose id |> List.ofSeq |> buildAnd |> Ok
+        | Ok filters -> filters |> Seq.vchoose id |> Seq.toList |> buildAnd |> Ok
 
     let rec parse inputValue =
         match inputValue with

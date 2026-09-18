@@ -166,7 +166,7 @@ and InputValue =
                 ListValue (
                     element.EnumerateArray ()
                     |> Seq.map InputValue.OfJsonElement
-                    |> List.ofSeq
+                    |> Seq.toList
                 )
             | JsonValueKind.Object ->
                 ObjectValue (

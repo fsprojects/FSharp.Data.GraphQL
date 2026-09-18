@@ -129,7 +129,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
 
     let properties =
         if not (isNull properties) then
-            properties |> Seq.sortBy _.Name |> List.ofSeq
+            properties |> Seq.sortBy _.Name |> Seq.toList
         else
             []
 

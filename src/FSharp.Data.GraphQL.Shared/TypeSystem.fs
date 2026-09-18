@@ -2196,7 +2196,7 @@ and TypeMap () =
                 | _ -> ValueNone)
         )
         |> Seq.vchoose id
-        |> List.ofSeq
+        |> Seq.toList
 
     /// <summary>
     /// Tries to find a FieldDef inside an ObjectDef by the object name and the field name.
@@ -2242,8 +2242,8 @@ and TypeMap () =
              |> toSeq
              |> Seq.map map
              |> Seq.choose id
-             |> List.ofSeq))
-        |> List.ofSeq
+             |> Seq.toList))
+        |> Seq.toList
 
     /// <summary>
     /// Creates a new TypeMap instance, using a sequence of NamedDef's to fill it.

@@ -62,7 +62,7 @@ module Seq =
 
 module internal List =
 
-    let vchoose mapping list = list |> Seq.ofList |> Seq.vchoose mapping |> List.ofSeq
+    let vchoose mapping list = list |> Seq.ofList |> Seq.vchoose mapping |> Seq.toList
 
     let vtryFind predicate list = list |> Seq.ofList |> Seq.vtryFind predicate
 
