@@ -223,9 +223,10 @@ module internal Observable =
                                     slots.Release () |> ignore
                             | pendingResult -> resolveInBackground pendingResult
             with ex ->
-                match ex with
-                | :? OperationCanceledException when failed () && not cancellationToken.IsCancellationRequested -> ()
-                | _ -> enumerationFailure <- ValueSome ex
+                if failed () && not cancellationToken.IsCancellationRequested then
+                    ()
+                else
+                    enumerationFailure <- ValueSome ex
             // Captured items no longer need the enumerator, so it is disposed before waiting for their resolutions
             let failureBeforeDispose =
                 enumerationFailure

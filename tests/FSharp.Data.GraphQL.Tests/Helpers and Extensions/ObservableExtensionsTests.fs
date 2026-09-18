@@ -609,9 +609,50 @@ let ``ofAsyncEnumerableResolved should preserve a resolution failure over Dispos
             AsyncVal.wrap n
     let observedFailure = ref ""
     use sub =
-        Observable.ofAsyncEnumerableResolved 2 resolve (fun ex ->
-            observedFailure.Value <- ex.Message
-            -1)
+        Observable.ofAsyncEnumerableResolved
+            2
+            resolve
+            (fun ex ->
+                observedFailure.Value <- ex.Message
+                -1)
+            source
+        |> Observer.create
+    sub.WaitCompleted (timeout = ms 10)
+    sub.Received |> seqEquals [ -1 ]
+    Assert.Equal ("Boom resolving", observedFailure.Value)
+
+[<Fact>]
+let ``ofAsyncEnumerableResolved should preserve a resolution failure over a later enumeration exception after canceling MoveNextAsync`` () =
+    // Regression test: once a resolution failure has already stopped the stream, a source that reacts to the linked
+    // cancellation by throwing a different exception from MoveNextAsync must not replace that original failure.
+    let moveFailed = TaskCompletionSource ()
+    let source =
+        SuspendingAsyncEnumerable<int>(fun cancellationToken index -> task {
+            match index with
+            | 0 -> return ValueSome 1
+            | 1 ->
+                use _ = cancellationToken.Register (fun () -> moveFailed.TrySetResult () |> ignore)
+                do! moveFailed.Task
+                return failwith "Boom during enumeration"
+            | _ -> return ValueNone
+        })
+    let resolve _ (n : int) =
+        if n = 1 then
+            async {
+                do! Async.Sleep (ms 50)
+                return failwith "Boom resolving"
+            }
+            |> AsyncVal.ofAsync
+        else
+            AsyncVal.wrap n
+    let observedFailure = ref ""
+    use sub =
+        Observable.ofAsyncEnumerableResolved
+            2
+            resolve
+            (fun ex ->
+                observedFailure.Value <- ex.Message
+                -1)
             source
         |> Observer.create
     sub.WaitCompleted (timeout = ms 10)
