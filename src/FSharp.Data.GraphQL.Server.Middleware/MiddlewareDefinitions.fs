@@ -85,7 +85,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType> (reportToMetada
     let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
         let modifyFields (object : ObjectDef<'ObjectType>) (fields : FieldDef<'ObjectType> seq) =
             let args = [ Define.Input ("filter", Nullable ObjectListFilterType) ]
-            let fields = fields |> Seq.map _.WithArgs(args) |> List.ofSeq
+            let fields = fields |> Seq.map _.WithArgs(args) |> Seq.toList
             object.WithFields (fields)
         let typesWithListFields = ctx.TypeMap.GetTypesWithListFields<'ObjectType, 'ListType>()
         if Seq.isEmpty typesWithListFields then

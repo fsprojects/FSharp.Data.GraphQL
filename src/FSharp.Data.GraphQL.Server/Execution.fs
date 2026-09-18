@@ -161,7 +161,7 @@ let deferResults path (res : ResolverResult<obj>) : IObservable<GQLDeferredRespo
         let deferredData =
             match errs with
             | [] -> DeferredResult (data, formattedPath)
-            | _ -> DeferredErrors (Option.ofObj data |> ValueOption.ofOption, errs, formattedPath)
+            | _ -> DeferredErrors (data |> ValueOption.ofObj, errs, formattedPath)
             |> Observable.singleton
         Option.foldBack Observable.concat deferred deferredData
     | Error errs -> Observable.singleton <| DeferredErrors (ValueNone, errs, formattedPath)
@@ -552,7 +552,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             match getArgumentValues argDefs info.Ast.Arguments ctx.GetInputContext ctx.Variables with
             | Ok args -> coerced.Add(i, struct (args, []))
             | Error errs -> coerced.Add(i, struct (Map.empty, errs)))
-        let coercionErrors = coerced.Values |> Seq.collect (fun struct (_, errs) -> errs) |> List.ofSeq
+        let coercionErrors = coerced.Values |> Seq.collect (fun struct (_, errs) -> errs) |> Seq.toList
         if not coercionErrors.IsEmpty then
             return GQLExecutionResult.Error(documentId, coercionErrors, ctx.Metadata)
         else
