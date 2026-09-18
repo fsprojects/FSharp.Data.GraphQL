@@ -10,13 +10,18 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types
 
-type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) =
+type internal QueryWeightMiddleware (threshold : float, reportToMetadata : bool) =
 
-    let middleware (threshold : float) (inputContext : InputExecutionContextProvider) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
+    let middleware
+        (threshold : float)
+        (inputContext : InputExecutionContextProvider)
+        (ctx : ExecutionContext)
+        (next : ExecutionContext -> AsyncVal<GQLExecutionResult>)
+        =
         let measureThreshold (threshold : float) (fields : ExecutionInfo list) =
             let getWeight f =
-                if f.ParentDef = upcast ctx.ExecutionPlan.RootDef
-                then 0.0
+                if f.ParentDef = upcast ctx.ExecutionPlan.RootDef then
+                    0.0
                 else
                     match f.Definition.Metadata.TryFind<float>("queryWeight") with
                     | ValueSome w -> w
@@ -34,33 +39,40 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
                 | [] -> (true, acc)
                 | x :: xs ->
                     let current = acc + (getWeight x)
-                    if current > threshold then (false, current)
-                    else match x.Kind with
-                         | ResolveValue -> checkThreshold current xs
-                         | SelectFields fields ->
+                    if current > threshold then
+                        (false, current)
+                    else
+                        match x.Kind with
+                        | ResolveValue -> checkThreshold current xs
+                        | SelectFields fields ->
                             let (pass, current) = checkThreshold current fields
                             if pass then checkThreshold current xs else (false, current)
-                         | ResolveCollection field ->
+                        | ResolveCollection field ->
                             let (pass, current) = checkThreshold acc [ field ]
                             if pass then checkThreshold current xs else (false, current)
-                         | ResolveAbstraction typeFields ->
+                        | ResolveAbstraction typeFields ->
                             let fields = typeFields |> Map.toList |> List.collect (fun (_, v) -> v)
                             let (pass, current) = checkThreshold current fields
                             if pass then checkThreshold current xs else (false, current)
-                         | ResolveDeferred info -> checkThreshold current (info :: xs)
-                         | ResolveStreamed (info, _) -> checkThreshold current (info :: xs)
-                         | ResolveLive info -> checkThreshold current (info :: xs)
+                        | ResolveDeferred info -> checkThreshold current (info :: xs)
+                        | ResolveStreamed (info, _) -> checkThreshold current (info :: xs)
+                        | ResolveLive info -> checkThreshold current (info :: xs)
             checkThreshold 0.0 fields
         let error (ctx : ExecutionContext) =
-            GQLExecutionResult.ErrorAsync(ctx.ExecutionPlan.DocumentId, "Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", ctx.Metadata)
+            GQLExecutionResult.ErrorAsync (
+                ctx.ExecutionPlan.DocumentId,
+                "Query complexity exceeds maximum threshold. Please reduce query complexity and try again.",
+                ctx.Metadata
+            )
         let (pass, totalWeight) = measureThreshold threshold ctx.ExecutionPlan.Fields
         let ctx =
             match reportToMetadata with
-            | true -> { ctx with Metadata = ctx.Metadata.Add("queryWeightThreshold", threshold).Add("queryWeight", totalWeight) }
+            | true -> {
+                ctx with
+                    Metadata = ctx.Metadata.Add("queryWeightThreshold", threshold).Add("queryWeight", totalWeight)
+              }
             | false -> ctx
-        if pass
-        then next ctx
-        else error ctx
+        if pass then next ctx else error ctx
 
     interface IExecutorMiddleware with
         member _.CompileSchema = None
@@ -68,33 +80,38 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
         member _.PlanOperation = None
         member _.ExecuteOperationAsync = Some (middleware threshold)
 
-type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadata : bool) =
+type internal ObjectListFilterMiddleware<'ObjectType, 'ListType> (reportToMetadata : bool) =
 
     let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
         let modifyFields (object : ObjectDef<'ObjectType>) (fields : FieldDef<'ObjectType> seq) =
-            let args = [ Define.Input("filter", Nullable ObjectListFilterType) ]
+            let args = [ Define.Input ("filter", Nullable ObjectListFilterType) ]
             let fields = fields |> Seq.map _.WithArgs(args) |> Seq.toList
-            object.WithFields(fields)
-        let typesWithListFields =
-            ctx.TypeMap.GetTypesWithListFields<'ObjectType, 'ListType>()
-        if Seq.isEmpty typesWithListFields
-        then failwith $"No lists with specified type '{typeof<'ObjectType>}' where found on object of type '{typeof<'ListType>}'."
+            object.WithFields (fields)
+        let typesWithListFields = ctx.TypeMap.GetTypesWithListFields<'ObjectType, 'ListType>()
+        if Seq.isEmpty typesWithListFields then
+            failwith $"No lists with specified type '{typeof<'ObjectType>}' where found on object of type '{typeof<'ListType>}'."
         let modifiedTypes =
             typesWithListFields
             |> Seq.map (fun (object, fields) -> modifyFields object fields)
             |> Seq.cast<NamedDef>
-        ctx.TypeMap.AddTypes(modifiedTypes, overwrite = true)
+        ctx.TypeMap.AddTypes (modifiedTypes, overwrite = true)
         next ctx
 
-    let reportMiddleware (inputContext : InputExecutionContextProvider) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
-        let rec collectArgs (path: obj list) (acc : KeyValuePair<obj list, ObjectListFilter> list) (fields : ExecutionInfo list) =
+    let reportMiddleware
+        (inputContext : InputExecutionContextProvider)
+        (ctx : ExecutionContext)
+        (next : ExecutionContext -> AsyncVal<GQLExecutionResult>)
+        =
+        let rec collectArgs (path : obj list) (acc : KeyValuePair<obj list, ObjectListFilter> list) (fields : ExecutionInfo list) =
             let fieldArgs currentPath field =
                 let filterResults =
                     field.Ast.Arguments
                     |> Seq.map (fun x ->
                         match x.Name, x.Value with
                         | "filter", (VariableName variableName) -> Ok (ValueSome (ctx.Variables[variableName] :?> ObjectListFilter))
-                        | "filter", inlineConstant -> ObjectListFilterType.CoerceInput inputContext (InlineConstant inlineConstant) ctx.Variables |> Result.map ValueOption.ofObj
+                        | "filter", inlineConstant ->
+                            ObjectListFilterType.CoerceInput inputContext (InlineConstant inlineConstant) ctx.Variables
+                            |> Result.map ValueOption.ofObj
                         | _ -> Ok ValueNone)
                     |> Seq.toList
                 match filterResults |> splitSeqErrorsList with
@@ -111,10 +128,8 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                 let currentPath = box x.Ast.AliasOrName :: path
                 let accResult =
                     match x.Kind with
-                    | SelectFields fields ->
-                        collectArgs currentPath acc fields
-                    | ResolveCollection field ->
-                        fieldArgs currentPath field
+                    | SelectFields fields -> collectArgs currentPath acc fields
+                    | ResolveCollection field -> fieldArgs currentPath field
                     | ResolveAbstraction typeFields ->
                         let fields = typeFields |> Map.toList |> List.collect (fun (_, v) -> v)
                         collectArgs currentPath acc fields
@@ -127,14 +142,14 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
             | true ->
                 let! args = collectArgs [] [] ctx.ExecutionPlan.Fields
                 let filters = ImmutableDictionary.CreateRange args
-                return { ctx with Metadata = ctx.Metadata.Add("filters", filters) }
+                return { ctx with Metadata = ctx.Metadata.Add ("filters", filters) }
             | false -> return ctx
         }
         match ctxResult with
         | Ok ctx -> next ctx
         | Error errs -> asyncVal {
-                return GQLExecutionResult.Direct(ctx.ExecutionPlan.DocumentId, null, (errs |> List.map GQLProblemDetails.OfError), ctx.Metadata)
-            }
+            return GQLExecutionResult.RequestError (ctx.ExecutionPlan.DocumentId, (errs |> List.map GQLProblemDetails.OfError), ctx.Metadata)
+          }
     interface IExecutorMiddleware with
         member _.CompileSchema = Some compileMiddleware
         member _.PostCompileSchema = None
@@ -144,22 +159,25 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
 /// A function that resolves an identity name for a schema object, based on a object definition of it.
 type IdentityNameResolver = ObjectDef -> string
 
-type internal LiveQueryMiddleware(identityNameResolver : IdentityNameResolver) =
+type internal LiveQueryMiddleware (identityNameResolver : IdentityNameResolver) =
 
     let middleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
-        let identity (identityName : string) (x : obj) =
-            x.GetType().GetProperty(identityName).GetValue(x)
-        let project (fieldName : string) (x : obj) =
-            x.GetType().GetProperty(fieldName).GetValue(x)
-        let makeSubscription id typeName fieldName : LiveFieldSubscription =
-            { Filter = (fun x y -> identity id x = identity id y); Project = project fieldName; TypeName = typeName; FieldName = fieldName }
+        let identity (identityName : string) (x : obj) = x.GetType().GetProperty(identityName).GetValue(x)
+        let project (fieldName : string) (x : obj) = x.GetType().GetProperty(fieldName).GetValue(x)
+        let makeSubscription id typeName fieldName : LiveFieldSubscription = {
+            Filter = (fun x y -> identity id x = identity id y)
+            Project = project fieldName
+            TypeName = typeName
+            FieldName = fieldName
+        }
         let getObjDefs (def : FieldDef) =
             let rec helper (acc : ObjectDef list) (def : TypeDef) =
                 match def with
                 | Object objdef ->
-                    if not (acc |> List.exists (fun x -> x.Name = objdef.Name))
-                    then helper (objdef :: acc) objdef
-                    else acc
+                    if not (acc |> List.exists (fun x -> x.Name = objdef.Name)) then
+                        helper (objdef :: acc) objdef
+                    else
+                        acc
                 | Nullable innerdef -> helper acc innerdef
                 | List innerdef -> helper acc innerdef
                 | Union udef -> (udef.Options |> List.ofArray) @ acc
@@ -169,14 +187,17 @@ type internal LiveQueryMiddleware(identityNameResolver : IdentityNameResolver) =
         |> Map.toSeq
         |> Seq.collect (snd >> getObjDefs)
         |> Seq.map (fun objdef -> identityNameResolver objdef, objdef)
-        |> Seq.filter (fun (id, objdef) -> not (isNull (objdef.Type.GetProperty(id))))
+        |> Seq.filter (fun (id, objdef) -> not (isNull (objdef.Type.GetProperty (id))))
         |> Seq.collect (fun (id, objdef) ->
             objdef.Fields
             |> Map.toSeq
-            |> Seq.map (snd >> (fun fdef -> makeSubscription id objdef.Name fdef.Name)))
+            |> Seq.map (
+                snd
+                >> (fun fdef -> makeSubscription id objdef.Name fdef.Name)
+            ))
         |> Seq.iter (fun x ->
-            if not (ctx.Schema.LiveFieldSubscriptionProvider.IsRegistered x.TypeName x.FieldName)
-            then ctx.Schema.LiveFieldSubscriptionProvider.Register x)
+            if not (ctx.Schema.LiveFieldSubscriptionProvider.IsRegistered x.TypeName x.FieldName) then
+                ctx.Schema.LiveFieldSubscriptionProvider.Register x)
         next ctx
 
     interface IExecutorMiddleware with

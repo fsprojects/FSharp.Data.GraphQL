@@ -874,6 +874,7 @@ and Resolve =
     /// output defines .NET type of the sequence items
     /// expr is untyped version of Expr<ResolveFieldContext->'Input->IAsyncEnumerable<'Output>>
     /// or Expr<ResolveFieldContext->'Input->IAsyncEnumerable<'Output> option>
+    /// or Expr<ResolveFieldContext->'Input->IAsyncEnumerable<'Output> voption>
     /// streaming defines how items are grouped and how many are resolved concurrently when the field is streamed
     | TaskSeq of input : Type * output : Type * expr : Expr * streaming : TaskSeqStreamingOptions
 
@@ -2424,6 +2425,16 @@ module Resolve =
             ValueNone
 
     [<return: Struct>]
+    let private (|FSharpValueOption|_|) (typ : Type) =
+        if
+            typ.GetTypeInfo().IsGenericType
+            && typ.GetGenericTypeDefinition () = typedefof<voption<_>>
+        then
+            ValueSome (typ.GenericTypeArguments |> Array.head)
+        else
+            ValueNone
+
+    [<return: Struct>]
     let private (|FSharpAsync|_|) (typ : Type) =
         if
             typ.GetTypeInfo().IsGenericType
@@ -2489,6 +2500,17 @@ module Resolve =
             | None -> null
         resolve
 
+    let private boxifyTaskSeqValueOption<'T, 'U> (streaming : TaskSeqStreamingOptions) (f : ResolveFieldContext -> 'T -> IAsyncEnumerable<'U> voption) : ResolveFieldContext -> obj -> obj =
+        let valueNone : obj voption = ValueNone
+        let resolve (ctx : ResolveFieldContext) (x : obj) =
+            match f ctx (x :?> 'T) with
+            | ValueSome source ->
+                match wrapAsyncEnumerable streaming source with
+                | null -> null
+                | wrapped -> box (ValueSome wrapped)
+            | ValueNone -> box valueNone
+        resolve
+
     let private getRuntimeMethod name =
         let methods = typeof<Marker>.DeclaringType.GetRuntimeMethods ()
         methods |> Seq.find (fun m -> m.Name.Equals name)
@@ -2504,6 +2526,8 @@ module Resolve =
     let private runtimeBoxifyTaskSeq = getRuntimeMethod (nameof boxifyTaskSeq)
 
     let private runtimeBoxifyTaskSeqOption = getRuntimeMethod (nameof boxifyTaskSeqOption)
+
+    let private runtimeBoxifyTaskSeqValueOption = getRuntimeMethod (nameof boxifyTaskSeqValueOption)
 
     let private unwrapExpr =
         function
@@ -2557,6 +2581,8 @@ module Resolve =
         match unwrapExpr expr with
         | resolver, FSharpFunc (_, FSharpFunc (d, AsyncEnumerable (c))) -> invoke runtimeBoxifyTaskSeq d c resolver
         | resolver, FSharpFunc (_, FSharpFunc (d, FSharpOption (AsyncEnumerable (c)))) -> invoke runtimeBoxifyTaskSeqOption d c resolver
+        | resolver, FSharpFunc (_, FSharpFunc (d, FSharpValueOption (AsyncEnumerable (c)))) ->
+            invoke runtimeBoxifyTaskSeqValueOption d c resolver
         | resolver, _ -> failwithf "Unsupported signature for TaskSeq Resolve %A" (resolver.GetType ())
 
     let (|BoxedSync|_|) =

@@ -31,6 +31,18 @@ let gatedNumbers (gate : Task) =
     })
     :> IAsyncEnumerable<int>
 
+let signaledGatedNumbers (reachedGate : TaskCompletionSource) (gate : Task) =
+    SuspendingAsyncEnumerable<int>(fun _ index -> task {
+        match index with
+        | 0 -> return ValueSome 1
+        | 1 ->
+            reachedGate.TrySetResult () |> ignore
+            do! gate
+            return ValueSome 2
+        | _ -> return ValueNone
+    })
+    :> IAsyncEnumerable<int>
+
 let failingNumbers () = taskSeq {
     yield 1
     yield 2
@@ -137,21 +149,52 @@ let ``TaskSeq field without directives returns the whole sequence as a list`` ()
         data |> equals (upcast expectedData)
 
 [<Fact>]
-let ``TaskSeq field without directives waits for a sequence that suspends`` () =
+let ``TaskSeq field without directives waits for a sequence that suspends`` () : Task = task {
+    let gate = TaskCompletionSource ()
+    let reachedGate = TaskCompletionSource ()
     let executor =
-        executorFor [ Define.TaskSeqField ("numbers", ListOf IntType, fun _ _ -> gatedNumbers Task.CompletedTask) ]
+        executorFor [
+            Define.TaskSeqField ("numbers", ListOf IntType, fun _ _ -> signaledGatedNumbers reachedGate gate.Task)
+        ]
     let expectedData = NameValueLookup.ofList [ "numbers", upcast [| box 1; box 2 |] ]
-    let result = executeQuery executor "{ numbers }"
+    let execution =
+        executor.AsyncExecute (parse "{ numbers }", getMockInputContext, ())
+        |> Async.StartImmediateAsTask
+    do!
+        waitForTask
+            (TimeSpan.FromSeconds (float (ms 5)))
+            "Timeout while waiting for the non-stream execution to reach the suspended second item"
+            reachedGate.Task
+    Assert.False (execution.IsCompleted, "The non-stream execution must wait for the sequence to produce its last item")
+    gate.SetResult ()
+    let! result = execution
     ensureDirect result
     <| fun data errors ->
         empty errors
         data |> equals (upcast expectedData)
+}
 
 [<Fact>]
 let ``TaskSeq field with defer directive delivers the whole list in one deferred payload`` () =
     let executor =
         executorFor [
             Define.TaskSeqField ("numbers", Nullable (ListOf IntType), fun _ _ -> Some (asyncItems [ 1; 2; 3 ]))
+        ]
+    let expectedData = NameValueLookup.ofList [ "numbers", null ]
+    let result = executeQuery executor "{ numbers @defer }"
+    ensureDeferred result
+    <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedData)
+        waitForCompletion deferred
+        |> single
+        |> equals (DeferredResult ([| box 1; box 2; box 3 |], [ box "numbers" ]))
+
+[<Fact>]
+let ``TaskSeq field with defer directive supports struct nullable lists`` () =
+    let executor =
+        executorFor [
+            Define.TaskSeqField ("numbers", StructNullable (ListOf IntType), fun _ _ -> ValueSome (asyncItems [ 1; 2; 3 ]))
         ]
     let expectedData = NameValueLookup.ofList [ "numbers", null ]
     let result = executeQuery executor "{ numbers @defer }"
@@ -362,14 +405,16 @@ let ``Batching from source runs only for a stream query that does not override t
     callCount |> equals 0
     executeQuery executor "{ deferrable @defer }" |> ignore
     callCount |> equals 0
-    executeQuery executor "{ numbers @stream(preferredBatchSize: 1) }" |> ignore
+    executeQuery executor "{ numbers @stream(preferredBatchSize: 1) }"
+    |> ignore
     callCount |> equals 0
     executeQuery executor "{ numbers @stream }" |> ignore
     callCount |> equals 1
 
 [<Fact>]
 let ``Throwing batching callback does not affect a query that does not stream the field`` () =
-    let throwingBatching = StreamBatching.FromSource (fun _ -> failwith "Batching must not run for this query")
+    let throwingBatching =
+        StreamBatching.FromSource (fun _ -> failwith "Batching must not run for this query")
     let executor =
         executorFor [
             Define.TaskSeqField ("numbers", ListOf IntType, (fun _ _ -> asyncItems [ 1; 2; 3 ]), batching = throwingBatching)
@@ -431,7 +476,11 @@ let ``Streamed TaskSeq field that fails acquiring the enumerator still delivers 
     // this field's DeferredErrors, which would drop sibling deferred results and the final completion payload
     let executor =
         executorFor [
-            Define.TaskSeqField ("failing", ListOf IntType, fun _ _ -> ThrowingAsyncEnumerable<int> "Boom acquiring the enumerator" :> IAsyncEnumerable<int>)
+            Define.TaskSeqField (
+                "failing",
+                ListOf IntType,
+                fun _ _ -> ThrowingAsyncEnumerable<int> "Boom acquiring the enumerator" :> IAsyncEnumerable<int>
+            )
             Define.TaskSeqField ("numbers", ListOf IntType, fun _ _ -> asyncItems [ 10; 20 ])
         ]
     let expectedData =
@@ -470,7 +519,10 @@ let ``Streamed TaskSeq field delivers an item's own resolver error and keeps str
     // streaming operator is concerned, so it must not be mistaken for a failure of the source or of the enumeration
     // itself: the item's error is delivered on its own path and later items keep streaming, exactly like @stream on
     // an ordinary list (see DeferredTests."Resolver list error")
-    let items = [ { Id = 1; Value = async { return failwith "Boom resolving the item" } }; { Id = 2; Value = async { return "two" } } ]
+    let items = [
+        { Id = 1; Value = async { return failwith "Boom resolving the item" } }
+        { Id = 2; Value = async { return "two" } }
+    ]
     let executor =
         executorFor [
             Define.TaskSeqField ("items", ListOf StreamItemType, (fun _ _ -> asyncItems items), maxConcurrency = 1)
@@ -498,7 +550,10 @@ let ``A batch containing a failed item alongside a succeeding one is delivered a
     // slot in `data`, so GraphQLWebsocketMiddleware.splitBatch's List.map2 would throw on a mixed success/error
     // batch. It does not: both arms of `merge` prepend the item's index, so `indices` and `data` always end up the
     // same length as the chunk, with the failed item's slot left null. This pins that shape end to end.
-    let items = [ { Id = 1; Value = async { return failwith "Boom resolving item 0" } }; { Id = 2; Value = async { return "two" } } ]
+    let items = [
+        { Id = 1; Value = async { return failwith "Boom resolving item 0" } }
+        { Id = 2; Value = async { return "two" } }
+    ]
     let executor =
         executorFor [
             Define.TaskSeqField ("items", ListOf StreamItemType, (fun _ _ -> asyncItems items), batching = StreamBatching.Fixed 2, maxConcurrency = 1)
@@ -529,7 +584,9 @@ let ``Disposing the stream subscription stops the enumeration of the TaskSeq fie
     match result.Content with
     | Deferred (_, errors, deferred) ->
         empty errors
-        let subscription = deferred |> Observable.subscribe (fun _ -> received.TrySetResult () |> ignore)
+        let subscription =
+            deferred
+            |> Observable.subscribe (fun _ -> received.TrySetResult () |> ignore)
         do! waitForTask (TimeSpan.FromSeconds (float (ms 5))) "Timeout while waiting for the first streamed item" received.Task
         subscription.Dispose ()
         do!
@@ -551,14 +608,16 @@ let ``TaskSeq field with stream directive never resolves more than maxConcurrenc
     let trackConcurrency (work : Async<'T>) : Async<'T> = async {
         let current = Interlocked.Increment inFlight
         let mutable observed = maxObserved.Value
-        while current > observed && Interlocked.CompareExchange (maxObserved, current, observed) <> observed do
+        while current > observed
+              && Interlocked.CompareExchange (maxObserved, current, observed)
+                 <> observed do
             observed <- maxObserved.Value
         try
             return! work
         finally
             Interlocked.Decrement inFlight |> ignore
     }
-    let items = [ for id in 1 .. 6 -> { Id = id; Value = trackConcurrency (delay 100 (string id)) } ]
+    let items = [ for id in 1..6 -> { Id = id; Value = trackConcurrency (delay 100 (string id)) } ]
     let executor =
         executorFor [
             Define.TaskSeqField ("items", ListOf StreamItemType, (fun _ _ -> asyncItems items), maxConcurrency = 2)
@@ -573,8 +632,9 @@ let ``TaskSeq field with stream directive never resolves more than maxConcurrenc
 
 [<Fact>]
 let ``TaskSeqField with a non-positive maxConcurrency fails at definition time`` () =
-    throws<ArgumentException> (fun () ->
-        Define.TaskSeqField ("numbers", ListOf IntType, (fun _ _ -> asyncItems [ 1 ]), maxConcurrency = 0) |> ignore)
+    throws<ArgumentException>(fun () ->
+        Define.TaskSeqField ("numbers", ListOf IntType, (fun _ _ -> asyncItems [ 1 ]), maxConcurrency = 0)
+        |> ignore)
 
 [<Fact>]
 let ``TaskSeq field resolved as null reports a non-null field error`` () =
