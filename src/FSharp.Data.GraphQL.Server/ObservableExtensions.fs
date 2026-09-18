@@ -71,7 +71,7 @@ module internal Observable =
         // a subscriber's synchronization context must neither be captured by the loop nor be needed to pump it
         let enumerate (observer : IObserver<'T>) (cancellationToken : CancellationToken) : Task = backgroundTask {
             let mutable enumerator = ValueNone
-            let mutable failure = ValueNone
+            let mutable enumerationFailure = ValueNone
             try
                 // Acquired inside the try, because a source may throw when asked for its enumerator
                 let acquired = source.GetAsyncEnumerator cancellationToken
@@ -85,8 +85,8 @@ module internal Observable =
                     else
                         hasNext <- false
             with ex ->
-                failure <- ValueSome ex
-            let! failure = disposeEnumerator enumerator failure
+                enumerationFailure <- ValueSome ex
+            let! failure = disposeEnumerator enumerator enumerationFailure
             match failure with
             // A failure caused by disposing the subscription has no observer left to be delivered to
             | ValueSome ex when not cancellationToken.IsCancellationRequested -> observer.OnError ex
@@ -188,7 +188,7 @@ module internal Observable =
                 }
                 |> ignore
             let mutable enumerator = ValueNone
-            let mutable failure = ValueNone
+            let mutable enumerationFailure = ValueNone
             try
                 // Acquired inside the try, because a source may throw when asked for its enumerator
                 let acquired = source.GetAsyncEnumerator enumerationCancellation.Token
@@ -225,16 +225,27 @@ module internal Observable =
             with ex ->
                 match ex with
                 | :? OperationCanceledException when failed () && not cancellationToken.IsCancellationRequested -> ()
-                | _ -> failure <- ValueSome ex
+                | _ -> enumerationFailure <- ValueSome ex
             // Captured items no longer need the enumerator, so it is disposed before waiting for their resolutions
-            let! failure = disposeEnumerator enumerator failure
+            let failureBeforeDispose =
+                enumerationFailure
+                |> ValueOption.orElse resolutionFailure.Value
+            let! failureAfterDispose = disposeEnumerator enumerator failureBeforeDispose
+            let disposalFailure =
+                match failureBeforeDispose, failureAfterDispose with
+                | ValueNone, ValueSome ex -> ValueSome ex
+                | _ -> ValueNone
             // Resolutions still in flight neither need the enumerator nor the loop, only their slots
             lock sync (fun () ->
                 enumerationEnded.Value <- true
                 if inFlight.Value = 0 then
                     drained.TrySetResult () |> ignore)
             do! drained.Task
-            match failure |> ValueOption.orElse resolutionFailure.Value with
+            match
+                enumerationFailure
+                |> ValueOption.orElse resolutionFailure.Value
+                |> ValueOption.orElse disposalFailure
+            with
             // A failure caused by disposing the subscription has no observer left to be delivered to
             | ValueSome ex when not cancellationToken.IsCancellationRequested -> emit (onFailure ex)
             | _ -> ()

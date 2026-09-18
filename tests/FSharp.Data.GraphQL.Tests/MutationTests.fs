@@ -74,9 +74,10 @@ let ``Execute handles mutation execution ordering: evaluates mutations serially`
         "fifth",  upcast NameValueLookup.ofList [ "theNumber", 5 :> obj]
     ]
     match mutationResult with
-    | Direct(data, errors) ->
+    | Direct(ValueSome data, errors) ->
       empty errors
       data |> equals (upcast expected)
+    | Direct(ValueNone, _) -> fail "Expected a 'Direct' GQLResponse with data but got null data"
     | response -> fail $"Expected a 'Direct' GQLResponse but got\n{response}"
 
 [<Fact>]
@@ -115,9 +116,10 @@ let ``Execute handles mutation execution ordering: evaluates mutations correctly
     ]
 
     match mutationResult with
-    | Direct(data, errors) ->
+    | Direct(ValueSome data, errors) ->
       data |> equals (upcast expected)
       List.length errors |> equals 2
+    | Direct(ValueNone, _) -> fail "Expected a 'Direct' GQLResponse with data but got null data"
     | response -> fail $"Expected a 'Direct' GQLResponse but got\n{response}"
 
 //[<Fact>]

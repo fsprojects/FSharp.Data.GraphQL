@@ -275,7 +275,7 @@ let ``Resolver error`` () =
         ]
     let expectedDeferred =
         DeferredErrors (
-            null,
+            ValueNone,
             [ GQLProblemDetails.CreateWithKind ("Resolver error!", Execution, [ box "testData"; "resolverError"; "value" ]) ],
             [ "testData"; "resolverError" ]
         )
@@ -304,13 +304,13 @@ let ``Resolver list error`` () =
         ]
     let expectedDeferred1 =
         DeferredErrors (
-            null,
+            ValueNone,
             [ GQLProblemDetails.CreateWithKind ("Resolver error!", Execution, [ box "testData"; "resolverListError"; 0; "value" ]) ],
             [ box "testData"; "resolverListError"; 0 ]
         )
     let expectedDeferred2 =
         DeferredErrors (
-            null,
+            ValueNone,
             [ GQLProblemDetails.CreateWithKind ("Resolver error!", Execution, [ box "testData"; "resolverListError"; 1; "value" ]) ],
             [ box "testData"; "resolverListError"; 1 ]
         )
@@ -343,7 +343,7 @@ let ``Nullable error`` () =
         ]
     let expectedDeferred =
         DeferredErrors (
-            null,
+            ValueNone,
             [ GQLProblemDetails.CreateWithKind ("Non-Null field value resolved as a null!", Execution, [ box "testData"; "nullableError"; "value" ]) ],
             [ "testData"; "nullableError" ]
         )

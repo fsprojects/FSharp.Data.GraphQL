@@ -104,7 +104,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         let prepareOutput res =
             match res with
             | RequestError errs -> GQLExecutionResult.Error (documentId, errs, res.Metadata)
-            | Direct (data, errors) -> GQLExecutionResult.Direct (documentId, data, errors, res.Metadata)
+            | Direct (data, errors) -> GQLExecutionResult.Direct (documentId, data |> ValueOption.toObj, errors, res.Metadata)
             | Deferred (data, errors, deferred) -> GQLExecutionResult.Deferred (documentId, data, errors, deferred, res.Metadata)
             | Stream (stream) -> GQLExecutionResult.Stream (documentId, stream, res.Metadata)
         async {

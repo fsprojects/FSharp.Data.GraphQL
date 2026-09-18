@@ -161,10 +161,10 @@ let deferResults path (res : ResolverResult<obj>) : IObservable<GQLDeferredRespo
         let deferredData =
             match errs with
             | [] -> DeferredResult (data, formattedPath)
-            | _ -> DeferredErrors (data, errs, formattedPath)
+            | _ -> DeferredErrors (Option.ofObj data |> ValueOption.ofOption, errs, formattedPath)
             |> Observable.singleton
         Option.foldBack Observable.concat deferred deferredData
-    | Error errs -> Observable.singleton <| DeferredErrors (null, errs, formattedPath)
+    | Error errs -> Observable.singleton <| DeferredErrors (ValueNone, errs, formattedPath)
 
 /// Collect together an array of results using the appropriate execution strategy.
 let collectFields (strategy : ExecutionStrategy) (rs : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> []) : AsyncVal<ResolverResult<KeyValuePair<string, obj> []>> = asyncVal {
@@ -327,7 +327,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
             ||> List.foldBack (fun event struct (items, failures) ->
                 match event with
                 | StreamedItem (index, result) -> struct (index, result) :: items, failures
-                | StreamFailure error -> items, DeferredErrors (null, resolverError path ctx error, normalizeErrorPath path) :: failures)
+                | StreamFailure error -> items, DeferredErrors (ValueNone, resolverError path ctx error, normalizeErrorPath path) :: failures)
         match failures with
         | [] -> collectItems items
         | failures -> collectItems items |> Observable.concat (Observable.ofSeq failures)
@@ -587,9 +587,9 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (inputC
     let onValue v = asyncVal {
             match! executeResolvers inputContext fieldCtx fieldPath value (toOption v |> AsyncVal.wrap) with
             | Ok (data, None, []) -> return SubscriptionResult (NameValueLookup.ofList [nameOrAlias, data.Value])
-            | Ok (data, None, errs) -> return SubscriptionErrors (NameValueLookup.ofList [nameOrAlias, data.Value], errs)
+            | Ok (data, None, errs) -> return SubscriptionErrors (ValueSome (NameValueLookup.ofList [nameOrAlias, data.Value]), errs)
             | Ok (_, Some _, _) -> return failwith "Deferred/Streamed/Live are not supported for subscriptions!"
-            | Error errs -> return SubscriptionErrors (null, errs)
+            | Error errs -> return SubscriptionErrors (ValueNone, errs)
         }
     return
         ctx.Schema.SubscriptionProvider.Add fieldCtx value subDef

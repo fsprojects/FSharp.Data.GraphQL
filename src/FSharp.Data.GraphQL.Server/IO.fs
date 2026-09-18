@@ -11,16 +11,16 @@ type Output = IDictionary<string, obj>
 
 type GQLResponse = {
     DocumentId : int
-    Data : (Output | null) Skippable
+    Data : Output voption Skippable
     Errors : GQLProblemDetails list Skippable
 } with
 
     static member Direct (documentId, data : Output | null, errors) = {
         DocumentId = documentId
-        Data = Include data
+        Data = Include (Option.ofObj data |> ValueOption.ofOption)
         Errors = Skippable.ofList errors
     }
-    static member Stream (documentId) = { DocumentId = documentId; Data = Include null; Errors = Skip }
+    static member Stream (documentId) = { DocumentId = documentId; Data = Include ValueNone; Errors = Skip }
     static member RequestError (documentId, errors) = { DocumentId = documentId; Data = Skip; Errors = Include errors }
 
 type GQLExecutionResult = {
@@ -31,7 +31,7 @@ type GQLExecutionResult = {
 
     static member Direct (documentId, data : Output | null, errors, meta) = {
         DocumentId = documentId
-        Content = Direct (data, errors)
+        Content = Direct (Option.ofObj data |> ValueOption.ofOption, errors)
         Metadata = meta
     }
     static member Deferred (documentId, data, errors, deferred, meta) = {
@@ -67,14 +67,14 @@ and GQLResponseContent =
     /// An execution result. Data is null when a non-null root field failed during execution and the error
     /// propagated to the root, exactly as it would for a non-null nested field, rather than being rejected as a
     /// RequestError.
-    | Direct of Data : (Output | null) * Errors : GQLProblemDetails list
+    | Direct of Data : Output voption * Errors : GQLProblemDetails list
     | Deferred of Data : Output * Errors : GQLProblemDetails list * Defer : IObservable<GQLDeferredResponseContent>
     | Stream of Stream : IObservable<GQLSubscriptionResponseContent>
 
 and GQLDeferredResponseContent =
     | DeferredResult of Data : obj * Path : FieldPath
-    | DeferredErrors of Data : obj * Errors : GQLProblemDetails list * Path : FieldPath
+    | DeferredErrors of Data : obj voption * Errors : GQLProblemDetails list * Path : FieldPath
 
 and GQLSubscriptionResponseContent =
     | SubscriptionResult of Data : Output
-    | SubscriptionErrors of Data : Output * Errors : GQLProblemDetails list
+    | SubscriptionErrors of Data : Output voption * Errors : GQLProblemDetails list

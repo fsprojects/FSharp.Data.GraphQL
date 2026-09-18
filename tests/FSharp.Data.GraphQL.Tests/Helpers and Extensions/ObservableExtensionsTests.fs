@@ -582,6 +582,43 @@ let ``ofAsyncEnumerableResolved should cancel a pending MoveNextAsync after a re
     sub.Received |> seqEquals [ -1 ]
 
 [<Fact>]
+let ``ofAsyncEnumerableResolved should preserve a resolution failure over DisposeAsync after canceling MoveNextAsync`` () =
+    // Regression test: a resolution failure can cancel an in-progress MoveNextAsync, whose cancellation is suppressed
+    // as expected; if DisposeAsync then throws, the original resolution failure must still win over the later
+    // disposal failure because it is what stopped the stream.
+    let source =
+        SuspendingAsyncEnumerable<int>(
+            (fun cancellationToken index -> task {
+                match index with
+                | 0 -> return ValueSome 1
+                | 1 ->
+                    do! Task.Delay (Timeout.Infinite, cancellationToken)
+                    return ValueSome 2
+                | _ -> return ValueNone
+            }),
+            fun () -> failwith "Boom disposing"
+        )
+    let resolve _ (n : int) =
+        if n = 1 then
+            async {
+                do! Async.Sleep (ms 50)
+                return failwith "Boom resolving"
+            }
+            |> AsyncVal.ofAsync
+        else
+            AsyncVal.wrap n
+    let observedFailure = ref ""
+    use sub =
+        Observable.ofAsyncEnumerableResolved 2 resolve (fun ex ->
+            observedFailure.Value <- ex.Message
+            -1)
+            source
+        |> Observer.create
+    sub.WaitCompleted (timeout = ms 10)
+    sub.Received |> seqEquals [ -1 ]
+    Assert.Equal ("Boom resolving", observedFailure.Value)
+
+[<Fact>]
 let ``ofAsyncEnumerableResolved should release the slot and not hang when the observer throws`` () : Task = task {
     // Regression test: an observer throwing while a background resolution is delivered used to skip the slot
     // release entirely, deadlocking the enumeration the same way a failed resolution did. System.Reactive tears

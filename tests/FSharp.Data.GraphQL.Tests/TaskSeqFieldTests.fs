@@ -443,9 +443,8 @@ let ``Non-nullable TaskSeq field that fails during enumeration propagates the er
     let executor =
         executorFor [ Define.TaskSeqField ("numbers", ListOf IntType, fun _ _ -> failingNumbers ()) ]
     let result = executeQuery executor "{ numbers }"
-    ensureDirect result
-    <| fun data errors ->
-        Assert.Null data
+    ensureDirectNullData result
+    <| fun errors ->
         errors
         |> single
         |> equals (fieldError "Boom during enumeration" "numbers")
@@ -468,7 +467,7 @@ let ``Streamed TaskSeq field that fails during enumeration delivers produced ite
         |> seqEquals [
             streamedBatch "failing" [ 0, 1 ]
             streamedBatch "failing" [ 1, 2 ]
-            DeferredErrors (null, [ fieldError "Boom during enumeration" "failing" ], [ box "failing" ])
+            DeferredErrors (ValueNone, [ fieldError "Boom during enumeration" "failing" ], [ box "failing" ])
         ]
 
 [<Fact>]
@@ -493,7 +492,7 @@ let ``Streamed TaskSeq field that fails acquiring the enumerator still delivers 
         data |> equals (upcast expectedData)
         waitForCompletion deferred
         |> seqEquals [
-            DeferredErrors (null, [ fieldError "Boom acquiring the enumerator" "failing" ], [ box "failing" ])
+            DeferredErrors (ValueNone, [ fieldError "Boom acquiring the enumerator" "failing" ], [ box "failing" ])
         ]
 
 [<Fact>]
@@ -511,7 +510,7 @@ let ``Streamed TaskSeq field emits a slower earlier item before the enumeration 
         waitForCompletion deferred
         |> seqEquals [
             DeferredResult ([| box (NameValueLookup.ofList [ "id", upcast 1; "value", upcast "slow" ]) |], [ box "items"; box 0 ])
-            DeferredErrors (null, [ fieldError "Boom during enumeration" "items" ], [ box "items" ])
+            DeferredErrors (ValueNone, [ fieldError "Boom during enumeration" "items" ], [ box "items" ])
         ]
 
 [<Fact>]
@@ -535,7 +534,7 @@ let ``Streamed TaskSeq field delivers an item's own resolver error and keeps str
         waitForCompletion deferred
         |> seqEquals [
             DeferredErrors (
-                null,
+                ValueNone,
                 [
                     GQLProblemDetails.CreateWithKind ("Boom resolving the item", Execution, [ box "items"; box 0; box "value" ])
                 ],
@@ -566,7 +565,7 @@ let ``A batch containing a failed item alongside a succeeding one is delivered a
         waitForCompletion deferred
         |> seqEquals [
             DeferredErrors (
-                [| null; box (NameValueLookup.ofList [ "id", upcast 2; "value", upcast "two" ]) |],
+                ValueSome [| null; box (NameValueLookup.ofList [ "id", upcast 2; "value", upcast "two" ]) |],
                 [
                     GQLProblemDetails.CreateWithKind ("Boom resolving item 0", Execution, [ box "items"; box 0; box "value" ])
                 ],
@@ -644,7 +643,5 @@ let ``TaskSeq field resolved as null reports a non-null field error`` () =
             Define.TaskSeqField ("numbers", ListOf IntType, fun _ _ -> Unchecked.defaultof<IAsyncEnumerable<int>>)
         ]
     let result = executeQuery executor "{ numbers }"
-    ensureDirect result
-    <| fun data errors ->
-        Assert.Null data
-        hasError "Non-Null field numbers resolved as a null!" errors
+    ensureDirectNullData result
+    <| fun errors -> hasError "Non-Null field numbers resolved as a null!" errors
