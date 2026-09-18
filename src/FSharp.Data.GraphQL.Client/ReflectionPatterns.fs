@@ -70,9 +70,10 @@ module ReflectionPatterns =
         let (_, none, _) = getOptionCases t
         FSharpValue.MakeUnion(none, [||])
 
+    [<return: Struct>]
     let (|Option|_|) t =
-        if isOption t then Some (Option (t.GetGenericArguments().[0]))
-        else None
+        if isOption t then ValueSome (Option (t.GetGenericArguments().[0]))
+        else ValueNone
 
     let isType (expected : Type) (t : Type) =
         match t with
@@ -82,37 +83,43 @@ module ReflectionPatterns =
     let isNumericType (t : Type) =
         numericTypes |> Array.exists (fun expected -> isType expected t)
 
+    [<return: Struct>]
     let (|Array|_|) (t : Type) =
-        if t.IsArray then Some (Array (t.GetElementType()))
-        else None
+        if t.IsArray then ValueSome (Array (t.GetElementType()))
+        else ValueNone
 
+    [<return: Struct>]
     let (|List|_|) (t : Type) =
-        if isList t then Some (List (t.GetGenericArguments().[0]))
-        else None
+        if isList t then ValueSome (List (t.GetGenericArguments().[0]))
+        else ValueNone
 
+    [<return: Struct>]
     let (|Seq|_|) (t : Type) =
-        if isSeq t then Some (Seq (t.GetGenericArguments().[0]))
-        else None
+        if isSeq t then ValueSome (Seq (t.GetGenericArguments().[0]))
+        else ValueNone
 
+    [<return: Struct>]
     let (|EnumerableValue|_|) (x : obj) =
         match x with
-        | :? IEnumerable as x -> Some (EnumerableValue (Seq.cast<obj> x |> Array.ofSeq))
-        | _ -> None
+        | :? IEnumerable as x -> ValueSome (EnumerableValue (Seq.cast<obj> x |> Array.ofSeq))
+        | _ -> ValueNone
 
+    [<return: Struct>]
     let (|OptionValue|_|) (x : obj) =
         let xtype = x.GetType()
         if isOption xtype
         then
             match FSharpValue.GetUnionFields(x, xtype) with
-            | (_, [|value|]) -> Some (OptionValue Some value)
-            | _ -> Some (OptionValue None)
-        else None
+            | (_, [|value|]) -> ValueSome (OptionValue Some value)
+            | _ -> ValueSome (OptionValue None)
+        else ValueNone
 
+    [<return: Struct>]
     let (|EnumValue|_|) (x : obj) =
         let xtype = x.GetType()
         if xtype.IsEnum
-        then Some (x.ToString())
-        else None
+        then ValueSome (x.ToString())
+        else ValueNone
 
     let makeValue (t : Type) (value : obj) =
         let isOption = isOption t

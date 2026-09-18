@@ -23,10 +23,11 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
             else i <- i+1
     let getValue key = (kvals |> Array.find (fun kv -> kv.Key = key)).Value
 
+    [<return: Struct>]
     let (|BoxedSeq|_|) (xs : obj) =
         match xs with
-        | (:? System.Collections.IEnumerable as enumerable) -> Some (Seq.cast<obj> enumerable)
-        | _ -> None
+        | (:? System.Collections.IEnumerable as enumerable) -> ValueSome (Seq.cast<obj> enumerable)
+        | _ -> ValueNone
 
     let rec structEq (x: NameValueLookup) (y: NameValueLookup) =
         if Object.ReferenceEquals(x, y) then true

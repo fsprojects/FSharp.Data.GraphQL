@@ -16,12 +16,14 @@ open System.Text.RegularExpressions
 module private TextConversionHelpers =
   let asOption = function true, v -> Some v | _ -> None
 
+  [<return: Struct>]
   let (|StringEqualsIgnoreCase|_|) (s1:string) s2 =
     if s1.Equals(s2, StringComparison.OrdinalIgnoreCase)
-      then Some () else None
+      then ValueSome () else ValueNone
 
+  [<return: Struct>]
   let (|OneOfIgnoreCase|_|) set str =
-    if Array.exists (fun s -> StringComparer.OrdinalIgnoreCase.Compare(s, str) = 0) set then Some() else None
+    if Array.exists (fun s -> StringComparer.OrdinalIgnoreCase.Compare(s, str) = 0) set then ValueSome() else ValueNone
 
   let msDateRegex = lazy Regex(@"^/Date\((-?\d+)([-+]\d+)?\)/$", RegexOptions.Compiled)
 

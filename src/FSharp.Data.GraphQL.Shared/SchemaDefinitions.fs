@@ -183,13 +183,14 @@ module SchemaDefinitions =
         | other -> None
 
     /// Check if provided obj value is an Option and extract its wrapped value as object if possible
+    [<return: Struct>]
     let private (|Option|_|) (x : obj) =
-        if isNull x then None
+        if isNull x then ValueNone
         else
             let t = x.GetType().GetTypeInfo()
             if t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>> then
-                t.GetDeclaredProperty("Value").GetValue(x) |> Some
-            else None
+                t.GetDeclaredProperty("Value").GetValue(x) |> ValueSome
+            else ValueNone
 
     /// Tries to convert any value to string.
     let coerceStringValue (x : obj) : string option =

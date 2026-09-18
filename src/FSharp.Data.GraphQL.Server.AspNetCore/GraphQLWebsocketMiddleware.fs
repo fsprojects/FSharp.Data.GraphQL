@@ -51,10 +51,11 @@ module internal IncrementalPayloadSplitting =
 
     /// Matches a path ending in a list of indices, such as the path of a batched deferred payload, returning the
     /// path of the batch's own field and the indices of its items.
+    [<return: Struct>]
     let (|BatchPath|_|) (path : obj list) =
         match List.rev path with
-        | (:? (obj list) as indices) :: fieldPathRev -> Some (List.rev fieldPathRev, indices)
-        | _ -> None
+        | (:? (obj list) as indices) :: fieldPathRev -> ValueSome (List.rev fieldPathRev, indices)
+        | _ -> ValueNone
 
     /// Splits a batch's data (an array with one element per index, in the same order) and errors (each carrying the
     /// full path of the item it belongs to, since every error of a batch originates from resolving one specific

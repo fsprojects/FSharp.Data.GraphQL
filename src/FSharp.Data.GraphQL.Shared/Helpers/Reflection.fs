@@ -192,7 +192,8 @@ module Helpers =
     /// Matches a System.Object with an option.
     /// If the object is an <see cref="Option{T}", returns it as Some, otherwise, return <see cref="None"/>.
     /// </summary>
-    let (|ObjectOption|_|) = optionCast
+    [<return: Struct>]
+    let (|ObjectOption|_|) (value : obj) = optionCast value |> ValueOption.ofOption
 
     /// <summary>
     /// Lifts a <see cref="System.Object"/> to an <see cref="option{System.Object}"/>, unless it is already an <see cref="option{System.Object}"/>.
