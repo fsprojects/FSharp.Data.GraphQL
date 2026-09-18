@@ -160,13 +160,15 @@ module Ast =
         match tref.Kind with
         | TypeKind.NON_NULL
         | TypeKind.LIST when tref.OfType.IsSome -> tryGetSchemaTypeByRef schemaTypes tref.OfType.Value
-        | _ -> tref.Name |> Option.bind schemaTypes.TryFind
+        | _ ->
+            tref.Name
+            |> ValueOption.bind (schemaTypes.TryFind >> ValueOption.ofOption)
 
     type SchemaInfo = {
         SchemaTypes : Map<string, IntrospectionType>
-        QueryType : IntrospectionType option
-        SubscriptionType : IntrospectionType option
-        MutationType : IntrospectionType option
+        QueryType : IntrospectionType voption
+        SubscriptionType : IntrospectionType voption
+        MutationType : IntrospectionType voption
         Directives : IntrospectionDirective[]
     } with
 
@@ -178,10 +180,10 @@ module Ast =
                 QueryType = tryGetSchemaTypeByRef schemaTypes schema.QueryType
                 MutationType =
                     schema.MutationType
-                    |> Option.bind (tryGetSchemaTypeByRef schemaTypes)
+                    |> ValueOption.bind (tryGetSchemaTypeByRef schemaTypes)
                 SubscriptionType =
                     schema.SubscriptionType
-                    |> Option.bind (tryGetSchemaTypeByRef schemaTypes)
+                    |> ValueOption.bind (tryGetSchemaTypeByRef schemaTypes)
                 Directives = schema.Directives
             }
         member x.TryGetOperationType (ot : OperationType) =
@@ -333,9 +335,7 @@ module Ast =
             |> ValueOption.map _.TypeCondition
             |> ValueOption.defaultValue x.ParentType
 
-    let private tryFindInArrayOption (finder : 'T -> bool) =
-        ValueOption.ofOption
-        >> ValueOption.bind (Array.tryFind finder >> ValueOption.ofOption)
+    let private tryFindInArrayOption (finder : 'T -> bool) = ValueOption.bind (Array.tryFind finder >> ValueOption.ofOption)
 
     let private onAllSelections (ctx : ValidationContext) (onSelection : SelectionInfo -> ValidationResult<GQLProblemDetails>) =
         let rec traverseSelections selection =
@@ -540,8 +540,8 @@ module Ast =
             else
                 let exists =
                     selection.FragmentOrParentType.Fields
-                    |> Option.map (Array.exists (fun f -> f.Name = selection.Field.Name))
-                    |> Option.defaultValue false
+                    |> ValueOption.map (Array.exists (fun f -> f.Name = selection.Field.Name))
+                    |> ValueOption.defaultValue false
                 if not exists then
                     AstError.AsResult (
                         $"Field '%s{selection.Field.Name}' is not defined in schema type '%s{selection.FragmentOrParentType.Name}'.",
@@ -553,14 +553,14 @@ module Ast =
     let private typesAreApplicable (parentType : IntrospectionType, fragmentType : IntrospectionType) =
         let parentPossibleTypes =
             parentType.PossibleTypes
-            |> Option.defaultValue [||]
-            |> Seq.choose _.Name
+            |> ValueOption.defaultValue [||]
+            |> Seq.vchoose _.Name
             |> Seq.append (Seq.singleton parentType.Name)
             |> Set.ofSeq
         let fragmentPossibleTypes =
             fragmentType.PossibleTypes
-            |> Option.defaultValue [||]
-            |> Seq.choose _.Name
+            |> ValueOption.defaultValue [||]
+            |> Seq.vchoose _.Name
             |> Seq.append (Seq.singleton fragmentType.Name)
             |> Set.ofSeq
         let applicableTypes = Set.intersect parentPossibleTypes fragmentPossibleTypes
@@ -978,21 +978,21 @@ module Ast =
             | _ when tref.Kind = TypeKind.NON_NULL -> checkIsCoercible tref.OfType.Value argName value
             | IntValue _ ->
                 match tref.Name, tref.Kind with
-                | Some ("ID" | "Int" | "Long" | "Float"), TypeKind.SCALAR -> Success
+                | ValueSome ("ID" | "Int" | "Long" | "Float"), TypeKind.SCALAR -> Success
                 | _ -> canNotCoerce
             | FloatValue _ ->
                 match tref.Name, tref.Kind with
-                | Some "Float", TypeKind.SCALAR -> Success
+                | ValueSome "Float", TypeKind.SCALAR -> Success
                 | _ -> canNotCoerce
             | BooleanValue _ ->
                 match tref.Name, tref.Kind with
-                | Some "Boolean", TypeKind.SCALAR -> Success
+                | ValueSome "Boolean", TypeKind.SCALAR -> Success
                 | _ -> canNotCoerce
             | StringValue _ ->
                 let invalidScalars = [| "Int"; "Float"; "Boolean" |]
                 match tref.Name, tref.Kind with
-                | (Some x, TypeKind.SCALAR) when not (Array.contains x invalidScalars) -> Success
-                | (Some x, TypeKind.INPUT_OBJECT) when x = FileType.Name -> Success
+                | (ValueSome x, TypeKind.SCALAR) when not (Array.contains x invalidScalars) -> Success
+                | (ValueSome x, TypeKind.INPUT_OBJECT) when x = FileType.Name -> Success
                 | _ -> canNotCoerce
             | EnumValue _ ->
                 match tref.Kind with
@@ -1011,10 +1011,10 @@ module Ast =
                 | TypeKind.UNION
                 | TypeKind.INPUT_OBJECT when tref.Name.IsSome ->
                     match schemaInfo.TryGetTypeByRef (tref) with
-                    | Some itype ->
+                    | ValueSome itype ->
                         let fieldMap =
                             itype.InputFields
-                            |> Option.defaultValue [||]
+                            |> ValueOption.defaultValue [||]
                             |> Array.fold (fun acc inputVal -> Map.add inputVal.Name inputVal.Type acc) Map.empty
                         let canCoerceFields =
                             fieldMap
@@ -1040,7 +1040,7 @@ module Ast =
                                         selection.Path
                                     ))
                         canCoerceFields @@ canCoerceProps
-                    | None -> canNotCoerce
+                    | ValueNone -> canNotCoerce
                 | _ -> canNotCoerce
             | VariableName varName ->
                 let variableDefinition =

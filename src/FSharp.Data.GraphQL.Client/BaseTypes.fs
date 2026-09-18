@@ -322,8 +322,8 @@ module internal JsonValueHelper =
                 | Some t -> t
                 | None -> typeof<string>
             match typeRef.Name with
-            | Some name -> getType name
-            | None -> failwith "Expected scalar type to have a name, but it does not have one."
+            | ValueSome name -> getType name
+            | ValueNone -> failwith "Expected scalar type to have a name, but it does not have one."
         let rec helper (useOption : bool) (schemaField : SchemaFieldInfo) (fieldValue : JsonValue) : obj =
             let makeSomeIfNeeded value =
                 match schemaField.SchemaTypeRef.Kind with
@@ -344,22 +344,22 @@ module internal JsonValueHelper =
                             | TypeKind.LIST -> schemaField.SchemaTypeRef.OfType
                             | TypeKind.NON_NULL ->
                                 match schemaField.SchemaTypeRef.OfType with
-                                | Some t when t.Kind = TypeKind.LIST -> t.OfType
+                                | ValueSome t when t.Kind = TypeKind.LIST -> t.OfType
                                 | _ ->
                                     failwithf
                                         "Expected field to be a list type with an underlying item, but it is %A."
                                         schemaField.SchemaTypeRef.OfType
                             | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." schemaField.SchemaTypeRef
                         match tref with
-                        | Some t -> t
-                        | None -> failwith "Schema type is a list type, but no underlying type was specified."
+                        | ValueSome t -> t
+                        | ValueNone -> failwith "Schema type is a list type, but no underlying type was specified."
                     let items =
                         let schemaField = { schemaField with SchemaTypeRef = itemType }
                         items |> Array.map (helper false schemaField)
                     match itemType.Kind with
                     | TypeKind.NON_NULL ->
                         match itemType.OfType with
-                        | Some itemType ->
+                        | ValueSome itemType ->
                             match itemType.Kind with
                             | TypeKind.NON_NULL -> failwith "Schema definition is not supported: a non null type of a non null type was specified."
                             | TypeKind.OBJECT
@@ -368,7 +368,7 @@ module internal JsonValueHelper =
                             | TypeKind.ENUM -> makeArray typeof<EnumBase> items
                             | TypeKind.SCALAR -> makeArray (getScalarType itemType) items
                             | kind -> failwithf "Unsupported type kind \"%A\"." kind
-                        | None -> failwith "Item type is a non null type, but no underlying type exists on the schema definition of the type."
+                        | ValueNone -> failwith "Item type is a non null type, but no underlying type exists on the schema definition of the type."
                     | TypeKind.OBJECT
                     | TypeKind.INTERFACE
                     | TypeKind.UNION -> makeOptionArray typeof<RecordBase> items
@@ -417,19 +417,19 @@ module internal JsonValueHelper =
                 match schemaField.SchemaTypeRef.Kind with
                 | TypeKind.NON_NULL ->
                     match schemaField.SchemaTypeRef.OfType with
-                    | Some itemType ->
+                    | ValueSome itemType ->
                         match itemType.Kind with
                         | TypeKind.NON_NULL -> failwith "Schema definition is not supported: a non null type of a non null type was specified."
                         | TypeKind.SCALAR ->
                             match itemType.Name with
-                            | Some "URI" -> System.Uri (s) |> box
-                            | Some "Date" ->
+                            | ValueSome "URI" -> System.Uri (s) |> box
+                            | ValueSome "Date" ->
                                 match DateTime.TryParse (s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
                                 | (true, d) -> box d
                                 | _ ->
                                     failwith
                                         "A string was received in the query response, and the schema recognizes it as a date and time string, but the conversion failed."
-                            | Some _ -> box s
+                            | ValueSome _ -> box s
                             | _ ->
                                 failwith
                                     "A string type was received in the query response item, but the matching schema field is not a string based type."
@@ -437,19 +437,19 @@ module internal JsonValueHelper =
                         | _ ->
                             failwith
                                 "A string type was received in the query response item, but the matching schema field is not a string or an enum type."
-                    | None -> failwith "Item type is a non null type, but no underlying type exists on the schema definition of the type."
+                    | ValueNone -> failwith "Item type is a non null type, but no underlying type exists on the schema definition of the type."
                 | TypeKind.SCALAR ->
                     match schemaField.SchemaTypeRef.Name with
-                    | Some "String"
-                    | Some "ID" -> s |> makeSomeIfNeeded
-                    | Some "URI" -> s |> System.Uri |> makeSomeIfNeeded
-                    | Some "Date" ->
+                    | ValueSome "String"
+                    | ValueSome "ID" -> s |> makeSomeIfNeeded
+                    | ValueSome "URI" -> s |> System.Uri |> makeSomeIfNeeded
+                    | ValueSome "Date" ->
                         match DateTime.TryParse (s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
                         | (true, d) -> makeSomeIfNeeded d
                         | _ ->
                             failwith
                                 "A string was received in the query response, and the schema recognizes it as a date and time string, but the conversion failed."
-                    | Some _ -> s |> makeSomeIfNeeded
+                    | ValueSome _ -> s |> makeSomeIfNeeded
                     | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
                 | TypeKind.ENUM when schemaField.SchemaTypeRef.Name.IsSome ->
                     EnumBase (schemaField.SchemaTypeRef.Name.Value, s)

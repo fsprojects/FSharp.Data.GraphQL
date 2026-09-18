@@ -96,7 +96,7 @@ module Serialization =
             | Option t -> getArrayValue t converter items |> makeOption t
             | ValueOption t -> getArrayValue t converter items |> makeValueOption t
             | Array itype | Seq itype -> items |> Array.map (converter itype) |> castArray itype
-            | List itype -> items |> Array.map (converter itype) |> Array.toList |> castList itype
+            | List itype -> items |> Seq.map (converter itype) |> Seq.toList |> castList itype
             | _ -> failwith $"Error parsing JSON value: %O{t} is not an array type.")
 
     let private downcastNumber (t : Type) n =
@@ -114,7 +114,7 @@ module Serialization =
             | JsonValue.Record jprops ->
                 let jprops =
                     jprops
-                    |> Array.map (fun (n, v) -> n.ToLowerInvariant(), v)
+                    |> Seq.map (fun (n, v) -> n.ToLowerInvariant(), v)
                     |> Map.ofSeq
                 let tprops t =
                     FSharpType.GetRecordFields(t, true)

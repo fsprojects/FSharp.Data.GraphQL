@@ -237,10 +237,10 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             | x -> x
         let defaultValue =
             inputDef.DefaultValue
-            |> Option.map (fun value -> JsonSerializer.Serialize(unwrap value, schemaConfig.JsonOptions))
+            |> ValueOption.map (fun value -> JsonSerializer.Serialize(unwrap value, schemaConfig.JsonOptions))
         { Name = inputDef.Name
           Description = inputDef.Description
-          Type = introspectTypeRef (Option.isSome inputDef.DefaultValue) namedTypes inputDef.TypeDef
+          Type = introspectTypeRef (ValueOption.isSome inputDef.DefaultValue) namedTypes inputDef.TypeDef
           DefaultValue = defaultValue }
 
     let introspectField (namedTypes: Map<string, IntrospectionTypeRef>) (fdef: FieldDef) =
@@ -248,7 +248,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           Description = fdef.Description
           Args = fdef.Args |> Array.map (introspectInput namedTypes)
           Type = introspectTypeRef false namedTypes fdef.TypeDef
-          IsDeprecated = Option.isSome fdef.DeprecationReason
+          IsDeprecated = ValueOption.isSome fdef.DeprecationReason
           DeprecationReason = fdef.DeprecationReason }
 
     let instrospectSubscriptionField (namedTypes: Map<string, IntrospectionTypeRef>) (subdef: SubscriptionFieldDef) =
@@ -256,13 +256,13 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           Description = subdef.Description
           Args = subdef.Args |> Array.map (introspectInput namedTypes)
           Type = introspectTypeRef false namedTypes subdef.OutputTypeDef
-          IsDeprecated = Option.isSome subdef.DeprecationReason
+          IsDeprecated = ValueOption.isSome subdef.DeprecationReason
           DeprecationReason = subdef.DeprecationReason }
 
     let introspectEnumVal (enumVal: EnumVal) : IntrospectionEnumVal =
         { Name = enumVal.Name
           Description = enumVal.Description
-          IsDeprecated = Option.isSome enumVal.DeprecationReason
+          IsDeprecated = ValueOption.isSome enumVal.DeprecationReason
           DeprecationReason = enumVal.DeprecationReason }
 
     let locationToList location =
@@ -331,13 +331,13 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             types.ToSeq()
             |> Seq.map (fun (typeName, typedef) ->
                 match typedef with
-                | Scalar x -> typeName, { Kind = TypeKind.SCALAR; Name = Some typeName; Description = x.Description; OfType = None }
-                | Object x -> typeName, { Kind = TypeKind.OBJECT; Name = Some typeName; Description = x.Description; OfType = None }
-                | InputObject x -> typeName, { Kind = TypeKind.INPUT_OBJECT; Name = Some typeName; Description = x.Description; OfType = None }
-                | Union x -> typeName, { Kind = TypeKind.UNION; Name = Some typeName; Description = x.Description; OfType = None }
-                | Enum x -> typeName, { Kind = TypeKind.ENUM; Name = Some typeName; Description = x.Description; OfType = None }
-                | Interface x -> typeName, { Kind = TypeKind.INTERFACE; Name = Some typeName; Description = x.Description; OfType = None }
-                | InputCustom x -> typeName, { Kind = TypeKind.INPUT_OBJECT; Name = Some typeName; Description = x.Description; OfType = None }
+                | Scalar x -> typeName, { Kind = TypeKind.SCALAR; Name = ValueSome typeName; Description = x.Description; OfType = ValueNone }
+                | Object x -> typeName, { Kind = TypeKind.OBJECT; Name = ValueSome typeName; Description = x.Description; OfType = ValueNone }
+                | InputObject x -> typeName, { Kind = TypeKind.INPUT_OBJECT; Name = ValueSome typeName; Description = x.Description; OfType = ValueNone }
+                | Union x -> typeName, { Kind = TypeKind.UNION; Name = ValueSome typeName; Description = x.Description; OfType = ValueNone }
+                | Enum x -> typeName, { Kind = TypeKind.ENUM; Name = ValueSome typeName; Description = x.Description; OfType = ValueNone }
+                | Interface x -> typeName, { Kind = TypeKind.INTERFACE; Name = ValueSome typeName; Description = x.Description; OfType = ValueNone }
+                | InputCustom x -> typeName, { Kind = TypeKind.INPUT_OBJECT; Name = ValueSome typeName; Description = x.Description; OfType = ValueNone }
                 | _ -> failwithf "Unexpected value of typedef: %O" typedef)
             |> Map.ofSeq
         let itypes =
@@ -349,8 +349,9 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             |> List.map (introspectDirective inamed)
             |> List.toArray
         { QueryType = Map.find query.Name inamed
-          MutationType = mutation |> Option.map (fun m -> Map.find m.Name inamed)
-          SubscriptionType = subscription |> Option.map(fun s -> Map.find s.Name inamed)
+          // TODO: `mutation`/`subscription` are still `'T option` (Schema's constructor is out of scope for this change) - convert here until that follow-up moves Schema to [<Struct>] ?.
+          MutationType = mutation |> ValueOption.ofOption |> ValueOption.map (fun m -> Map.find m.Name inamed)
+          SubscriptionType = subscription |> ValueOption.ofOption |> ValueOption.map(fun s -> Map.find s.Name inamed)
           Types = itypes
           Directives = idirectives }
 
