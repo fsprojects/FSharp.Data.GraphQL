@@ -200,8 +200,19 @@ type GraphQLWebSocketMiddleware<'Root>
             streamSource : IObservable<'ResponseContent>,
             jsonSerializerOptions : JsonSerializerOptions
         ) =
-        let sendTerminalError () =
-            sendMessageViaSocket jsonSerializerOptions socket (Error (id, [ GQLProblemDetails.Create "Unexpected error during response delivery" ]))
+        let rec problemDetailsOfObservableError (ex : exn) =
+            match ex with
+            | :? AggregateException as aggregate ->
+                aggregate.Flatten().InnerExceptions
+                |> Seq.toList
+                |> List.collect problemDetailsOfObservableError
+            | _ ->
+                match box ex with
+                | :? IGQLError as error -> [ GQLProblemDetails.OfError error ]
+                | _ -> [ GQLProblemDetails.Create (ex.Message, ex) ]
+
+        let sendTerminalError (ex : exn) =
+            sendMessageViaSocket jsonSerializerOptions socket (Error (id, problemDetailsOfObservableError ex))
 
         let observer =
             new Reactive.AnonymousObserver<'ResponseContent> (
@@ -210,7 +221,7 @@ type GraphQLWebSocketMiddleware<'Root>
                     (fun ex ->
                         logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
                         try
-                            (sendTerminalError ()).Wait()
+                            (sendTerminalError ex).Wait()
                         finally
                             subscriptions
                             |> GraphQLSubscriptionsManagement.removeSubscription (id)),
