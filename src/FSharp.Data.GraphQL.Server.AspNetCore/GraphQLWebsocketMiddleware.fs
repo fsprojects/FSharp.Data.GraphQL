@@ -42,7 +42,8 @@ module internal IncrementalPayloadSplitting =
     // a type abbreviation is erased, so this is the exact same type and unifies fine with FieldPath-typed values.
     let pathStartsWith (prefix : obj list) (path : obj list) =
         let prefixLength = List.length prefix
-        List.length path >= prefixLength && List.truncate prefixLength path = prefix
+        List.length path >= prefixLength
+        && List.truncate prefixLength path = prefix
 
     /// Matches a path ending in a list of indices, such as the path of a batched deferred payload, returning the
     /// path of the batch's own field and the indices of its items.
@@ -90,30 +91,41 @@ type GraphQLWebSocketMiddleware<'Root>
             | ConnectionAck -> { Id = ValueNone; Type = "connection_ack"; Payload = ValueNone }
             | ServerPing -> { Id = ValueNone; Type = "ping"; Payload = ValueNone }
             | ServerPong p -> { Id = ValueNone; Type = "pong"; Payload = p |> ValueOption.map CustomResponse }
-            | Next (id, payload) -> { Id = ValueSome id; Type = "next"; Payload = ValueSome <| ExecutionResult payload }
+            | Next (id, payload) -> {
+                Id = ValueSome id
+                Type = "next"
+                Payload = ValueSome <| ExecutionResult payload
+              }
             | Complete id -> { Id = ValueSome id; Type = "complete"; Payload = ValueNone }
-            | Error (id, errMessages) -> { Id = ValueSome id; Type = "error"; Payload = ValueSome <| ErrorMessages errMessages }
+            | Error (id, errMessages) -> {
+                Id = ValueSome id
+                Type = "error"
+                Payload = ValueSome <| ErrorMessages errMessages
+              }
         return JsonSerializer.Serialize (raw, jsonSerializerOptions)
     }
 
     static let invalidJsonInClientMessageError =
-        Result.Error <| InvalidMessage (4400, "Invalid json in client message")
+        Result.Error
+        <| InvalidMessage (4400, "Invalid json in client message")
 
     let deserializeClientMessage (serializerOptions : JsonSerializerOptions) (msg : IReadOnlyPooledList<byte>) = taskResult {
         try
-            return JsonSerializer.Deserialize<ClientMessage> (msg.Span, serializerOptions)
+            return JsonSerializer.Deserialize<ClientMessage>(msg.Span, serializerOptions)
         with
         | :? InvalidWebsocketMessageException as ex ->
-            logger.LogError(ex, "Invalid websocket message:\n{payload}", msg)
-            return! Result.Error <| InvalidMessage (4400, ex.Message.ToString ())
-        | :? JsonException as ex when logger.IsEnabled(LogLevel.Trace) ->
-            logger.LogError(ex, "Cannot deserialize WebSocket message:\n{payload}", msg)
+            logger.LogError (ex, "Invalid websocket message:\n{payload}", msg)
+            return!
+                Result.Error
+                <| InvalidMessage (4400, ex.Message.ToString ())
+        | :? JsonException as ex when logger.IsEnabled (LogLevel.Trace) ->
+            logger.LogError (ex, "Cannot deserialize WebSocket message:\n{payload}", msg)
             return! invalidJsonInClientMessageError
         | :? JsonException as ex ->
-            logger.LogError(ex, "Cannot deserialize WebSocket message")
+            logger.LogError (ex, "Cannot deserialize WebSocket message")
             return! invalidJsonInClientMessageError
         | ex ->
-            logger.LogError(ex, $"Unexpected exception '{ex.GetType().Name}' in GraphQLWebsocketMiddleware")
+            logger.LogError (ex, $"Unexpected exception '{ex.GetType().Name}' in GraphQLWebsocketMiddleware")
             return! invalidJsonInClientMessageError
     }
 
@@ -149,7 +161,7 @@ type GraphQLWebSocketMiddleware<'Root>
                     |> Seq.toArray
                     |> System.Text.Encoding.UTF8.GetString
                 logger.LogInformation ("-> Request: {request}", message)
-            if completeMessage.All(fun b -> b = 0uy) then
+            if completeMessage.All (fun b -> b = 0uy) then
                 return ValueNone
             else
                 let! result = deserializeClientMessage serializerOptions completeMessage
@@ -160,13 +172,19 @@ type GraphQLWebSocketMiddleware<'Root>
 
     let sendMessageViaSocket (jsonSerializerOptions) (socket : WebSocket) (message : ServerMessage) : Task = task {
         if not (socket.State = WebSocketState.Open) then
-            logger.LogTrace ($"Ignoring message to be sent via socket, since its state is not '{nameof WebSocketState.Open}', but '{{state}}'", socket.State)
+            logger.LogTrace (
+                $"Ignoring message to be sent via socket, since its state is not '{nameof WebSocketState.Open}', but '{{state}}'",
+                socket.State
+            )
         else
             // TODO: Allocate string only if a debugger is attached
             let! serializedMessage = message |> serializeServerMessage jsonSerializerOptions
             let segment = ArraySegment<byte>(System.Text.Encoding.UTF8.GetBytes serializedMessage)
             if not (socket.State = WebSocketState.Open) then
-                logger.LogTrace ($"Ignoring message to be sent via socket, since its state is not '{nameof WebSocketState.Open}', but '{{state}}'", socket.State)
+                logger.LogTrace (
+                    $"Ignoring message to be sent via socket, since its state is not '{nameof WebSocketState.Open}', but '{{state}}'",
+                    socket.State
+                )
             else
                 do! socket.SendAsync (segment, WebSocketMessageType.Text, endOfMessage = true, cancellationToken = CancellationToken.None)
 
@@ -176,22 +194,29 @@ type GraphQLWebSocketMiddleware<'Root>
     let addClientSubscription
         (id : SubscriptionId)
         (howToSendDataOnNext : SubscriptionId -> 'ResponseContent -> Task)
-        (subscriptions : SubscriptionsDict,
-         socket : WebSocket,
-         streamSource : IObservable<'ResponseContent>,
-         jsonSerializerOptions : JsonSerializerOptions)
-        =
+        (
+            subscriptions : SubscriptionsDict,
+            socket : WebSocket,
+            streamSource : IObservable<'ResponseContent>,
+            jsonSerializerOptions : JsonSerializerOptions
+        ) =
+        let sendTerminalError () =
+            sendMessageViaSocket jsonSerializerOptions socket (Error (id, [ GQLProblemDetails.Create "Unexpected error during response delivery" ]))
+
         let observer =
             new Reactive.AnonymousObserver<'ResponseContent> (
-                onNext = (fun theOutput -> (howToSendDataOnNext id theOutput).Wait ()),
+                onNext = (fun theOutput -> (howToSendDataOnNext id theOutput).Wait()),
                 onError =
                     (fun ex ->
                         logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
-                        subscriptions
-                        |> GraphQLSubscriptionsManagement.removeSubscription (id)),
+                        try
+                            (sendTerminalError ()).Wait()
+                        finally
+                            subscriptions
+                            |> GraphQLSubscriptionsManagement.removeSubscription (id)),
                 onCompleted =
                     (fun () ->
-                        (sendMessageViaSocket jsonSerializerOptions socket (Complete id)).Wait ()
+                        (sendMessageViaSocket jsonSerializerOptions socket (Complete id)).Wait()
                         subscriptions
                         |> GraphQLSubscriptionsManagement.removeSubscription (id))
             )
@@ -209,7 +234,8 @@ type GraphQLWebSocketMiddleware<'Root>
         with _ ->
             // Nothing will ever complete this subscription now, so the id is freed here instead; a no-op if the
             // synchronous completion above already removed it. Rethrown for the caller to report the failure.
-            subscriptions |> GraphQLSubscriptionsManagement.removeSubscription id
+            subscriptions
+            |> GraphQLSubscriptionsManagement.removeSubscription id
             reraise ()
 
     let tryToGracefullyCloseSocket (code, message) theSocket =
@@ -231,19 +257,24 @@ type GraphQLWebSocketMiddleware<'Root>
         let sendMsg = sendMessageViaSocket serializerOptions socket
         let rcv () = socket |> rcvMsgViaSocket serializerOptions
 
-        let sendOutput id (output : SubscriptionExecutionResult) =
-            sendMsg (Next (id, output))
+        let sendOutput id (output : SubscriptionExecutionResult) = sendMsg (Next (id, output))
 
         let sendSubscriptionResponseOutput id subscriptionResult =
             match subscriptionResult with
-            | SubscriptionResult output -> SubscriptionExecutionResult.Create (output, []) |> sendOutput id
+            | SubscriptionResult output ->
+                SubscriptionExecutionResult.Create (output, [])
+                |> sendOutput id
             | SubscriptionErrors (output, errors) ->
                 // TODO: Use StringBuilder
                 logger.LogWarning ("Subscription errors: {subscriptionErrors}", (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}"))))
                 // The executor may still have resolved partial data alongside the field errors; forward it as-is
                 match output with
-                | ValueNone -> SubscriptionExecutionResult.CreateErrors errors |> sendOutput id
-                | ValueSome output -> SubscriptionExecutionResult.Create (output, errors) |> sendOutput id
+                | ValueNone ->
+                    SubscriptionExecutionResult.CreateErrors errors
+                    |> sendOutput id
+                | ValueSome output ->
+                    SubscriptionExecutionResult.Create (output, errors)
+                    |> sendOutput id
 
         // Incremental payloads are sent as soon as they are produced, with their path inside the initial result,
         // so a client can merge them. The completion marker becomes a final payload with hasNext set to false.
@@ -253,9 +284,13 @@ type GraphQLWebSocketMiddleware<'Root>
             match deferredResult with
             | ValueSome (DeferredResult (data, BatchPath (fieldPath, indices))) ->
                 for itemData, _, itemPath in splitBatch fieldPath indices data [] do
-                    do! SubscriptionExecutionResult.CreateIncremental (itemData, [], itemPath) |> sendOutput id
+                    do!
+                        SubscriptionExecutionResult.CreateIncremental (itemData, [], itemPath)
+                        |> sendOutput id
             | ValueSome (DeferredResult (data, path)) ->
-                do! SubscriptionExecutionResult.CreateIncremental (data, [], path) |> sendOutput id
+                do!
+                    SubscriptionExecutionResult.CreateIncremental (data, [], path)
+                    |> sendOutput id
             | ValueSome (DeferredErrors (ValueSome data, errors, BatchPath (fieldPath, indices))) ->
                 logger.LogWarning (
                     "Deferred response errors: {deferredErrors}",
@@ -263,15 +298,22 @@ type GraphQLWebSocketMiddleware<'Root>
                     (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
                 )
                 for itemData, itemErrors, itemPath in splitBatch fieldPath indices data errors do
-                    do! SubscriptionExecutionResult.CreateIncremental (itemData, itemErrors, itemPath) |> sendOutput id
+                    do!
+                        SubscriptionExecutionResult.CreateIncremental (itemData, itemErrors, itemPath)
+                        |> sendOutput id
             | ValueSome (DeferredErrors (data, errors, path)) ->
                 logger.LogWarning (
                     "Deferred response errors: {deferredErrors}",
                     // TODO: Use StringBuilder
                     (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
                 )
-                do! SubscriptionExecutionResult.CreateIncremental (data |> ValueOption.toObj, errors, path) |> sendOutput id
-            | ValueNone -> do! SubscriptionExecutionResult.CreateCompleted () |> sendOutput id
+                do!
+                    SubscriptionExecutionResult.CreateIncremental (data |> ValueOption.toObj, errors, path)
+                    |> sendOutput id
+            | ValueNone ->
+                do!
+                    SubscriptionExecutionResult.CreateCompleted ()
+                    |> sendOutput id
         }
 
         let applyPlanExecutionResult (id : SubscriptionId) (socket) (executionResult : GQLExecutionResult) : Task = task {
@@ -280,7 +322,9 @@ type GraphQLWebSocketMiddleware<'Root>
                 (subscriptions, socket, observableOutput, serializerOptions)
                 |> addClientSubscription id sendSubscriptionResponseOutput
             | Deferred (data, errors, observableOutput) ->
-                do! SubscriptionExecutionResult.CreateInitial (data, errors) |> sendOutput id
+                do!
+                    SubscriptionExecutionResult.CreateInitial (data, errors)
+                    |> sendOutput id
                 (subscriptions, socket, observableOutput |> Observable.withCompletionMarker, serializerOptions)
                 |> addClientSubscription id sendDeferredResponseOutput
             | Direct (data, errors) ->
@@ -289,11 +333,13 @@ type GraphQLWebSocketMiddleware<'Root>
                 // message below
                 if not errors.IsEmpty then
                     logger.LogWarning ("Execution errors:\n{errors}", errors)
-                do! SubscriptionExecutionResult.Create (data |> ValueOption.toObj, errors) |> sendOutput id
+                do!
+                    SubscriptionExecutionResult.Create (data |> ValueOption.toObj, errors)
+                    |> sendOutput id
                 // The graphql-transport-ws protocol requires Complete after the single Next of a query or mutation
                 do! sendMsg (Complete id)
             | RequestError problemDetails ->
-                logger.LogWarning("Request errors:\n{errors}", problemDetails)
+                logger.LogWarning ("Request errors:\n{errors}", problemDetails)
                 // The request was rejected before execution, so it is not a result: the protocol requires it to be
                 // sent as the terminal Error message instead of a Next followed by Complete, or a client would
                 // read it as a successful result with null data
@@ -359,7 +405,7 @@ type GraphQLWebSocketMiddleware<'Root>
                                             )
                                     else
                                         let variables = query.Variables |> Skippable.toValueOption
-                                        let getInputContext() = httpContext.RequestServices.GetRequiredService<IInputExecutionContext>()
+                                        let getInputContext () = httpContext.RequestServices.GetRequiredService<IInputExecutionContext>()
                                         let! planExecutionResult =
                                             let root = options.RootFactory httpContext
                                             options.SchemaExecutor.AsyncExecute (query.Query, getInputContext, root, ?variables = variables)
@@ -380,7 +426,8 @@ type GraphQLWebSocketMiddleware<'Root>
                     // just close the socket without further ado.
                     do! socket |> tryToGracefullyCloseSocketWithDefaultBehavior
             finally
-                subscriptions |> GraphQLSubscriptionsManagement.removeAllSubscriptions
+                subscriptions
+                |> GraphQLSubscriptionsManagement.removeAllSubscriptions
         }
 
     // <--------
@@ -394,10 +441,10 @@ type GraphQLWebSocketMiddleware<'Root>
             timerTokenSource.Token.Register (fun _ ->
                 (socket
                  |> tryToGracefullyCloseSocket (enum CustomWebSocketStatus.ConnectionTimeout, "Connection initialization timeout"))
-                    .Wait ())
+                    .Wait())
 
         let! connectionInitSucceeded =
-            TaskResult.Run<bool> (
+            TaskResult.Run<bool>(
                 (fun _ -> task {
                     logger.LogDebug ($"Waiting for {nameof ConnectionInit}...")
                     let! receivedMessage = receiveMessageViaSocket CancellationToken.None serializerOptions socket
@@ -443,10 +490,8 @@ type GraphQLWebSocketMiddleware<'Root>
                 | Result.Error errMsg -> logger.LogWarning errMsg
                 | Ok _ ->
                     let longRunningCancellationToken =
-                        (CancellationTokenSource
-                            .CreateLinkedTokenSource(ctx.RequestAborted, applicationLifetime.ApplicationStopping)
-                            .Token)
-                    longRunningCancellationToken.Register (fun _ -> (socket |> tryToGracefullyCloseSocketWithDefaultBehavior).Wait ())
+                        (CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted, applicationLifetime.ApplicationStopping).Token)
+                    longRunningCancellationToken.Register (fun _ -> (socket |> tryToGracefullyCloseSocketWithDefaultBehavior).Wait())
                     |> ignore
                     try
                         do! socket |> handleMessages longRunningCancellationToken ctx
@@ -458,5 +503,6 @@ type GraphQLWebSocketMiddleware<'Root>
                 title = "WebSocket connection expected.",
                 detail = $"'{options.WebsocketOptions.EndpointUrl}' endpoint only accepts WebSocket connections.",
                 statusCode = StatusCodes.Status400BadRequest
-            ) :> IResult
+            )
+            :> IResult
             |> _.ExecuteAsync(ctx)
