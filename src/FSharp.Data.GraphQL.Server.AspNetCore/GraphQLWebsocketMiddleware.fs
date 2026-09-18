@@ -246,8 +246,8 @@ type GraphQLWebSocketMiddleware<'Root>
                 logger.LogWarning ("Subscription errors: {subscriptionErrors}", (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}"))))
                 // The executor may still have resolved partial data alongside the field errors; forward it as-is
                 match output with
-                | null -> SubscriptionExecutionResult.CreateErrors errors |> sendOutput id
-                | output -> SubscriptionExecutionResult.Create (output, errors) |> sendOutput id
+                | ValueNone -> SubscriptionExecutionResult.CreateErrors errors |> sendOutput id
+                | ValueSome output -> SubscriptionExecutionResult.Create (output, errors) |> sendOutput id
 
         // Incremental payloads are sent as soon as they are produced, with their path inside the initial result,
         // so a client can merge them. The completion marker becomes a final payload with hasNext set to false.
@@ -260,7 +260,7 @@ type GraphQLWebSocketMiddleware<'Root>
                     do! SubscriptionExecutionResult.CreateIncremental (itemData, [], itemPath) |> sendOutput id
             | ValueSome (DeferredResult (data, path)) ->
                 do! SubscriptionExecutionResult.CreateIncremental (data, [], path) |> sendOutput id
-            | ValueSome (DeferredErrors (data, errors, BatchPath (fieldPath, indices))) ->
+            | ValueSome (DeferredErrors (ValueSome data, errors, BatchPath (fieldPath, indices))) ->
                 logger.LogWarning (
                     "Deferred response errors: {deferredErrors}",
                     (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
@@ -272,7 +272,7 @@ type GraphQLWebSocketMiddleware<'Root>
                     "Deferred response errors: {deferredErrors}",
                     (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
                 )
-                do! SubscriptionExecutionResult.CreateIncremental (data, errors, path) |> sendOutput id
+                do! SubscriptionExecutionResult.CreateIncremental (data |> ValueOption.toObj, errors, path) |> sendOutput id
             | ValueNone -> do! SubscriptionExecutionResult.CreateCompleted () |> sendOutput id
         }
 
@@ -291,7 +291,7 @@ type GraphQLWebSocketMiddleware<'Root>
                 // message below
                 if not errors.IsEmpty then
                     logger.LogWarning ("Execution errors:\n{errors}", errors)
-                do! SubscriptionExecutionResult.Create (data, errors) |> sendOutput id
+                do! SubscriptionExecutionResult.Create (data |> ValueOption.toObj, errors) |> sendOutput id
                 // The graphql-transport-ws protocol requires Complete after the single Next of a query or mutation
                 do! sendMsg (Complete id)
             | RequestError problemDetails ->

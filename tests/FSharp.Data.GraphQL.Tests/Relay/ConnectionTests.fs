@@ -155,9 +155,10 @@ let ``Connection definition includes connection and edge fields for simple cases
             ]
         ]
     match result with
-    | Direct (data, errors) ->
+    | Direct (ValueSome data, errors) ->
         empty errors
         data |> equals (upcast expected)
+    | Direct (ValueNone, _) -> fail "Expected a Direct GQLResponse with data"
     | _ -> fail "Expected a Direct GQLResponse"
 
 [<Fact>]
@@ -210,9 +211,10 @@ let ``Connection definition includes connection and edge fields for complex case
             ]
         ]
     match result with
-    | Direct (data, errors) ->
+    | Direct (ValueSome data, errors) ->
         empty errors
         data |> equals (upcast expected)
+    | Direct (ValueNone, _) -> fail "Expected a Direct GQLResponse with data"
     | _ -> fail "Expected a Direct GQLResponse"
 
 

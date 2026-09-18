@@ -18,7 +18,14 @@ let ensureDeferred (result : GQLExecutionResult) (onDeferred : Output -> GQLProb
 
 let ensureDirect (result : GQLExecutionResult) (onDirect : Output -> GQLProblemDetails list -> unit) : unit =
     match result.Content with
-    | Direct(data, errors) -> onDirect data errors
+    | Direct (ValueSome data, errors) -> onDirect data errors
+    | Direct (ValueNone, _) -> fail "Expected a 'Direct' GQLResponse with data but got null data"
+    | response -> fail $"Expected a 'Direct' GQLResponse but got\n{response}"
+
+let ensureDirectNullData (result : GQLExecutionResult) (onDirect : GQLProblemDetails list -> unit) : unit =
+    match result.Content with
+    | Direct (ValueNone, errors) -> onDirect errors
+    | Direct (ValueSome _, _) -> fail "Expected a 'Direct' GQLResponse with null data but got data"
     | response -> fail $"Expected a 'Direct' GQLResponse but got\n{response}"
 
 let ensureRequestError (result : GQLExecutionResult) (onRequestError : GQLProblemDetails list -> unit) : unit =
