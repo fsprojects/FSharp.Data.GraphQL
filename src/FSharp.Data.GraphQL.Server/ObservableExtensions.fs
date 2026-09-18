@@ -131,6 +131,7 @@ module internal Observable =
         // concurrency slot and, at the end, the resolutions still draining on the thread pool - a subscriber's
         // synchronization context that has to be pumped for those continuations would be a deadlock waiting to happen
         let enumerate (observer : IObserver<'Result>) (cancellationToken : CancellationToken) : Task = backgroundTask {
+            use linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource cancellationToken
             use slots = new SemaphoreSlim (maxConcurrency, maxConcurrency)
             // Observer calls are not required to be thread-safe, but resolutions complete on arbitrary threads
             let sync = obj ()
@@ -145,6 +146,15 @@ module internal Observable =
             let resolutionFailure = ref ValueNone
             let failed () = lock sync (fun () -> resolutionFailure.Value.IsSome)
             let stopped () = cancellationToken.IsCancellationRequested || failed ()
+            let reportResolutionFailure (ex : exn) =
+                let shouldCancel =
+                    lock sync (fun () ->
+                        if resolutionFailure.Value.IsNone then
+                            resolutionFailure.Value <- ValueSome ex
+                            true
+                        else false)
+                if shouldCancel then
+                    linkedCancellation.Cancel ()
             let settle () =
                 lock sync (fun () ->
                     inFlight.Value <- inFlight.Value - 1
@@ -161,7 +171,7 @@ module internal Observable =
                             emit result
                         with ex ->
                             // The first failure stops the enumeration; it is delivered once every started resolution has settled
-                            lock sync (fun () -> if resolutionFailure.Value.IsNone then resolutionFailure.Value <- ValueSome ex)
+                            reportResolutionFailure ex
                     finally
                         // Released whatever happened, otherwise the enumeration would wait for this slot forever.
                         // Released before settling, because settling lets the enumeration finish and dispose the semaphore.
@@ -173,7 +183,7 @@ module internal Observable =
             let mutable failure = ValueNone
             try
                 // Acquired inside the try, because a source may throw when asked for its enumerator
-                let acquired = source.GetAsyncEnumerator cancellationToken
+                let acquired = source.GetAsyncEnumerator linkedCancellation.Token
                 enumerator <- ValueSome acquired
                 let mutable index = 0
                 let mutable hasNext = true
@@ -204,8 +214,9 @@ module internal Observable =
                                 finally
                                     slots.Release () |> ignore
                             | pendingResult -> resolveInBackground pendingResult
-            with ex ->
-                failure <- ValueSome ex
+            with
+            | :? OperationCanceledException when not cancellationToken.IsCancellationRequested && failed () -> ()
+            | ex -> failure <- ValueSome ex
             // Captured items no longer need the enumerator, so it is disposed before waiting for their resolutions
             let! failure = disposeEnumerator enumerator failure
             // Resolutions still in flight neither need the enumerator nor the loop, only their slots

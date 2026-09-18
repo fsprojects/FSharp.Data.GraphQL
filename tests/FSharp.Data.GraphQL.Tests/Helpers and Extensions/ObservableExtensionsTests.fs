@@ -436,12 +436,12 @@ let ``ofAsyncEnumerableResolved should not resolve an item pulled after a resolu
     // when that move completed the code used to go straight to resolving it without rechecking the failure, so a
     // synchronously resolved item 2 was pulled and emitted before the failure that already happened
     let source =
-        SuspendingAsyncEnumerable<int> (fun _ index ->
+        SuspendingAsyncEnumerable<int> (fun cancellationToken index ->
             task {
                 match index with
                 | 0 -> return ValueSome 1
                 | 1 ->
-                    do! Task.Delay (ms 150)
+                    do! Task.Delay (ms 150, cancellationToken)
                     return ValueSome 2
                 | _ -> return ValueNone
             })
