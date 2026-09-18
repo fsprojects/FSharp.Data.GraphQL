@@ -57,7 +57,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
             if logger.IsEnabled LogLevel.Trace then
                 logger.LogTrace ("GraphQL response data:\n{data}", serializeIndented data)
 
-            GQLResponse.Direct (documentId, data, errs)
+            GQLResponse.Direct (documentId, data |> ValueOption.toObj, errs)
         | Deferred (data, errs, deferred) ->
             logger.LogDebug ("Produced deferred GraphQL response with documentId = '{documentId}' and metadata:\n{metadata}", documentId, metadata)
 
@@ -69,12 +69,12 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
 
                         if logger.IsEnabled LogLevel.Trace then
                             logger.LogTrace ("GraphQL deferred data:\n{data}", serializeIndented data)
-                    | DeferredErrors (null, errors, path) ->
+                    | DeferredErrors (ValueNone, errors, path) ->
                         logger.LogDebug ("Produced GraphQL deferred errors for path: {path}", path |> Seq.map string |> Seq.toArray |> Path.Join)
 
                         if logger.IsEnabled LogLevel.Trace then
                             logger.LogTrace ("GraphQL deferred errors:\n{errors}", errors)
-                    | DeferredErrors (data, errors, path) ->
+                    | DeferredErrors (ValueSome data, errors, path) ->
                         logger.LogDebug (
                             "Produced GraphQL deferred result with errors for path: {path}",
                             path |> Seq.map string |> Seq.toArray |> Path.Join
@@ -96,12 +96,12 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
 
                         if logger.IsEnabled LogLevel.Trace then
                             logger.LogTrace ("GraphQL subscription data:\n{data}", serializeIndented data)
-                    | SubscriptionErrors (null, errors) ->
+                    | SubscriptionErrors (ValueNone, errors) ->
                         logger.LogDebug ("Produced GraphQL subscription errors")
 
                         if logger.IsEnabled LogLevel.Trace then
                             logger.LogTrace ("GraphQL subscription errors:\n{errors}", errors)
-                    | SubscriptionErrors (data, errors) ->
+                    | SubscriptionErrors (ValueSome data, errors) ->
                         logger.LogDebug ("Produced GraphQL subscription result with errors")
 
                         if logger.IsEnabled LogLevel.Trace then

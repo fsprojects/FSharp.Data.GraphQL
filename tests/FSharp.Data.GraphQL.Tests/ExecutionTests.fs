@@ -452,8 +452,7 @@ let ``Execution handles errors: exceptions`` () =
             ]))
     let expectedError = GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "a" ])
     let result = sync <| Executor(schema).AsyncExecute("query Test { a }", getMockInputContext, ())
-    ensureDirect result <| fun data [ error ] ->
-        Assert.Null data
+    ensureDirectNullData result <| fun [ error ] ->
         error |> equals expectedError
 
 type CoercionGuardInput = { Country : string }
@@ -603,8 +602,7 @@ let ``Execution handles errors: additional error added when exception is rised i
     let result =
         let variables = { Inner = { Kaboom = "Yes, Rico, Kaboom" }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
         sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", getMockInputContext, variables)
-    ensureDirect result <| fun data errors ->
-        Assert.Null data
+    ensureDirectNullData result <| fun errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         errors |> equals expectedErrors
 
@@ -632,7 +630,6 @@ let ``Execution handles errors: additional error added and when null returned fr
     let result =
         let variables = { Inner = { Kaboom = "Yes, Rico, Kaboom" }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
         sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", getMockInputContext, variables)
-    ensureDirect result <| fun data errors ->
-        Assert.Null data
+    ensureDirectNullData result <| fun errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         errors |> equals expectedErrors
