@@ -11,6 +11,7 @@ open System.Security.Cryptography
 /// Extensions for types used by the GraphQL client library.
 [<AutoOpen>]
 module internal Extensions =
+
     type String with
         /// Returns the input string with the first character in upper case.
         member this.FirstCharUpper() =
@@ -20,11 +21,13 @@ module internal Extensions =
         member this.FirstCharLower() =
             this.Substring(0, 1).ToLowerInvariant() + this.Substring(1)
 
-        member this.MD5Hash() =
-            Encoding.UTF8.GetBytes(this)
-            |> MD5.Create().ComputeHash
+        /// Returns a lowercase hex MD5 hash of the UTF-8 bytes of this string.
+        member this.MD5Hash () =
+            use md5 = MD5.Create()
+
+            md5.ComputeHash (Encoding.UTF8.GetBytes this)
             |> Seq.map _.ToString("x2")
-            |> Seq.reduce (+)
+            |> String.Concat
 
 /// Basic operations on lists.
 module internal List =
