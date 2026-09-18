@@ -216,7 +216,14 @@ type GraphQLWebSocketMiddleware<'Root>
 
         let observer =
             new Reactive.AnonymousObserver<'ResponseContent> (
-                onNext = (fun theOutput -> (howToSendDataOnNext id theOutput).Wait()),
+                onNext =
+                    (fun theOutput ->
+                        try
+                            (howToSendDataOnNext id theOutput).Wait()
+                        with _ ->
+                            subscriptions
+                            |> GraphQLSubscriptionsManagement.removeSubscription id
+                            reraise ()),
                 onError =
                     (fun ex ->
                         logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
@@ -227,9 +234,11 @@ type GraphQLWebSocketMiddleware<'Root>
                             |> GraphQLSubscriptionsManagement.removeSubscription (id)),
                 onCompleted =
                     (fun () ->
-                        (sendMessageViaSocket jsonSerializerOptions socket (Complete id)).Wait()
-                        subscriptions
-                        |> GraphQLSubscriptionsManagement.removeSubscription (id))
+                        try
+                            (sendMessageViaSocket jsonSerializerOptions socket (Complete id)).Wait()
+                        finally
+                            subscriptions
+                            |> GraphQLSubscriptionsManagement.removeSubscription id)
             )
 
         // Registered before subscribing, so a stream that completes synchronously (from inside Subscribe) still
