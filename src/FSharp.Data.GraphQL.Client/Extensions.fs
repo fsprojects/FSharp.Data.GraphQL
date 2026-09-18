@@ -21,9 +21,6 @@ module internal Extensions =
         /// Returns the input string with the first character in upper case.
         member this.FirstCharUpper () = changeFirstChar Char.ToUpperInvariant this
 
-        /// Returns the input string with the first character in lower case.
-        member this.FirstCharLower () = changeFirstChar Char.ToLowerInvariant this
-
         member this.MD5Hash() =
             Encoding.UTF8.GetBytes(this)
             |> MD5.Create().ComputeHash

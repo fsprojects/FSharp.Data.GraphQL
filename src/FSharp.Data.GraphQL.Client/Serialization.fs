@@ -8,6 +8,7 @@ open System.Collections.Generic
 open System.Diagnostics
 open System.Globalization
 open System.Reflection
+open System.Text.Json
 open Microsoft.FSharp.Reflection
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
@@ -176,7 +177,7 @@ module Serialization =
                 | :? Upload as u -> JsonValue.String u.Name
                 | :? IDictionary<string, obj> as items ->
                     items
-                    |> Seq.map (fun (KeyValue (k, v)) -> k.FirstCharLower(), toJsonValue v)
+                    |> Seq.map (fun (KeyValue (k, v)) -> JsonNamingPolicy.CamelCase.ConvertName k, toJsonValue v)
                     |> Seq.toArray
                     |> JsonValue.Record
                 | EnumerableValue items ->
@@ -187,7 +188,7 @@ module Serialization =
                 | EnumValue x -> JsonValue.String x
                 | _ ->
                     let props = t.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
-                    let items = props |> Array.map (fun p -> (p.Name.FirstCharLower(), p.GetValue(x) |> toJsonValue))
+                    let items = props |> Array.map (fun p -> (JsonNamingPolicy.CamelCase.ConvertName p.Name, p.GetValue(x) |> toJsonValue))
                     JsonValue.Record items)
 
     let serializeRecord (x : obj) =
