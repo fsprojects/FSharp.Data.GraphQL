@@ -15,6 +15,7 @@
 
   <ItemGroup Label="InternalsVisibleTo">
     <InternalsVisibleTo Include="FSharp.Data.GraphQL.Server" />
+    <InternalsVisibleTo Include="FSharp.Data.GraphQL.Server.AspNetCore" />
     <InternalsVisibleTo Include="FSharp.Data.GraphQL.Server.Middleware" />
     <InternalsVisibleTo Include="FSharp.Data.GraphQL.Client" />
     <InternalsVisibleTo Include="FSharp.Data.GraphQL.Client.DesignTime" />

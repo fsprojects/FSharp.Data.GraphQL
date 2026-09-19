@@ -27,7 +27,7 @@ type RawMessage = { Id : string voption; Type : string; Payload : JsonDocument v
 type SubscriptionExecutionResult = {
     /// Result data: an object for complete and initial payloads, or a deferred or streamed value for incremental payloads.
     /// It is omitted from the final payload of an incremental delivery.
-    Data : obj Skippable
+    Data : obj voption Skippable
     /// Errors raised while producing the payload.
     Errors : GQLProblemDetails list
     /// Path of a deferred or streamed value inside the initial result.
@@ -37,19 +37,29 @@ type SubscriptionExecutionResult = {
 } with
 
     /// Creates a payload of a complete execution result.
-    static member Create (data : Output, errors : GQLProblemDetails list) = {
-        Data = Include (box data)
+    static member Create (data : Output | null, errors : GQLProblemDetails list) = {
+        Data =
+            Include (
+                Option.ofObj data
+                |> ValueOption.ofOption
+                |> ValueOption.map box
+            )
         Errors = errors
         Path = Skip
         HasNext = Skip
     }
 
     /// Creates a payload that carries only errors.
-    static member CreateErrors (errors : GQLProblemDetails list) = { Data = Include null; Errors = errors; Path = Skip; HasNext = Skip }
+    static member CreateErrors (errors : GQLProblemDetails list) = { Data = Include ValueNone; Errors = errors; Path = Skip; HasNext = Skip }
 
     /// Creates the initial payload of an incremental delivery, which is always followed by incremental payloads.
-    static member CreateInitial (data : Output, errors : GQLProblemDetails list) = {
-        Data = Include (box data)
+    static member CreateInitial (data : Output | null, errors : GQLProblemDetails list) = {
+        Data =
+            Include (
+                Option.ofObj data
+                |> ValueOption.ofOption
+                |> ValueOption.map box
+            )
         Errors = errors
         Path = Skip
         HasNext = Include true
@@ -60,7 +70,7 @@ type SubscriptionExecutionResult = {
     /// More payloads may follow, so <see cref="SubscriptionExecutionResult.HasNext"/> is <see langword="true"/>.
     /// </summary>
     static member CreateIncremental (data : objnull, errors : GQLProblemDetails list, path : FieldPath) = {
-        Data = Include data
+        Data = Include (data |> ValueOption.ofObj)
         Errors = errors
         Path = Include path
         HasNext = Include true
