@@ -1,5 +1,7 @@
 module internal FSharp.Data.GraphQL.Server.AspNetCore.GraphQLSubscriptionsManagement
 
+open System
+
 open FSharp.Data.GraphQL.Shared.WebSockets
 
 let addSubscription
@@ -42,5 +44,14 @@ let removeAllSubscriptions (subscriptions : SubscriptionsDict) =
             subscriptions.Clear ()
             snapshot)
 
+    let exceptions = ResizeArray ()
+
     subscriptionsToDispose
-    |> Array.iter (fun struct (id, subscription) -> subscription |> executeOnUnsubscribeAndDispose id)
+    |> Array.iter (fun struct (id, subscription) ->
+        try
+            subscription |> executeOnUnsubscribeAndDispose id
+        with ex ->
+            exceptions.Add ex)
+
+    if exceptions.Count > 0 then
+        raise (AggregateException ("One or more subscriptions failed to unsubscribe.", exceptions))

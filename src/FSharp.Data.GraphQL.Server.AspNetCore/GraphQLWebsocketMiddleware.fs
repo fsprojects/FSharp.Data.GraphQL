@@ -305,14 +305,23 @@ type GraphQLWebSocketMiddleware<'Root>
             |> GraphQLSubscriptionsManagement.removeSubscription id
             reraise ()
 
-    let tryToGracefullyCloseSocket (code, message) theSocket =
-        if theSocket |> canCloseSocket then
-            theSocket.CloseAsync (code, message, CancellationToken.None)
-        else
-            Task.CompletedTask
+    let tryToGracefullyCloseSocket (sendGate : SemaphoreSlim) (code, message) (theSocket : WebSocket) : Task = task {
+        do! sendGate.WaitAsync ()
 
-    let tryToGracefullyCloseSocketWithDefaultBehavior =
-        tryToGracefullyCloseSocket (WebSocketCloseStatus.NormalClosure, "Normal Closure")
+        try
+            if theSocket |> canCloseSocket then
+                do! theSocket.CloseAsync (code, message, CancellationToken.None)
+            else
+                logger.LogTrace (
+                    $"Ignoring socket close request, since its state is neither writable nor closeable, but '{{state}}'",
+                    theSocket.State
+                )
+        finally
+            sendGate.Release () |> ignore
+    }
+
+    let tryToGracefullyCloseSocketWithDefaultBehavior sendGate =
+        tryToGracefullyCloseSocket sendGate (WebSocketCloseStatus.NormalClosure, "Normal Closure")
 
     let handleMessages (sendGate : SemaphoreSlim) (cancellationToken : CancellationToken) (httpContext : HttpContext) (socket : WebSocket) : Task =
         let subscriptions = Dictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction>()
@@ -439,18 +448,20 @@ type GraphQLWebSocketMiddleware<'Root>
                             nameof InvalidMessage
                             |> logMsgReceivedWithOptionalPayload ValueNone
                             match failureMessages with
-                            | InvalidMessage (code, explanation) -> do! socket.CloseAsync (enum code, explanation, CancellationToken.None)
+                            | InvalidMessage (code, explanation) ->
+                                do!
+                                    socket
+                                    |> tryToGracefullyCloseSocket sendGate (enum code, explanation)
                         | Ok ValueNone -> logger.LogTrace ("WebSocket received empty message! State = '{socketState}'", socket.State)
                         | Ok (ValueSome msg) ->
                             match msg with
                             | ConnectionInit p ->
                                 nameof ConnectionInit |> logMsgReceivedWithOptionalPayload p
                                 do!
-                                    socket.CloseAsync (
-                                        enum CustomWebSocketStatus.TooManyInitializationRequests,
-                                        "Too many initialization requests",
-                                        CancellationToken.None
-                                    )
+                                    socket
+                                    |> tryToGracefullyCloseSocket
+                                        sendGate
+                                        (enum CustomWebSocketStatus.TooManyInitializationRequests, "Too many initialization requests")
                             | ClientPing p ->
                                 nameof ClientPing |> logMsgReceivedWithOptionalPayload p
                                 match pingHandler with
@@ -466,11 +477,10 @@ type GraphQLWebSocketMiddleware<'Root>
                                         do!
                                             let warningMsg : FormattableString = $"Subscriber for Id = '{id}' already exists"
                                             logger.LogWarning (String.Format (warningMsg.Format, "id"), id)
-                                            socket.CloseAsync (
-                                                enum CustomWebSocketStatus.SubscriberAlreadyExists,
-                                                warningMsg.ToString (),
-                                                CancellationToken.None
-                                            )
+                                            socket
+                                            |> tryToGracefullyCloseSocket
+                                                sendGate
+                                                (enum CustomWebSocketStatus.SubscriberAlreadyExists, warningMsg.ToString ())
                                     else
                                         let variables = query.Variables |> Skippable.toValueOption
                                         let getInputContext () = httpContext.RequestServices.GetRequiredService<IInputExecutionContext>()
@@ -486,13 +496,17 @@ type GraphQLWebSocketMiddleware<'Root>
                                 subscriptions
                                 |> GraphQLSubscriptionsManagement.removeSubscription (id)
                     logger.LogTrace "Leaving the 'graphql-ws' connection loop..."
-                    do! socket |> tryToGracefullyCloseSocketWithDefaultBehavior
+                    do!
+                        socket
+                        |> tryToGracefullyCloseSocketWithDefaultBehavior sendGate
                 with ex ->
                     logger.LogError (ex, "Cannot handle a message; dropping a websocket connection")
                     // At this point, only something really weird must have happened.
                     // In order to avoid faulty state scenarios and unimagined damages,
                     // just close the socket without further ado.
-                    do! socket |> tryToGracefullyCloseSocketWithDefaultBehavior
+                    do!
+                        socket
+                        |> tryToGracefullyCloseSocketWithDefaultBehavior sendGate
             finally
                 subscriptions
                 |> GraphQLSubscriptionsManagement.removeAllSubscriptions
@@ -508,7 +522,7 @@ type GraphQLWebSocketMiddleware<'Root>
         let detonationRegistration =
             timerTokenSource.Token.Register (fun _ ->
                 (socket
-                 |> tryToGracefullyCloseSocket (enum CustomWebSocketStatus.ConnectionTimeout, "Connection initialization timeout"))
+                 |> tryToGracefullyCloseSocket sendGate (enum CustomWebSocketStatus.ConnectionTimeout, "Connection initialization timeout"))
                     .Wait())
 
         let! connectionInitSucceeded =
@@ -527,15 +541,17 @@ type GraphQLWebSocketMiddleware<'Root>
                     | Ok (ValueSome (Subscribe _)) ->
                         do!
                             socket
-                            |> tryToGracefullyCloseSocket (enum CustomWebSocketStatus.Unauthorized, "Unauthorized")
+                            |> tryToGracefullyCloseSocket sendGate (enum CustomWebSocketStatus.Unauthorized, "Unauthorized")
                         return false
                     | Result.Error (InvalidMessage (code, explanation)) ->
                         do!
                             socket
-                            |> tryToGracefullyCloseSocket (enum code, explanation)
+                            |> tryToGracefullyCloseSocket sendGate (enum code, explanation)
                         return false
                     | _ ->
-                        do! socket |> tryToGracefullyCloseSocketWithDefaultBehavior
+                        do!
+                            socket
+                            |> tryToGracefullyCloseSocketWithDefaultBehavior sendGate
                         return false
                 }),
                 timerTokenSource.Token
@@ -560,7 +576,10 @@ type GraphQLWebSocketMiddleware<'Root>
                 | Ok _ ->
                     let longRunningCancellationToken =
                         (CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted, applicationLifetime.ApplicationStopping).Token)
-                    longRunningCancellationToken.Register (fun _ -> (socket |> tryToGracefullyCloseSocketWithDefaultBehavior).Wait())
+                    longRunningCancellationToken.Register (fun _ ->
+                        (socket
+                         |> tryToGracefullyCloseSocketWithDefaultBehavior sendGate)
+                            .Wait())
                     |> ignore
                     try
                         do!

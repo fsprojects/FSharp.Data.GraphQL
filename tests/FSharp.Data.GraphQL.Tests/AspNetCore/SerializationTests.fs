@@ -1,14 +1,18 @@
 module FSharp.Data.GraphQL.Tests.AspNetCore.SerializationTests
 
 open System
+open System.Collections.Concurrent
 open System.Collections.Generic
-open Xunit
 open System.Text.Json
+open System.Text.Json.Serialization
+
+open Xunit
+
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Shared
-open FSharp.Data.GraphQL.Shared.WebSockets
+open FSharp.Data.GraphQL.Server.AspNetCore.GraphQLSubscriptionsManagement
 open FSharp.Data.GraphQL.Server.AspNetCore.ObservableErrorHandling
-open System.Text.Json.Serialization
+open FSharp.Data.GraphQL.Shared.WebSockets
 
 [<Fact>]
 let ``Deserializes ConnectionInit correctly`` () =
@@ -245,3 +249,43 @@ let ``Request error sanitization preserves GraphQL-facing errors`` () =
     let expected = GQLProblemDetails.OfError (GQLMessageException "Visible to client")
     let actual = sanitizeRequestError expected
     Assert.Equal (expected, actual)
+
+type private TrackingSubscription (onDispose : unit -> unit) =
+    interface IDisposable with
+        member _.Dispose () = onDispose ()
+
+[<Fact>]
+let ``Removing all subscriptions attempts every disposal before raising aggregate failure`` () =
+    let disposedIds = ConcurrentQueue ()
+    let unsubscribedIds = ConcurrentQueue ()
+    let subscriptions =
+        Dictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction>() :> SubscriptionsDict
+
+    let createSubscription id shouldThrow =
+        let subscription =
+            new TrackingSubscription (fun () ->
+                disposedIds.Enqueue id
+
+                if shouldThrow then
+                    raise (InvalidOperationException $"Dispose failed for {id}"))
+
+        let onUnsubscribe removedId =
+            unsubscribedIds.Enqueue removedId
+
+            if shouldThrow then
+                raise (InvalidOperationException $"Unsubscribe failed for {removedId}")
+
+        id, (subscription :> SubscriptionUnsubscriber), onUnsubscribe
+
+    subscriptions
+    |> addSubscription (createSubscription "first" true)
+    subscriptions
+    |> addSubscription (createSubscription "second" false)
+
+    let error = Assert.Throws<AggregateException>(fun () -> subscriptions |> removeAllSubscriptions)
+
+    Assert.False (subscriptions.ContainsKey "first")
+    Assert.False (subscriptions.ContainsKey "second")
+    Assert.Equal<string>(set [ "first"; "second" ], set disposedIds)
+    Assert.Equal<string>(set [ "first"; "second" ], set unsubscribedIds)
+    Assert.Single error.InnerExceptions
