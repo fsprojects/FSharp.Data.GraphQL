@@ -175,8 +175,9 @@ module Helpers =
     /// Casts a <see cref="System.Object"/> to a <see cref="voption{System.Object}"/>.
     /// </summary>
     let objectOptionCast (value: obj) =
-        if isNull value then ValueNone
-        else
+        match value with
+        | null -> ValueNone
+        | _ ->
             let t = value.GetType()
             if t.FullName.StartsWith ReflectionHelper.OptionTypeName then
                 let p = t.GetProperty("Value")
