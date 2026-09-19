@@ -210,8 +210,11 @@ module Helpers =
     let toValueOption x =
         match x with
         | null -> ValueNone
-        | ObjectOption v
-        | v -> ValueSome v
+        | value ->
+            let t = value.GetType()
+            if t.FullName.StartsWith ReflectionHelper.OptionTypeName || t.FullName.StartsWith ReflectionHelper.ValueOptionTypeName then
+                objectOptionCast value
+            else ValueSome value
 
     /// <summary>
     /// Unwraps a <see cref="System.Object"/> from an <see cref="option{System.Object}"/> or <see cref="voption{System.Object}"/>,
