@@ -21,6 +21,15 @@ let private pendingIds (result : SubscriptionExecutionResult voption) =
         |> List.map _.Id
     | ValueNone -> []
 
+let private pendingPaths (result : SubscriptionExecutionResult voption) =
+    match result with
+    | ValueSome r ->
+        r.Pending
+        |> Skippable.toValueOption
+        |> ValueOption.defaultValue []
+        |> List.map _.Path
+    | ValueNone -> []
+
 let private incrementalOf (result : SubscriptionExecutionResult voption) =
     match result with
     | ValueSome r ->
@@ -103,16 +112,40 @@ let ``A stream failing after an item folds the failure into its completion, drop
     pc |> equals ValueNone // already closed by the failure; the later DeferredCompleted is a no-op
 
 [<Fact>]
-let ``A stream failing before any item is reported as an ordinary incremental entry, then a plain completion`` () =
+let ``A stream pending is emitted with the payload that exposes its containing data`` () =
     let delivery = IncrementalDelivery ()
+    delivery.Apply (DeferredPending itemsPath)
+    |> equals ValueNone
+    let payload = delivery.Apply (DeferredResult (box "value", [ box "container" ]))
+    let pending = pendingPaths payload
+    Assert.Contains (itemsPath, pending)
+    Assert.Contains ([ box "container" ], pending)
+    let entry = incrementalOf payload |> single
+    entry.Data |> equals (Include (box "value"))
+    entry.Errors |> equals Skip
+
+[<Fact>]
+let ``A stream failing before any item completes with errors instead of replacing the list with null`` () =
+    let delivery = IncrementalDelivery ()
+    delivery.Apply (DeferredPending [ box "failing" ])
+    |> equals ValueNone
     let error = fieldError "Boom acquiring the enumerator" [ box "failing" ]
     let pFail = delivery.Apply (DeferredErrors (null, [ error ], [ box "failing" ]))
     let pc = delivery.Apply (DeferredCompleted [ box "failing" ])
-    pendingIds pFail |> single |> ignore
-    let entry = incrementalOf pFail |> single
-    entry.Data |> equals (Include null)
-    entry.Errors |> equals (Include [ error ])
-    (completedOf pc |> single).Errors |> equals Skip
+    incrementalOf pFail |> empty
+    (completedOf pFail |> single).Errors
+    |> equals (Include [ error ])
+    pc |> equals ValueNone
+
+[<Fact>]
+let ``An empty stream still produces a completed entry after being pre-announced`` () =
+    let delivery = IncrementalDelivery ()
+    delivery.Apply (DeferredPending itemsPath)
+    |> equals ValueNone
+    let payload = delivery.Apply (DeferredCompleted itemsPath)
+    pendingIds payload |> empty
+    incrementalOf payload |> empty
+    (completedOf payload |> single).Errors |> equals Skip
 
 [<Fact>]
 let ``A defer field's own value is announced and delivered, then completes`` () =

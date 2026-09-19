@@ -384,20 +384,135 @@ type GraphQLWebSocketMiddleware<'Root>
             | ValueNone -> do! delivery.Finish () |> sendOutput id
         }
 
+        let addDeferredClientSubscription id data errors observableOutput =
+            let delivery = IncrementalDelivery ()
+            let gate = obj ()
+            let queuedOutputs = Queue<GQLDeferredResponseContent voption>()
+            let mutable initialPayloadSent = false
+            let mutable pendingTerminal : Result<unit, exn> voption = ValueNone
+            let sendTerminalError (ex : exn) = sendMsg (Error (id, problemDetailsOfObservableError ex))
+
+            let flushQueuedOutputs () : Task = task {
+                let outputsToFlush =
+                    lock gate (fun () ->
+                        initialPayloadSent <- true
+                        [
+                            while queuedOutputs.Count > 0 do
+                                queuedOutputs.Dequeue ()
+                        ])
+
+                for output in outputsToFlush do
+                    do! sendDeferredResponseOutput delivery id output
+
+                match
+                    lock gate (fun () ->
+                        match pendingTerminal with
+                        | ValueSome terminal ->
+                            pendingTerminal <- ValueNone
+                            ValueSome terminal
+                        | ValueNone -> ValueNone)
+                with
+                | ValueSome (Result.Ok ()) ->
+                    try
+                        do! sendMsg (Complete id)
+                    finally
+                        subscriptions
+                        |> GraphQLSubscriptionsManagement.removeSubscription id
+                | ValueSome (Result.Error ex) ->
+                    logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
+                    try
+                        do! sendTerminalError ex
+                    finally
+                        subscriptions
+                        |> GraphQLSubscriptionsManagement.removeSubscription id
+                | ValueNone -> ()
+            }
+
+            let observer =
+                new Reactive.AnonymousObserver<GQLDeferredResponseContent voption> (
+                    onNext =
+                        (fun output ->
+                            try
+                                match
+                                    lock gate (fun () ->
+                                        if initialPayloadSent then
+                                            ValueSome output
+                                        else
+                                            match output with
+                                            | ValueSome (DeferredPending _ as event) ->
+                                                delivery.Apply event |> ignore
+                                                ValueNone
+                                            | _ ->
+                                                queuedOutputs.Enqueue output
+                                                ValueNone)
+                                with
+                                | ValueSome output -> (sendDeferredResponseOutput delivery id output).Wait()
+                                | ValueNone -> ()
+                            with _ ->
+                                subscriptions
+                                |> GraphQLSubscriptionsManagement.removeSubscription id
+                                reraise ()),
+                    onError =
+                        (fun ex ->
+                            logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
+
+                            let shouldSendImmediately =
+                                lock gate (fun () ->
+                                    if initialPayloadSent then
+                                        true
+                                    else
+                                        pendingTerminal <- ValueSome (Result.Error ex)
+                                        false)
+
+                            if shouldSendImmediately then
+                                try
+                                    (sendTerminalError ex).Wait()
+                                finally
+                                    subscriptions
+                                    |> GraphQLSubscriptionsManagement.removeSubscription id),
+                    onCompleted =
+                        (fun () ->
+                            let shouldSendImmediately =
+                                lock gate (fun () ->
+                                    if initialPayloadSent then
+                                        true
+                                    else
+                                        pendingTerminal <- ValueSome (Result.Ok ())
+                                        false)
+
+                            if shouldSendImmediately then
+                                try
+                                    (sendMsg (Complete id)).Wait()
+                                finally
+                                    subscriptions
+                                    |> GraphQLSubscriptionsManagement.removeSubscription id)
+                )
+
+            let placeholder = new System.Reactive.Disposables.SingleAssignmentDisposable ()
+
+            subscriptions
+            |> GraphQLSubscriptionsManagement.addSubscription (id, placeholder, (fun _ -> ()))
+
+            try
+                placeholder.Disposable <- (observableOutput |> Observable.withCompletionMarker).Subscribe(observer)
+            with _ ->
+                subscriptions
+                |> GraphQLSubscriptionsManagement.removeSubscription id
+                reraise ()
+
+            task {
+                do!
+                    SubscriptionExecutionResult.CreateInitial (data, errors, delivery.TakePending ())
+                    |> sendOutput id
+                do! flushQueuedOutputs ()
+            }
+
         let applyPlanExecutionResult (id : SubscriptionId) (socket) (executionResult : GQLExecutionResult) : Task = task {
             match executionResult with
             | Stream observableOutput ->
                 (subscriptions, observableOutput, sendMsg)
                 |> addClientSubscription id sendSubscriptionResponseOutput
-            | Deferred (data, errors, observableOutput) ->
-                // No field is pre-announced: a client accepts a pending entry in any payload, not only the initial
-                // one, so every field is instead announced lazily, in the same payload as its first delivery.
-                let delivery = IncrementalDelivery ()
-                do!
-                    SubscriptionExecutionResult.CreateInitial (data, errors, [])
-                    |> sendOutput id
-                (subscriptions, observableOutput |> Observable.withCompletionMarker, sendMsg)
-                |> addClientSubscription id (sendDeferredResponseOutput delivery)
+            | Deferred (data, errors, observableOutput) -> do! addDeferredClientSubscription id data errors observableOutput
             | Direct (data, errors) ->
                 // An execution result, whose data is null when a non-null root field failed during execution;
                 // still a result, so it is sent as Next + Complete like any other, not as the terminal Error

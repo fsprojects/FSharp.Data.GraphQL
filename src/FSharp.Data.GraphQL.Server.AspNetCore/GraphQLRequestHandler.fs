@@ -64,6 +64,8 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
             if logger.IsEnabled LogLevel.Debug then
                 deferred
                 |> Observable.add (function
+                    | DeferredPending path ->
+                        logger.LogDebug ("Announced GraphQL deferred field at path: {path}", path |> Seq.map string |> Seq.toArray |> Path.Join)
                     | DeferredResult (data, path) ->
                         logger.LogDebug ("Produced GraphQL deferred result for path: {path}", path |> Seq.map string |> Seq.toArray |> Path.Join)
 

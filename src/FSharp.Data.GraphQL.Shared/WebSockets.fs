@@ -28,8 +28,8 @@ type PendingResult = { Id : string; Path : FieldPath }
 /// <see cref="PendingResult"/>.
 /// </summary>
 /// <remarks>
-/// <see cref="Data"/> carries a <c>@defer</c> field's own value (or a stream failure reported before any item was
-/// produced); <see cref="Items"/> carries one or more of a <c>@stream</c> field's items, in list order.
+/// <see cref="Data"/> carries a <c>@defer</c> field's own value; <see cref="Items"/> carries one or more of a
+/// <c>@stream</c> field's items, in list order.
 /// </remarks>
 type IncrementalResult = {
     Id : string

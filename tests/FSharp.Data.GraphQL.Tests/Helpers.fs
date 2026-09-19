@@ -171,13 +171,21 @@ module Observer =
     let createWithCallback (onReceive : TestObserver<'T> -> 'T -> unit) (sub : IObservable<'T>) =
         new TestObserver<'T>(sub, onReceive)
 
-/// Drops every DeferredCompleted marker from a sequence of deferred/streamed/live results. Tests written before
-/// DeferredCompleted existed assert exact positions and counts of DeferredResult/DeferredErrors payloads;
-/// filtering the new marker out before those assertions keeps them unchanged and correct, since it never carries
-/// data of its own. Tests of the completion marker itself, or of the graphql-transport-ws translation that relies
-/// on it, do not use this helper.
+/// Drops every DeferredPending marker from a sequence of deferred/streamed/live results. The engine now announces
+/// streamed fields before their first item so the transport can translate them into `pending` entries; tests of the
+/// raw engine events usually assert only the value-carrying payloads and filter this announcement out.
+let withoutPending (events : GQLDeferredResponseContent seq) =
+    events |> Seq.filter (function DeferredPending _ -> false | _ -> true)
+
+/// Drops every DeferredPending and DeferredCompleted marker from a sequence of deferred/streamed/live results.
+/// Tests written before these transport-oriented markers existed assert exact positions and counts of
+/// DeferredResult/DeferredErrors payloads; filtering them out before those assertions keeps them unchanged and
+/// correct, since neither carries field data of its own. Tests of the markers themselves, or of the
+/// graphql-transport-ws translation that relies on them, do not use this helper.
 let withoutCompleted (events : GQLDeferredResponseContent seq) =
-    events |> Seq.filter (function DeferredCompleted _ -> false | _ -> true)
+    events
+    |> withoutPending
+    |> Seq.filter (function DeferredCompleted _ -> false | _ -> true)
 
 open System.Runtime.CompilerServices
 

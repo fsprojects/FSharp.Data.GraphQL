@@ -359,6 +359,10 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
     let withStreamCompleted (events : IObservable<GQLDeferredResponseContent>) =
         events |> Observable.concat (Observable.singleton (DeferredCompleted (normalizeErrorPath path)))
 
+    let announceStream (events : IObservable<GQLDeferredResponseContent>) =
+        Observable.singleton (DeferredPending (normalizeErrorPath path))
+        |> Observable.concat events
+
     let resolveItem index item = asyncVal {
         let! result = executeResolvers inputContext innerCtx (box index :: path) parent (toOption item |> AsyncVal.wrap)
         return (index, result)
@@ -373,6 +377,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
             // each emitted as soon as it is resolved; a failure of the source itself is emitted last
             |> Observable.ofAsyncEnumerableResolved fieldValue.MaxConcurrency resolveStreamedItem StreamFailure
             |> buffer
+            |> announceStream
             |> withStreamCompleted
         ResolverResult.defered (KeyValuePair (name, box [])) stream |> AsyncVal.wrap
     | :? System.Collections.IEnumerable as enumerable ->
@@ -384,6 +389,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (i
             |> Observable.ofAsyncValSeq
             |> Observable.map StreamedItem
             |> buffer
+            |> announceStream
             |> withStreamCompleted
         ResolverResult.defered (KeyValuePair (name, box [])) stream |> AsyncVal.wrap
     | _ -> raise <| GQLMessageException (ErrorMessages.expectedEnumerableValue ctx.ExecutionInfo.Identifier (value.GetType()))

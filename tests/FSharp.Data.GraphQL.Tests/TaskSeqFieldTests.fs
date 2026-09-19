@@ -204,7 +204,10 @@ let ``TaskSeq field with defer directive delivers its DeferredCompleted marker r
         subscription.WaitCompleted (timeout = ms 10)
         subscription.Received
         |> Seq.toList
-        |> equals [ DeferredResult ([| box 1; box 2; box 3 |], [ box "numbers" ]); DeferredCompleted [ box "numbers" ] ]
+        |> equals [
+            DeferredResult ([| box 1; box 2; box 3 |], [ box "numbers" ])
+            DeferredCompleted [ box "numbers" ]
+        ]
 
 [<Fact>]
 let ``TaskSeq field with stream directive delivers items before the sequence completes`` () =
@@ -220,12 +223,16 @@ let ``TaskSeq field with stream directive delivers items before the sequence com
         data |> equals (upcast expectedData)
         use subscription =
             deferred
-            |> Observer.createWithCallback (fun _ _ -> firstReceived.Set ())
+            |> Observer.createWithCallback (fun _ event ->
+                match event with
+                | DeferredPending _ -> ()
+                | _ -> firstReceived.Set ())
         if not (firstReceived.Wait (TimeSpan.FromSeconds (float (ms 5)))) then
             fail "Timeout while waiting for the first streamed item"
         // The sequence is blocked on the gate, so only its first item can have been delivered
         Assert.False (subscription.IsCompleted, "The stream must not complete before the sequence produces its last item")
         subscription.Received
+        |> withoutPending
         |> single
         |> equals (streamedBatch "numbers" [ 0, 1 ])
         gate.SetResult ()
@@ -245,6 +252,7 @@ let ``TaskSeq field with stream directive delivers its DeferredCompleted marker 
         use subscription = Observer.create deferred
         subscription.WaitCompleted (timeout = ms 10)
         subscription.Received
+        |> withoutPending
         |> Seq.toList
         |> equals [
             streamedBatch "numbers" [ 0, 1 ]
@@ -267,6 +275,7 @@ let ``TaskSeq field with stream directive emits each item as soon as its fields 
     <| fun _ errors deferred ->
         empty errors
         waitForCompletion deferred
+        |> withoutCompleted
         |> seqEquals [
             DeferredResult ([| box (NameValueLookup.ofList [ "id", upcast 2; "value", upcast "fast" ]) |], [ box "items"; box 1 ])
             DeferredResult ([| box (NameValueLookup.ofList [ "id", upcast 1; "value", upcast "slow" ]) |], [ box "items"; box 0 ])
@@ -281,6 +290,7 @@ let ``TaskSeq field with stream directive groups items by the preferred batch si
     <| fun _ errors deferred ->
         empty errors
         waitForCompletion deferred
+        |> withoutCompleted
         |> seqEquals [
             streamedBatch "numbers" [ 0, 1; 1, 2 ]
             streamedBatch "numbers" [ 2, 3; 3, 4 ]
@@ -298,6 +308,7 @@ let ``TaskSeq field with fixed batching groups streamed items without query argu
     <| fun _ errors deferred ->
         empty errors
         waitForCompletion deferred
+        |> withoutCompleted
         |> seqEquals [
             streamedBatch "numbers" [ 0, 1; 1, 2 ]
             streamedBatch "numbers" [ 2, 3; 3, 4 ]
@@ -320,6 +331,7 @@ let ``TaskSeq field with batching from source groups streamed items by the page 
     <| fun _ errors deferred ->
         empty errors
         waitForCompletion deferred
+        |> withoutCompleted
         |> seqEquals [ streamedBatch "numbers" [ 0, 1; 1, 2; 2, 3 ]; streamedBatch "numbers" [ 3, 4; 4, 5; 5, 6 ] ]
 
 [<Fact>]
@@ -333,6 +345,7 @@ let ``TaskSeq field with batching from source delivers items one by one when the
     <| fun _ errors deferred ->
         empty errors
         waitForCompletion deferred
+        |> withoutCompleted
         |> seqEquals [ streamedBatch "numbers" [ 0, 1 ]; streamedBatch "numbers" [ 1, 2 ] ]
 
 [<Fact>]
@@ -364,6 +377,7 @@ let ``TaskSeq field backed by Azure AsyncPageable streams items in batches of th
     <| fun _ errors deferred ->
         empty errors
         waitForCompletion deferred
+        |> withoutCompleted
         |> seqEquals [
             streamedBatch "numbers" [ 0, 1; 1, 2 ]
             streamedBatch "numbers" [ 2, 3; 3, 4 ]
@@ -386,6 +400,7 @@ let ``TaskSeq field backed by plain Azure AsyncPageable streams items one by one
     <| fun _ errors deferred ->
         empty errors
         waitForCompletion deferred
+        |> withoutCompleted
         |> seqEquals [
             streamedBatch "numbers" [ 0, 1 ]
             streamedBatch "numbers" [ 1, 2 ]
@@ -403,6 +418,7 @@ let ``Preferred batch size of the stream directive overrides the batching of the
     <| fun _ errors deferred ->
         empty errors
         waitForCompletion deferred
+        |> withoutCompleted
         |> seqEquals [
             streamedBatch "numbers" [ 0, 1 ]
             streamedBatch "numbers" [ 1, 2 ]
@@ -484,6 +500,7 @@ let ``Streamed TaskSeq field that fails during enumeration delivers produced ite
         empty errors
         data |> equals (upcast expectedData)
         waitForCompletion deferred
+        |> withoutCompleted
         |> seqEquals [
             streamedBatch "failing" [ 0, 1 ]
             streamedBatch "failing" [ 1, 2 ]
@@ -511,6 +528,7 @@ let ``Streamed TaskSeq field that fails acquiring the enumerator still delivers 
         empty errors
         data |> equals (upcast expectedData)
         waitForCompletion deferred
+        |> withoutCompleted
         |> seqEquals [
             DeferredErrors (null, [ fieldError "Boom acquiring the enumerator" "failing" ], [ box "failing" ])
         ]
@@ -528,6 +546,7 @@ let ``Streamed TaskSeq field emits a slower earlier item before the enumeration 
     <| fun _ errors deferred ->
         empty errors
         waitForCompletion deferred
+        |> withoutCompleted
         |> seqEquals [
             DeferredResult ([| box (NameValueLookup.ofList [ "id", upcast 1; "value", upcast "slow" ]) |], [ box "items"; box 0 ])
             DeferredErrors (null, [ fieldError "Boom during enumeration" "items" ], [ box "items" ])
@@ -552,21 +571,29 @@ let ``Streamed TaskSeq field delivers an item's own resolver error and keeps str
     <| fun _ errors deferred ->
         empty errors
         waitForCompletion deferred
+        |> withoutCompleted
         |> Seq.map (function
             | DeferredErrors (data, errors, path) ->
-                DeferredErrors (data, errors |> List.map (fun error -> { error with Exception = ValueNone }), path)
+                DeferredErrors (
+                    data,
+                    errors
+                    |> List.map (fun error -> { error with Exception = ValueNone }),
+                    path
+                )
             | event -> event)
         |> Seq.toList
-        |> seqEquals ([
-            DeferredErrors (
-                null,
-                [
-                    GQLProblemDetails.CreateWithKind ("Boom resolving the item", Execution, [ box "items"; box 0; box "value" ])
-                ],
-                [ box "items"; box 0 ]
-            )
-            DeferredResult ([| box (NameValueLookup.ofList [ "id", upcast 2; "value", upcast "two" ]) |], [ box "items"; box 1 ])
-        ])
+        |> seqEquals (
+            [
+                DeferredErrors (
+                    null,
+                    [
+                        GQLProblemDetails.CreateWithKind ("Boom resolving the item", Execution, [ box "items"; box 0; box "value" ])
+                    ],
+                    [ box "items"; box 0 ]
+                )
+                DeferredResult ([| box (NameValueLookup.ofList [ "id", upcast 2; "value", upcast "two" ]) |], [ box "items"; box 1 ])
+            ]
+        )
 
 [<Fact>]
 let ``A batch containing a failed item alongside a succeeding one is delivered as one DeferredErrors event`` () =
@@ -587,7 +614,10 @@ let ``A batch containing a failed item alongside a succeeding one is delivered a
     ensureDeferred result
     <| fun _ errors deferred ->
         empty errors
-        let actual = waitForCompletion deferred |> Seq.exactlyOne
+        let actual =
+            waitForCompletion deferred
+            |> withoutCompleted
+            |> Seq.exactlyOne
         match actual with
         | DeferredErrors (data, [ error ], path) ->
             Assert.True ((path = [ box "items"; box [ box 0; box 1 ] ]), "Unexpected batch path")
@@ -650,7 +680,7 @@ let ``TaskSeq field with stream directive never resolves more than maxConcurrenc
     <| fun _ errors deferred ->
         empty errors
         let received = waitForCompletion deferred
-        received |> List.length |> equals 6
+        received |> withoutCompleted |> Seq.length |> equals 6
         Assert.True (maxObserved.Value <= 2, $"Expected at most 2 concurrent item resolutions, but observed {maxObserved.Value}")
 
 [<Fact>]

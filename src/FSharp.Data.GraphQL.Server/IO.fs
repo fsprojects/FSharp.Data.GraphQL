@@ -80,8 +80,9 @@ and GQLResponseContent =
 /// a <c>@live</c> field, which has no end of its own.
 /// </remarks>
 and GQLDeferredResponseContent =
+    | DeferredPending of Path : FieldPath
     | DeferredResult of Data : obj * Path : FieldPath
-    | DeferredErrors of Data : obj * Errors: GQLProblemDetails list * Path : FieldPath
+    | DeferredErrors of Data : obj * Errors : GQLProblemDetails list * Path : FieldPath
     | DeferredCompleted of Path : FieldPath
 
 and GQLSubscriptionResponseContent =
