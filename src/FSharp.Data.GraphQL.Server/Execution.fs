@@ -186,6 +186,7 @@ let private prependNestedPending
     | Some nested ->
         { new IObservable<GQLDeferredResponseContent> with
             member _.Subscribe(observer) =
+                let gate = obj ()
                 let pendingPrefix = ResizeArray<GQLDeferredResponseContent>()
                 let tail = new ReplaySubject<GQLDeferredResponseContent>()
                 let mutable capturePendingPrefix = true
@@ -193,23 +194,26 @@ let private prependNestedPending
                 let nestedSubscription =
                     nested.Subscribe(
                         (fun event ->
-                            if capturePendingPrefix then
-                                match event with
-                                | DeferredPending _ -> pendingPrefix.Add event
-                                | _ ->
-                                    capturePendingPrefix <- false
-                                    tail.OnNext event
-                            else
-                                tail.OnNext event),
+                            lock gate (fun () ->
+                                if capturePendingPrefix then
+                                    match event with
+                                    | DeferredPending _ -> pendingPrefix.Add event
+                                    | _ ->
+                                        capturePendingPrefix <- false
+                                        tail.OnNext event
+                                else
+                                    tail.OnNext event)),
                         (fun ex ->
-                            capturePendingPrefix <- false
-                            tail.OnError ex),
+                            lock gate (fun () ->
+                                capturePendingPrefix <- false
+                                tail.OnError ex)),
                         (fun () ->
-                            capturePendingPrefix <- false
-                            tail.OnCompleted ())
+                            lock gate (fun () ->
+                                capturePendingPrefix <- false
+                                tail.OnCompleted ()))
                     )
 
-                capturePendingPrefix <- false
+                lock gate (fun () -> capturePendingPrefix <- false)
 
                 let combined =
                     Observable.ofSeq pendingPrefix
