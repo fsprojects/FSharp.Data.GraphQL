@@ -95,6 +95,8 @@ type IncrementalDelivery () =
     }
 
     let announcePending (fieldPath : obj list) (label : string voption) =
+        // DeferredCompleted must be able to recover the field id even when a pre-announced stream completes without
+        // ever producing an item, so every pending announcement creates the per-field state eagerly.
         let state, isNew = stateFor fieldPath
 
         match label with
