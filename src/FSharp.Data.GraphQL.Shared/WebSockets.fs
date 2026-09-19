@@ -123,7 +123,7 @@ type SubscriptionExecutionResult = {
 
     /// Creates a payload that carries only errors.
     static member CreateErrors (errors : GQLProblemDetails list) = {
-        Data = Include null
+        Data = Skip
         Errors = Include errors
         Pending = Skip
         Incremental = Skip

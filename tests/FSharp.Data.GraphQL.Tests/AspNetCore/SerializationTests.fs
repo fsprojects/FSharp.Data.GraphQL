@@ -244,12 +244,12 @@ let ``Serializes complete payload without pending, incremental, completed or has
     Assert.False (hasProperty "hasNext" payload, $"Expected no hasNext in {json}")
 
 [<Fact>]
-let ``Serializes errors payload with null data as before`` () =
+let ``Serializes errors payload without top-level data`` () =
     let json =
         serializePayload (SubscriptionExecutionResult.CreateErrors [ GQLProblemDetails.CreateWithKind ("Boom", Execution, [ box "numbers" ]) ])
     use document = JsonDocument.Parse json
     let payload = document.RootElement.GetProperty "payload"
-    Assert.Equal (JsonValueKind.Null, payload.GetProperty("data").ValueKind)
+    Assert.False (hasProperty "data" payload, $"Expected no top-level data in {json}")
     Assert.Equal ("Boom", (payload.GetProperty "errors").Item(0).GetProperty("message").GetString())
 
 [<Fact>]
