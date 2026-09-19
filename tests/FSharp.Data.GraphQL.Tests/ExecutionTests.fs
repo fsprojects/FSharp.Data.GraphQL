@@ -358,6 +358,18 @@ let ``Execution handles basic tasks: list of scalars`` () =
         empty errors
         data |> equals (upcast NameValueLookup.ofList ["strings", box [ box "foo"; upcast "bar"; upcast "baz" ]])
 
+[<Fact>]
+let ``Execution handles basic tasks: list of struct nullable scalars`` () =
+    let schema =
+        Schema(Define.Object<{| Items : string voption list |}>(
+                "Type", [
+                    Define.Field("items", ListOf (StructNullable StringType), fun _ (value : {| Items : string voption list |}) -> value.Items)
+                ]))
+    let result = sync <| Executor(schema).AsyncExecute("query Example { items }", getMockInputContext, {| Items = [ ValueSome "foo"; ValueNone; ValueSome "bar" ] |})
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast NameValueLookup.ofList ["items", box [ box "foo"; null; box "bar" ]])
+
 type TwiceTest = { A : string; B : int }
 
 [<Fact>]

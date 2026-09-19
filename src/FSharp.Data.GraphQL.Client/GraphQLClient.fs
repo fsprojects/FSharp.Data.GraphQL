@@ -125,24 +125,21 @@ module GraphQLClient =
             let rec tryMapFileVariable (name : string, value : obj) =
                 match value with
                 | null
-                | :? string -> None
-                | :? Upload as x -> Some [| name, x |]
-                | OptionValue x -> x |> Option.bind (fun x -> tryMapFileVariable (name, x))
+                | :? string -> [||]
+                | :? Upload as x -> [| struct (name, x) |]
+                | OptionValue x -> x |> ValueOption.map (fun x -> tryMapFileVariable (name, x)) |> ValueOption.defaultValue [||]
                 | :? IDictionary<string, obj> as x ->
                     x
-                    |> Seq.collect (fun kvp ->
-                        tryMapFileVariable (name + "." + (kvp.Key.FirstCharLower ()), kvp.Value)
-                        |> Option.defaultValue [||])
-                    |> Array.ofSeq
-                    |> Some
+                    |> Seq.collect (fun kvp -> tryMapFileVariable (name + "." + (kvp.Key.FirstCharLower ()), kvp.Value))
+                    |> Seq.toArray
                 | EnumerableValue x ->
                     x
-                    |> Array.mapi (fun ix x -> tryMapFileVariable ($"%s{name}.%i{ix}", x))
-                    |> Array.collect (Option.defaultValue [||])
-                    |> Some
-                | _ -> None
+                    |> Seq.mapi (fun ix x -> tryMapFileVariable ($"%s{name}.%i{ix}", x))
+                    |> Seq.collect id
+                    |> Seq.toArray
+                | _ -> [||]
             request.Variables
-            |> Array.collect (tryMapFileVariable >> (Option.defaultValue [||]))
+            |> Array.collect tryMapFileVariable
 
         let operationContent =
             let variables =
@@ -171,7 +168,7 @@ module GraphQLClient =
         let mapContent =
             let files =
                 files
-                |> Array.mapi (fun ix (name, _) -> ix.ToString (), JsonValue.Array [| JsonValue.String ("variables." + name) |])
+                |> Array.mapi (fun ix struct (name, _) -> ix.ToString (), JsonValue.Array [| JsonValue.String ("variables." + name) |])
                 |> JsonValue.Record
             let content = new StringContent (files.ToString (JsonSaveOptions.DisableFormatting))
             content.Headers.Add ("Content-Disposition", "form-data; name=\"map\"")
@@ -179,7 +176,7 @@ module GraphQLClient =
         content.Add (mapContent)
         let fileContents =
             files
-            |> Seq.mapi (fun _ (_, value) ->
+            |> Seq.mapi (fun _ struct (_, value) ->
                 let content = new StreamContent (value.Stream)
                 content.Headers.Add ("Content-Disposition", $"form-data; name=\"%s{value.Name}\"; filename=\"%s{value.FileName}\"")
                 content.Headers.Add ("Content-Type", value.ContentType)

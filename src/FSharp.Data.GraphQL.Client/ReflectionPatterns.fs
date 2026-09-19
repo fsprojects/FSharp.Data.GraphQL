@@ -143,8 +143,8 @@ module ReflectionPatterns =
         let xtype = x.GetType()
         let tryGetValue optionType =
             match FSharpValue.GetUnionFields(x, optionType) with
-            | (_, [|value|]) -> ValueSome (OptionValue Some value)
-            | _ -> ValueSome (OptionValue None)
+            | (_, [|value|]) -> ValueSome (OptionValue ValueSome value)
+            | _ -> ValueSome (OptionValue ValueNone)
         if isOption xtype
         then tryGetValue xtype
         elif isValueOption xtype
@@ -162,10 +162,10 @@ module ReflectionPatterns =
         let isOption = isOption t
         match value, isOption with
         | null, true -> makeNone t
-        | OptionValue (Some null), true -> box (makeSome (Convert.ChangeType(null, t)))
-        | OptionValue (Some value), true -> box (makeSome value)
-        | OptionValue (Some value), false -> Convert.ChangeType(value, t)
-        | OptionValue None, false -> Convert.ChangeType(null, t)
-        | OptionValue None, true -> box (makeNone t)
+        | OptionValue (ValueSome null), true -> box (makeSome (Convert.ChangeType(null, t)))
+        | OptionValue (ValueSome value), true -> box (makeSome value)
+        | OptionValue (ValueSome value), false -> Convert.ChangeType(value, t)
+        | OptionValue ValueNone, false -> Convert.ChangeType(null, t)
+        | OptionValue ValueNone, true -> box (makeNone t)
         | value, true -> makeSome value
         | value, false -> Convert.ChangeType(value, t)

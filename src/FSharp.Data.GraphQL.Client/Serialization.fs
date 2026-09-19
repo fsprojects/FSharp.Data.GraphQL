@@ -169,7 +169,7 @@ module Serialization =
             Tracer.runAndMeasureExecutionTime $"Converted object type %O{t} to JsonValue" (fun _ ->
                 match x with
                 | null -> JsonValue.Null
-                | OptionValue None -> JsonValue.Null
+                | OptionValue ValueNone -> JsonValue.Null
                 | :? int as x -> JsonValue.Integer (int x)
                 | :? float as x -> JsonValue.Float x
                 | :? string as x -> JsonValue.String x
@@ -189,7 +189,7 @@ module Serialization =
                     items
                     |> Array.map toJsonValue
                     |> JsonValue.Array
-                | OptionValue (Some x) -> toJsonValue x
+                | OptionValue (ValueSome x) -> toJsonValue x
                 | EnumValue x -> JsonValue.String x
                 | _ ->
                     let props = t.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)

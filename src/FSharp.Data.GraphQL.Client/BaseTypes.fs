@@ -147,15 +147,15 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             | :? string -> v // We need this because strings are enumerables, and we don't want to enumerate them recursively as an object
             | :? EnumBase as v -> v.GetValue () |> box
             | :? RecordBase as v -> box (v.ToDictionary ())
-            | OptionValue v -> v |> Option.map mapDictionaryValue |> Option.toObj
+            | OptionValue v -> v |> ValueOption.map mapDictionaryValue |> ValueOption.toObj
             | EnumerableValue v -> v |> Array.map mapDictionaryValue |> box
             | _ -> v
         x.GetProperties ()
-        |> Seq.choose (fun p ->
+        |> Seq.vchoose (fun p ->
             if not (isNull p.Value) then
-                Some (p.Name, mapDictionaryValue p.Value)
+                ValueSome (p.Name, mapDictionaryValue p.Value)
             else
-                None)
+                ValueNone)
         |> dict
 
     override x.ToString () =
@@ -309,8 +309,8 @@ module internal JsonValueHelper =
 
     let getTypeName (fields : (string * JsonValue) seq) =
         fields
-        |> Seq.tryFind (fun (name, _) -> name = "__typename")
-        |> Option.map (fun (_, value) ->
+        |> Seq.vtryFind (fun (name, _) -> name = "__typename")
+        |> ValueOption.map (fun (_, value) ->
             match value with
             | JsonValue.String x -> x
             | _ -> failwithf "Expected \"__typename\" field to be a string field, but it was %A." value)
@@ -379,16 +379,16 @@ module internal JsonValueHelper =
             | JsonValue.Record props ->
                 let typeName =
                     match getTypeName props with
-                    | Some typeName -> typeName
-                    | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
+                    | ValueSome typeName -> typeName
+                    | ValueNone -> failwith "Expected type to have a \"__typename\" field, but it was not found."
                 let mapRecordProperty (aliasOrName : string, value : JsonValue) =
                     let schemaField =
                         match
                             schemaField.Fields
-                            |> Array.tryFind (fun f -> f.AliasOrName = aliasOrName)
+                            |> Array.vtryFind (fun f -> f.AliasOrName = aliasOrName)
                         with
-                        | Some f -> f
-                        | None ->
+                        | ValueSome f -> f
+                        | ValueNone ->
                             failwithf
                                 "Expected to find field information for field with alias or name \"%s\" of type \"%s\" but it was not found."
                                 aliasOrName
@@ -479,49 +479,49 @@ module internal JsonValueHelper =
     let getErrors (errors : JsonValue[]) =
         let tryFindField fieldName (fields : (string * JsonValue)[]) =
             fields
-            |> Array.tryFind (fun (name, _) -> name = fieldName)
-            |> Option.map snd
+            |> Array.vtryFind (fun (name, _) -> name = fieldName)
+            |> ValueOption.map snd
 
-        let parsePath =
-            function
-            | Some (JsonValue.Array path) ->
+        let parsePath jsonValueOpt =
+            match jsonValueOpt with
+            | ValueSome (JsonValue.Array path) ->
                 let pathMapper =
                     function
                     | JsonValue.String x -> box x
                     | JsonValue.Integer x -> box x
                     | _ -> failwith "Error parsing response errors. An item in the path is neither a String nor an Integer."
                 path |> Array.map pathMapper
-            | Some JsonValue.Null
-            | None -> [||]
+            | ValueSome JsonValue.Null
+            | ValueNone -> [||]
             | _ -> failwith "Error parsing response errors. Path field must be an Array."
 
-        let parseLocations =
-            function
-            | Some (JsonValue.Array locations) ->
+        let parseLocations jsonValueOpt =
+            match jsonValueOpt with
+            | ValueSome (JsonValue.Array locations) ->
                 let parseLocation =
                     function
                     | JsonValue.Record locationFields ->
                         match tryFindField "line" locationFields, tryFindField "column" locationFields with
-                        | Some (JsonValue.Integer line), Some (JsonValue.Integer column) -> { Line = line; Column = column }
+                        | ValueSome (JsonValue.Integer line), ValueSome (JsonValue.Integer column) -> { Line = line; Column = column }
                         | _ -> failwith "Error parsing response errors. A location item must contain Integer fields named \"line\" and \"column\"."
                     | _ -> failwith "Error parsing response errors. A location item is not a Record."
                 locations |> Array.map parseLocation
-            | Some JsonValue.Null
-            | None -> [||]
+            | ValueSome JsonValue.Null
+            | ValueNone -> [||]
             | _ -> failwith "Error parsing response errors. Locations field must be an Array."
 
-        let parseExtensions =
-            function
-            | Some (JsonValue.Record fields) -> Serialization.deserializeMap fields
-            | Some JsonValue.Null
-            | None -> Map.empty
+        let parseExtensions jsonValueOpt =
+            match jsonValueOpt with
+            | ValueSome (JsonValue.Record fields) -> Serialization.deserializeMap fields
+            | ValueSome JsonValue.Null
+            | ValueNone -> Map.empty
             | _ -> failwith "Error parsing response errors. Extensions field must be a Record."
 
         let errorMapper =
             function
             | JsonValue.Record fields ->
                 match tryFindField "message" fields with
-                | Some (JsonValue.String message) -> {
+                | ValueSome (JsonValue.String message) -> {
                     Message = message
                     Locations = tryFindField "locations" fields |> parseLocations
                     Path = tryFindField "path" fields |> parsePath
@@ -597,6 +597,6 @@ module VariableMapping =
         | :? string -> value
         | :? EnumBase as v -> v.GetValue () |> box
         | :? RecordBase as v -> v.ToDictionary () |> box
-        | OptionValue v -> v |> Option.map mapVariableValue |> box
+        | OptionValue v -> v |> ValueOption.map mapVariableValue |> ValueOption.toObj
         | EnumerableValue v -> v |> Array.map mapVariableValue |> box
         | v -> v

@@ -514,8 +514,8 @@ module Ast =
                 | InlineFragment frag -> List.append (getFieldNames frag.SelectionSet) acc
                 | FragmentSpread spread ->
                     fragmentDefinitions
-                    |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
-                    |> Option.unwrap acc (fun frag -> getFieldNames frag.SelectionSet))
+                    |> List.vtryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
+                    |> ValueOption.unwrap acc (fun frag -> getFieldNames frag.SelectionSet))
         ctx.Document.Definitions
         |> ValidationResult.collect (function
             | OperationDefinition def when def.OperationType = Subscription ->

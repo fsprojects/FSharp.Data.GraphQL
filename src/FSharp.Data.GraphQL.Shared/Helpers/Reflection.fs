@@ -171,9 +171,13 @@ module Helpers =
 
     let rec internal moduleType = ReflectionHelper.getModuleType <@ moduleType @>
 
-    let private objectOptionCast (value: obj) =
-        if isNull value then ValueNone
-        else
+    /// <summary>
+    /// Casts a <see cref="System.Object"/> to a <see cref="voption{System.Object}"/>.
+    /// </summary>
+    let objectOptionCast (value: obj) =
+        match value with
+        | null -> ValueNone
+        | _ ->
             let t = value.GetType()
             if t.FullName.StartsWith ReflectionHelper.OptionTypeName then
                 let p = t.GetProperty("Value")
@@ -184,11 +188,6 @@ module Helpers =
                     let p = t.GetProperty("Value")
                     ValueSome (p.GetValue(value, [||]))
             else ValueNone
-
-    /// <summary>
-    /// Casts a <see cref="System.Object"/> to a <see cref="option{System.Object}"/>.
-    /// </summary>
-    let optionCast (value: obj) = objectOptionCast value |> ValueOption.toOption
 
     /// <summary>
     /// Matches a <see cref="System.Object"/> containing a boxed <see cref="Option{T}"/> or <see cref="ValueOption{T}"/>.
@@ -205,6 +204,24 @@ module Helpers =
         | null -> None
         | ObjectOption v
         | v -> Some v
+
+    /// <summary>
+    /// Lifts a <see cref="System.Object"/> to an <see cref="voption{System.Object}"/>, unless it is already an <see cref="voption{System.Object}"/>.
+    /// </summary>
+    let toValueOption x =
+        match x with
+        | null -> ValueNone
+        | value ->
+            let t = value.GetType()
+            match t.FullName with
+            | null -> ValueSome value
+            | _ when t.IsGenericType ->
+                let genericTypeDefinition = t.GetGenericTypeDefinition()
+                match genericTypeDefinition.FullName with
+                | ReflectionHelper.OptionTypeName
+                | ReflectionHelper.ValueOptionTypeName -> objectOptionCast value
+                | _ -> ValueSome value
+            | _ -> ValueSome value
 
     /// <summary>
     /// Unwraps a <see cref="System.Object"/> from an <see cref="option{System.Object}"/> or <see cref="voption{System.Object}"/>,

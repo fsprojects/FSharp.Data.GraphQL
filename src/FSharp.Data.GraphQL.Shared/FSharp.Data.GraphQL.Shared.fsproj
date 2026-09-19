@@ -38,6 +38,7 @@
     <Compile Include="Output.fs" />
     <Compile Include="Helpers\Diagnostics.fs" />
     <Compile Include="Helpers\ObjAndStructConversions.fs" />
+    <Compile Include="Helpers\CollectionExtensions.fs" />
     <Compile Include="Helpers\Extensions.fs" />
     <Compile Include="Helpers\Reflection.fs" />
     <Compile Include="Helpers\MemoryCache.fs" />
