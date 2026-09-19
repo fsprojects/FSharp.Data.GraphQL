@@ -225,28 +225,28 @@ let private prependNestedPending
                 let pendingPrefix = ResizeArray<GQLDeferredResponseContent>()
                 let tail = new ReplaySubject<GQLDeferredResponseContent> ()
                 let mutable capturePendingPrefix = true
+                let handleNestedEvent event =
+                    lock gate (fun () ->
+                        if capturePendingPrefix then
+                            match event with
+                            | DeferredPending _ -> pendingPrefix.Add event
+                            | _ ->
+                                capturePendingPrefix <- false
+                                tail.OnNext event
+                        else
+                            tail.OnNext event)
 
-                let nestedSubscription =
-                    nested.Subscribe (
-                        (fun event ->
-                            lock gate (fun () ->
-                                if capturePendingPrefix then
-                                    match event with
-                                    | DeferredPending _ -> pendingPrefix.Add event
-                                    | _ ->
-                                        capturePendingPrefix <- false
-                                        tail.OnNext event
-                                else
-                                    tail.OnNext event)),
-                        (fun ex ->
-                            lock gate (fun () ->
-                                capturePendingPrefix <- false
-                                tail.OnError ex)),
-                        (fun () ->
-                            lock gate (fun () ->
-                                capturePendingPrefix <- false
-                                tail.OnCompleted ()))
-                    )
+                let handleNestedError ex =
+                    lock gate (fun () ->
+                        capturePendingPrefix <- false
+                        tail.OnError ex)
+
+                let handleNestedCompletion () =
+                    lock gate (fun () ->
+                        capturePendingPrefix <- false
+                        tail.OnCompleted ())
+
+                let nestedSubscription = nested.Subscribe (handleNestedEvent, handleNestedError, handleNestedCompletion)
 
                 lock gate (fun () -> capturePendingPrefix <- false)
 
