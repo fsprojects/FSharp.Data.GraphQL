@@ -217,6 +217,12 @@ let ``Observable error details preserve GraphQL-facing messages inside aggregate
     Assert.DoesNotContain ("sensitive backend failure", actual)
 
 [<Fact>]
+let ``Observable error details fall back to the generic message for empty aggregates`` () =
+    let actual = problemDetailsOfObservableError (AggregateException ())
+    let error = Assert.Single actual
+    Assert.Equal (UnexpectedObservableErrorMessage, error.Message)
+
+[<Fact>]
 let ``Observable error details do not duplicate repeated aggregate errors`` () =
     let actual =
         AggregateException [|
@@ -227,3 +233,15 @@ let ``Observable error details do not duplicate repeated aggregate errors`` () =
 
     let error = Assert.Single actual
     Assert.Equal ("Visible to client", error.Message)
+
+[<Fact>]
+let ``Request error sanitization replaces backend exception messages`` () =
+    let actual =
+        sanitizeRequestError (GQLProblemDetails.Create ("sensitive backend failure", Exception "sensitive backend failure"))
+    Assert.Equal (UnexpectedObservableErrorMessage, actual.Message)
+
+[<Fact>]
+let ``Request error sanitization preserves GraphQL-facing errors`` () =
+    let expected = GQLProblemDetails.OfError (GQLMessageException "Visible to client")
+    let actual = sanitizeRequestError expected
+    Assert.Equal (expected, actual)
