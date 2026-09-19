@@ -99,27 +99,78 @@ type IncrementalDelivery () =
         pending.Clear ()
         ready
 
+    let rec pathExistsInData (relativePath : obj list) (data : obj) =
+        match relativePath, data with
+        | [], _ -> true
+        | _ :: _, null -> false
+        | (:? string as fieldName) :: tail, (:? IDictionary<string, obj> as fields) ->
+            match fields.TryGetValue fieldName with
+            | true, value -> pathExistsInData tail value
+            | false, _ -> false
+        | (:? int as index) :: tail, (:? (obj[]) as items) when index >= 0 && index < items.Length -> pathExistsInData tail items[index]
+        | _ -> false
+
+    let takePendingWhen predicate =
+        let ready = ResizeArray ()
+        let remaining = ResizeArray<PendingResult>()
+
+        for entry in pending do
+            if predicate entry then
+                ready.Add entry
+            else
+                remaining.Add entry
+
+        pending.Clear ()
+        pending.AddRange remaining
+        List.ofSeq ready
+
+    let takePendingVisibleIn (payloadPath : obj list) (payloadData : obj) =
+        takePendingWhen (fun entry ->
+            pathStartsWith payloadPath entry.Path
+            && entry.Path
+               |> List.skip (List.length payloadPath)
+               |> fun relativePath -> pathExistsInData relativePath payloadData)
+
+    let takePendingForItems (fieldPath : obj list) (flushedItems : (int * obj) list) =
+        takePendingWhen (fun entry ->
+            entry.Path = fieldPath
+            || flushedItems
+               |> List.exists (fun (index, item) ->
+                   let itemPath = fieldPath @ [ box index ]
+                   pathStartsWith itemPath entry.Path
+                   && entry.Path
+                      |> List.skip (List.length itemPath)
+                      |> fun relativePath -> pathExistsInData relativePath item))
+
+    let takeFieldPending (fieldPath : obj list) = takePendingWhen (fun entry -> entry.Path = fieldPath)
+
     /// Flushes the contiguous run of buffered items starting at the field's next expected index, if any.
     let flush (state : FieldState) =
         if state.Buffer.ContainsKey state.NextIndex then
             let items = ResizeArray ()
+            let flushedItems = ResizeArray ()
             let errors = ResizeArray ()
             while state.Buffer.ContainsKey state.NextIndex do
+                let index = state.NextIndex
                 let item, itemErrors = state.Buffer[state.NextIndex]
                 items.Add item
+                flushedItems.Add (index, item)
                 errors.AddRange itemErrors
                 state.Buffer.Remove state.NextIndex |> ignore
                 state.NextIndex <- state.NextIndex + 1
-            Some {
-                Id = state.Id
-                Data = Skip
-                Items = Include (items.ToArray ())
-                Errors =
-                    (if errors.Count = 0 then
-                         Skip
-                     else
-                         Include (List.ofSeq errors))
-            }
+            Some (
+                {
+                    Id = state.Id
+                    Data = Skip
+                    Items = Include (items.ToArray ())
+                    Errors =
+                        (if errors.Count = 0 then
+                             Skip
+                         else
+                             Include (List.ofSeq errors))
+                },
+                List.ofSeq flushedItems
+            )
         else
             None
 
@@ -141,11 +192,16 @@ type IncrementalDelivery () =
         let state = announceStream fieldPath
         state.Buffer[index] <- (unwrapItem data, errors)
 
-        match takePending (), flush state |> Option.toList with
-        | [], [] -> ValueNone
-        | pending, incremental -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, incremental, [], true))
+        match flush state with
+        | Some (incremental, flushedItems) ->
+            let pending = takePendingForItems fieldPath flushedItems
+            ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
+        | None ->
+            match takeFieldPending fieldPath with
+            | [] -> ValueNone
+            | pending -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [], [], true))
 
-    member _.TakePending () = takePending ()
+    member _.TakePendingVisibleIn (data : obj) = takePendingVisibleIn [] data
 
     /// Applies one engine event, returning the payload it produces, if any (an out-of-order item that does not
     /// complete a contiguous run, or a completion for a field already closed by a preceding stream failure,
@@ -160,9 +216,14 @@ type IncrementalDelivery () =
             let state = announceStream fieldPath
             (indices, List.ofArray items)
             ||> List.iter2 (fun index item -> state.Buffer[index :?> int] <- (item, []))
-            match takePending (), flush state |> Option.toList with
-            | [], [] -> ValueNone
-            | pending, incremental -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, incremental, [], true))
+            match flush state with
+            | Some (incremental, flushedItems) ->
+                let pending = takePendingForItems fieldPath flushedItems
+                ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
+            | None ->
+                match takeFieldPending fieldPath with
+                | [] -> ValueNone
+                | pending -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [], [], true))
         | DeferredResult (data, ItemPath (fieldPath, index)) -> itemEvent fieldPath index data []
         | DeferredErrors (data, errors, ItemPath (fieldPath, index)) -> itemEvent fieldPath index data errors
         | DeferredErrors (data, errors, BatchPath (fieldPath, indices)) ->
@@ -182,14 +243,19 @@ type IncrementalDelivery () =
                         |> ValueOption.map (pathStartsWith itemPath)
                         |> ValueOption.defaultValue false)
                 state.Buffer[index :?> int] <- (item, itemErrors))
-            match takePending (), flush state |> Option.toList with
-            | [], [] -> ValueNone
-            | pending, incremental -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, incremental, [], true))
+            match flush state with
+            | Some (incremental, flushedItems) ->
+                let pending = takePendingForItems fieldPath flushedItems
+                ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
+            | None ->
+                match takeFieldPending fieldPath with
+                | [] -> ValueNone
+                | pending -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [], [], true))
         | DeferredResult (data, fieldPath) ->
             // A plain (non-indexed) path: a @defer field's own value.
             let state, isNew = stateFor fieldPath
             let incremental = { Id = state.Id; Data = Include data; Items = Skip; Errors = Skip }
-            let pending = [ yield! pendingFor fieldPath state isNew; yield! takePending () ]
+            let pending = [ yield! pendingFor fieldPath state isNew; yield! takePendingVisibleIn fieldPath data ]
             ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
         | DeferredErrors (data, errors, fieldPath) ->
             match fields.TryGetValue fieldPath with
@@ -204,7 +270,7 @@ type IncrementalDelivery () =
                 // A @defer field's own failure.
                 let state, isNew = stateFor fieldPath
                 let incremental = { Id = state.Id; Data = Include data; Items = Skip; Errors = Include errors }
-                let pending = [ yield! pendingFor fieldPath state isNew; yield! takePending () ]
+                let pending = [ yield! pendingFor fieldPath state isNew; yield! takePendingVisibleIn fieldPath data ]
                 ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
         | DeferredCompleted fieldPath ->
             match fields.TryGetValue fieldPath with

@@ -526,7 +526,7 @@ type GraphQLWebSocketMiddleware<'Root>
 
             task {
                 do!
-                    SubscriptionExecutionResult.CreateInitial (data, errors, delivery.TakePending ())
+                    SubscriptionExecutionResult.CreateInitial (data, errors, delivery.TakePendingVisibleIn data)
                     |> sendOutput id
                 do! flushQueuedOutputs ()
             }

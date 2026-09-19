@@ -98,9 +98,9 @@
     <Compile Include="AspNetCore/TestSchema.fs" />
     <Compile Include="AspNetCore/InvalidMessageTests.fs" />
     <Compile Include="AspNetCore/SerializationTests.fs" />
-    <Compile Include="AspNetCore/IncrementalDeliveryTests.fs" />
     <Compile Include="AspNetCore/RequestHandlerExtensibilityTests.fs" />
     <Compile Include="TaskSeqFieldTests.fs" />
+    <Compile Include="AspNetCore/IncrementalDeliveryTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

@@ -114,15 +114,35 @@ let ``A stream failing after an item folds the failure into its completion, drop
 [<Fact>]
 let ``A stream pending is emitted with the payload that exposes its containing data`` () =
     let delivery = IncrementalDelivery ()
-    delivery.Apply (DeferredPending itemsPath)
+    let parentPath = [ box "container" ]
+    let streamPath = parentPath @ itemsPath
+    delivery.Apply (DeferredPending streamPath)
     |> equals ValueNone
-    let payload = delivery.Apply (DeferredResult (box "value", [ box "container" ]))
+    let payload =
+        delivery.Apply (DeferredResult (box (NameValueLookup.ofList [ "items", upcast [||] ]), parentPath))
     let pending = pendingPaths payload
-    Assert.Contains (itemsPath, pending)
-    Assert.Contains ([ box "container" ], pending)
+    Assert.Contains (streamPath, pending)
+    Assert.Contains (parentPath, pending)
     let entry = incrementalOf payload |> single
-    entry.Data |> equals (Include (box "value"))
+    entry.Data
+    |> equals (Include (box (NameValueLookup.ofList [ "items", upcast [||] ])))
     entry.Errors |> equals Skip
+
+[<Fact>]
+let ``A nested stream pending waits for the deferred payload that exposes it`` () =
+    let delivery = IncrementalDelivery ()
+    let parentPath = [ box "parent" ]
+    let childPath = parentPath @ [ box "child" ]
+    let streamPath = childPath @ [ box "items" ]
+    delivery.Apply (DeferredPending streamPath)
+    |> equals ValueNone
+    let parentPayload =
+        delivery.Apply (DeferredResult (box (NameValueLookup.ofList [ "child", null ]), parentPath))
+    pendingPaths parentPayload |> equals [ parentPath ]
+    let childPayload =
+        delivery.Apply (DeferredResult (box (NameValueLookup.ofList [ "items", upcast [||] ]), childPath))
+    pendingPaths childPayload
+    |> equals [ childPath; streamPath ]
 
 [<Fact>]
 let ``A stream failing before any item completes with errors instead of replacing the list with null`` () =
