@@ -385,6 +385,9 @@ type GraphQLWebSocketMiddleware<'Root>
         }
 
         let addDeferredClientSubscription id data errors observableOutput =
+            if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
+                invalidOp $"Subscriber for Id = '{id}' already exists"
+
             let delivery = IncrementalDelivery ()
             let gate = obj ()
             let queuedOutputs = Queue<GQLDeferredResponseContent voption>()
