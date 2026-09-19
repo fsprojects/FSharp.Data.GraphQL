@@ -95,6 +95,13 @@ let ``An item's own error flushes with the run and does not stop the stream`` ()
     |> equals (Include [| box "one" |])
 
 [<Fact>]
+let ``A streamed item that is itself an empty list is preserved as the item value`` () =
+    let delivery = IncrementalDelivery ()
+    let payload = delivery.Apply (DeferredResult (box [||], itemPath 0))
+    (incrementalOf payload |> single).Items
+    |> equals (Include [| box [||] |])
+
+[<Fact>]
 let ``A stream failing after an item folds the failure into its completion, dropping unflushed items`` () =
     let delivery = IncrementalDelivery ()
     let error = fieldError "Boom during enumeration" [ box "items" ]

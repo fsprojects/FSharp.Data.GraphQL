@@ -187,7 +187,7 @@ type IncrementalDelivery () =
     /// resolution failed outright instead carries data = null, already unwrapped.
     let unwrapItem (data : obj) =
         match data with
-        | :? (obj[]) as items -> items[0]
+        | :? (obj[]) as items when items.Length = 1 -> items[0]
         | data -> data
 
     let itemEvent (fieldPath : obj list) (index : int) (data : obj) (errors : GQLProblemDetails list) =
