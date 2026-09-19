@@ -430,9 +430,7 @@ type GraphQLWebSocketMiddleware<'Root>
                                 | ValueSome pending ->
                                     pendingTerminal <- ValueNone
                                     Choice2Of2 (ValueSome pending)
-                                | ValueNone ->
-                                    initialPayloadSent <- true
-                                    Choice2Of2 ValueNone)
+                                | ValueNone -> Choice2Of2 ValueNone)
                     with
                     | Choice1Of2 outputsToFlush ->
                         for output in outputsToFlush do
@@ -539,6 +537,7 @@ type GraphQLWebSocketMiddleware<'Root>
                 reraise ()
 
             enqueueSend (fun () -> task {
+                lock gate (fun () -> initialPayloadSent <- true)
                 do!
                     SubscriptionExecutionResult.CreateInitial (data, errors, delivery.TakePendingVisibleIn data)
                     |> sendOutput id
