@@ -39,6 +39,24 @@ module Seq =
         |> Seq.map ValueSome
         |> _.FirstOrDefault()
 
+    let vtryItem index (source : 'T seq) =
+        if index < 0 then
+            ValueNone
+        else
+            use enumerator = source.GetEnumerator ()
+            let mutable currentIndex = 0
+            let mutable result = ValueNone
+            let mutable found = false
+
+            while not found && enumerator.MoveNext () do
+                if currentIndex = index then
+                    result <- ValueSome enumerator.Current
+                    found <- true
+                else
+                    currentIndex <- currentIndex + 1
+
+            result
+
     let vtryHead (source : 'T seq) =
         use enumerator = source.GetEnumerator ()
         if not (enumerator.MoveNext ()) then
@@ -66,9 +84,25 @@ module internal List =
 
     let vtryFind predicate list = list |> Seq.ofList |> Seq.vtryFind predicate
 
+    let vtryItem index list =
+        let rec loop currentIndex list =
+            match currentIndex, list with
+            | _, [] -> ValueNone
+            | 0, head :: _ -> ValueSome head
+            | currentIndex, _ :: tail when currentIndex > 0 -> loop (currentIndex - 1) tail
+            | _ -> ValueNone
+
+        loop index list
+
 module internal Array =
 
     let vchoose mapping array = array |> Seq.vchoose mapping |> Array.ofSeq
+
+    let vtryItem index (array : 'T array) =
+        if index < 0 || index >= array.Length then
+            ValueNone
+        else
+            ValueSome array.[index]
 
 module internal Map =
 

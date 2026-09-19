@@ -49,7 +49,7 @@ module internal IncrementalPayloadSplitting =
         let fieldPathLength = List.length fieldPath
 
         if pathStartsWith fieldPath path then
-            path |> List.tryItem fieldPathLength |> ValueOption.ofOption
+            path |> List.vtryItem fieldPathLength
         else
             ValueNone
 
@@ -68,12 +68,11 @@ module internal IncrementalPayloadSplitting =
         let items = data :?> obj[]
         let errorsByItemIndex =
             errors
-            |> Seq.choose (fun error ->
+            |> Seq.vchoose (fun error ->
                 error.Path
                 |> Skippable.toValueOption
                 |> ValueOption.bind (tryGetPathItemIndex fieldPath)
-                |> ValueOption.map (fun index -> struct (index, error))
-                |> ValueOption.toOption)
+                |> ValueOption.map (fun index -> struct (index, error)))
             |> _.ToLookup((fun struct (index, _) -> index), (fun struct (_, error) -> error))
 
         (indices, List.ofArray items)
