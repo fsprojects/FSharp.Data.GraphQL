@@ -53,6 +53,20 @@ module Option =
         | Some t -> onSome t
         | None -> defaultValue
 
+module ValueOption =
+
+    let mergeWith (f: 'T -> 'T -> 'T) (o1 : 'T voption) (o2 : 'T voption) : 'T voption =
+        match (o1, o2) with
+        | ValueSome a, ValueSome b -> ValueSome (f a b)
+        | ValueSome a, _ -> ValueSome a
+        | _, ValueSome b -> ValueSome b
+        | _, _ -> ValueNone
+
+    let unwrap (defaultValue : 'U) (onSome : 'T -> 'U) (o : 'T voption) : 'U =
+        match o with
+        | ValueSome t -> onSome t
+        | ValueNone -> defaultValue
+
 module Skippable =
 
     let ofList list =

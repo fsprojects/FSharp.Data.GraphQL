@@ -104,6 +104,14 @@ module internal Array =
             i <- i + 1
         result
 
+    let vtryPick (chooser : 'T -> 'U voption) (source : 'T array) =
+        let mutable i = 0
+        let mutable result = ValueNone
+        while i < source.Length && result.IsNone do
+            result <- chooser source[i]
+            i <- i + 1
+        result
+
 module internal Map =
 
     let vtryFind key (map : Map<_, _>) =

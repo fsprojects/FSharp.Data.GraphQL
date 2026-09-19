@@ -171,7 +171,10 @@ module Helpers =
 
     let rec internal moduleType = ReflectionHelper.getModuleType <@ moduleType @>
 
-    let private objectOptionCast (value: obj) =
+    /// <summary>
+    /// Casts a <see cref="System.Object"/> to a <see cref="voption{System.Object}"/>.
+    /// </summary>
+    let objectOptionCast (value: obj) =
         if isNull value then ValueNone
         else
             let t = value.GetType()
@@ -184,11 +187,6 @@ module Helpers =
                     let p = t.GetProperty("Value")
                     ValueSome (p.GetValue(value, [||]))
             else ValueNone
-
-    /// <summary>
-    /// Casts a <see cref="System.Object"/> to a <see cref="option{System.Object}"/>.
-    /// </summary>
-    let optionCast (value: obj) = objectOptionCast value |> ValueOption.toOption
 
     /// <summary>
     /// Matches a <see cref="System.Object"/> containing a boxed <see cref="Option{T}"/> or <see cref="ValueOption{T}"/>.
@@ -205,6 +203,15 @@ module Helpers =
         | null -> None
         | ObjectOption v
         | v -> Some v
+
+    /// <summary>
+    /// Lifts a <see cref="System.Object"/> to an <see cref="voption{System.Object}"/>, unless it is already an <see cref="voption{System.Object}"/>.
+    /// </summary>
+    let toValueOption x =
+        match x with
+        | null -> ValueNone
+        | ObjectOption v
+        | v -> ValueSome v
 
     /// <summary>
     /// Unwraps a <see cref="System.Object"/> from an <see cref="option{System.Object}"/> or <see cref="voption{System.Object}"/>,
