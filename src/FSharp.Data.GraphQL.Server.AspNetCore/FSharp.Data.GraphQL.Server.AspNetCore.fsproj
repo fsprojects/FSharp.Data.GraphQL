@@ -20,6 +20,7 @@
     <Compile Include="RequestExecutionContext.fs" />
     <Compile Include="GraphQLOptions.fs" />
     <Compile Include="GraphQLSubscriptionsManagement.fs" />
+    <Compile Include="IncrementalDelivery.fs" />
     <Compile Include="GraphQLWebsocketMiddleware.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="HttpContext.fs" />

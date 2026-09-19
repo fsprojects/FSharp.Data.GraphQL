@@ -98,6 +98,8 @@ How the sequence is delivered depends on the query:
 - With `@defer` on a `Nullable (ListOf ...)` field the complete list is delivered in one deferred payload.
 - With `@stream` every item is delivered as soon as the sequence produces it and its fields are resolved. The enumeration is cancelled when the client unsubscribes.
 
+Over `graphql-transport-ws`, a `@defer` or `@stream` field is delivered using the `pending`/`incremental`/`completed`/`hasNext` format used by graphql-js 17 and Apollo Client's `GraphQL17Alpha9Handler`. Each field is announced once, in a `pending` entry, and identified afterwards by a short id rather than its path. A deferred field is announced in the same payload as its own value, while a streamed field is announced as soon as the payload exposing its containing data is sent. A labeled `@defer(label: "...")` surfaces that label as `pending.label` for the announced field. Streamed items always arrive in list order, and a batch of items is delivered as the `items` of one `incremental` entry addressed by that id. A payload that carries only GraphQL errors now omits the top-level `data` property instead of sending `data: null`, matching the existing request-error contract used elsewhere in the transport.
+
 Streamed items can be grouped into batches. The `preferredBatchSize` argument of `@stream`, available with `SchemaConfig.DefaultWithBufferedStream`, has priority. Otherwise the `batching` parameter of the field applies. It is either a fixed size or a function that reads the size from the source, such as the page size of a paged SDK sequence. The function is evaluated lazily: only for a `@stream` query that does not itself specify `preferredBatchSize`, so it never runs for an ordinary or `@defer` query.
 
 ```fsharp
