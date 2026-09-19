@@ -42,6 +42,7 @@ type IncrementalResult = {
 /// Reports that the deferred or streamed field identified by the id from its <see cref="PendingResult"/> has
 /// delivered everything it is going to.
 /// </summary>
+[<Struct>]
 type CompletedResult = { Id : string; Errors : GQLProblemDetails list Skippable }
 
 /// <summary>
@@ -99,10 +100,8 @@ type SubscriptionExecutionResult = {
         HasNext = Include true
     }
 
-    /// <summary>
     /// Creates a subsequent payload of an incremental delivery, carrying the fields it newly announces, the
     /// deltas it delivers for already-announced fields, and the fields it completes.
-    /// </summary>
     static member CreateSubsequent
         (pending : PendingResult list, incremental : IncrementalResult list, completed : CompletedResult list, hasNext : bool)
         = {

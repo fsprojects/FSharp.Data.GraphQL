@@ -19,16 +19,18 @@ module private IncrementalDeliveryPaths =
 
     /// Matches a path ending in the list of indices of a batch of streamed items, as Execution.collectItems
     /// produces for more than one item resolved into the same buffered event, such as ["items"; [2; 1]].
+    [<return: Struct>]
     let (|BatchPath|_|) (path : obj list) =
         match List.rev path with
-        | (:? (obj list) as indices) :: fieldPathRev -> Some (List.rev fieldPathRev, indices)
-        | _ -> None
+        | (:? (obj list) as indices) :: fieldPathRev -> ValueSome (List.rev fieldPathRev, indices)
+        | _ -> ValueNone
 
     /// Matches a path ending in a single streamed item's own index, such as ["items"; 0].
+    [<return: Struct>]
     let (|ItemPath|_|) (path : obj list) =
         match List.rev path with
-        | (:? int as index) :: fieldPathRev -> Some (List.rev fieldPathRev, index)
-        | _ -> None
+        | (:? int as index) :: fieldPathRev -> ValueSome (List.rev fieldPathRev, index)
+        | _ -> ValueNone
 
 /// Mutable per-field bookkeeping of IncrementalDelivery, keyed by a field's own path (with any item index or
 /// batch removed).
@@ -136,7 +138,7 @@ type IncrementalDelivery () =
             entry.Path = fieldPath
             || flushedItems
                |> List.exists (fun (index, item) ->
-                   let itemPath = fieldPath @ [ box index ]
+                   let itemPath = [ yield! fieldPath; yield box index ]
                    pathStartsWith itemPath entry.Path
                    && entry.Path
                       |> List.skip (List.length itemPath)
@@ -158,7 +160,7 @@ type IncrementalDelivery () =
                 errors.AddRange itemErrors
                 state.Buffer.Remove state.NextIndex |> ignore
                 state.NextIndex <- state.NextIndex + 1
-            Some (
+            ValueSome (
                 {
                     Id = state.Id
                     Data = Skip
@@ -172,7 +174,7 @@ type IncrementalDelivery () =
                 List.ofSeq flushedItems
             )
         else
-            None
+            ValueNone
 
     let pendingFor (fieldPath : obj list) (state : FieldState) (isNew : bool) =
         if isNew then
@@ -193,10 +195,10 @@ type IncrementalDelivery () =
         state.Buffer[index] <- (unwrapItem data, errors)
 
         match flush state with
-        | Some (incremental, flushedItems) ->
+        | ValueSome (incremental, flushedItems) ->
             let pending = takePendingForItems fieldPath flushedItems
             ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
-        | None ->
+        | ValueNone ->
             match takeFieldPending fieldPath with
             | [] -> ValueNone
             | pending -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [], [], true))
@@ -217,10 +219,10 @@ type IncrementalDelivery () =
             (indices, List.ofArray items)
             ||> List.iter2 (fun index item -> state.Buffer[index :?> int] <- (item, []))
             match flush state with
-            | Some (incremental, flushedItems) ->
+            | ValueSome (incremental, flushedItems) ->
                 let pending = takePendingForItems fieldPath flushedItems
                 ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
-            | None ->
+            | ValueNone ->
                 match takeFieldPending fieldPath with
                 | [] -> ValueNone
                 | pending -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [], [], true))
@@ -234,7 +236,7 @@ type IncrementalDelivery () =
             let state = announceStream fieldPath
             (indices, List.ofArray items)
             ||> List.iter2 (fun index item ->
-                let itemPath = fieldPath @ [ index ]
+                let itemPath = [ yield! fieldPath; yield index ]
                 let itemErrors =
                     errors
                     |> List.filter (fun e ->
@@ -244,10 +246,10 @@ type IncrementalDelivery () =
                         |> ValueOption.defaultValue false)
                 state.Buffer[index :?> int] <- (item, itemErrors))
             match flush state with
-            | Some (incremental, flushedItems) ->
+            | ValueSome (incremental, flushedItems) ->
                 let pending = takePendingForItems fieldPath flushedItems
                 ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
-            | None ->
+            | ValueNone ->
                 match takeFieldPending fieldPath with
                 | [] -> ValueNone
                 | pending -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [], [], true))
@@ -289,5 +291,5 @@ type IncrementalDelivery () =
             fields.Values
             |> Seq.filter (fun state -> not state.Closed)
             |> Seq.map (fun state -> { Id = state.Id; Errors = Skip })
-            |> List.ofSeq
+            |> Seq.toList
         SubscriptionExecutionResult.CreateSubsequent ([], [], stillOpen, false)
