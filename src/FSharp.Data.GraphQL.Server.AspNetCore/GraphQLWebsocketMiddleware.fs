@@ -383,11 +383,9 @@ type GraphQLWebSocketMiddleware<'Root>
         let sendDeferredResponseOutput (delivery : IncrementalDelivery) id event : Task = task {
             match event with
             | ValueSome (DeferredErrors (_, errors, _) as event) ->
-                logger.LogWarning (
-                    "Deferred response errors: {deferredErrors}",
-                    // TODO: Use StringBuilder
-                    (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
-                )
+                // TODO: Use StringBuilder
+                let errorsString = (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
+                logger.LogWarning ("Deferred response errors: {deferredErrors}", errorsString)
                 match delivery.Apply event with
                 | ValueSome payload -> do! sendOutput id payload
                 | ValueNone -> ()
@@ -395,7 +393,8 @@ type GraphQLWebSocketMiddleware<'Root>
                 match delivery.Apply event with
                 | ValueSome payload -> do! sendOutput id payload
                 | ValueNone -> ()
-            | ValueNone -> do! delivery.Finish () |> sendOutput id
+            | ValueNone ->
+                do! delivery.Finish () |> sendOutput id
         }
 
         let addDeferredClientSubscription id data errors observableOutput : Task =

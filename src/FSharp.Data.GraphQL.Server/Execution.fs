@@ -14,9 +14,7 @@ open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Errors
-open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Helpers
-open FSharp.Data.GraphQL.Shared
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL
@@ -46,7 +44,8 @@ let private getArgumentValues
     (args : Argument list)
     (inputContext : InputExecutionContextProvider)
     (variables : ImmutableDictionary<string, obj>)
-    : Result<Map<string, obj>, IGQLError list> =
+    : Result<Map<string, obj>, IGQLError list>
+    =
     argDefs
     |> Array.fold
         (fun acc argdef ->
@@ -174,25 +173,23 @@ let private resolved name v : AsyncVal<ResolverResult<KeyValuePair<string, obj>>
     |> ResolverResult.data
     |> AsyncVal.wrap
 
-let private deferLabel (field : Field) =
-    field.Directives
-    |> List.vtryFind (fun directive -> directive.Name = "defer")
-    |> ValueOption.bind (fun directive ->
-        directive.Arguments
-        |> List.vtryFind (fun argument -> argument.Name = "label")
-        |> ValueOption.bind (fun argument ->
-            match argument.Value with
-            | StringValue label -> ValueSome label
-            | NullValue -> ValueNone
-            | _ ->
-                Debug.Fail "Must be prevented by validation"
-                ValueNone))
+let private deferLabel (field : Field) = voption {
+    let! directive =  field.Directives |> List.vtryFind (fun directive -> directive.Name = "defer")
+    let! argument = directive.Arguments |> List.vtryFind (fun argument -> argument.Name = "label")
+    match argument.Value with
+    | StringValue label -> return label
+    | NullValue -> return! ValueNone
+    | _ ->
+        Debug.Fail "Must be prevented by validation"
+        return! ValueNone
+}
 
 /// The result at path itself, not including any of its own nested deferred/streamed fields.
 let private ownDeferredResult
     path
     (res : ResolverResult<obj>)
-    : IObservable<GQLDeferredResponseContent> * IObservable<GQLDeferredResponseContent> voption =
+    : IObservable<GQLDeferredResponseContent> * IObservable<GQLDeferredResponseContent> voption
+    =
     let formattedPath = normalizeErrorPath path
     match res with
     | Ok (data, nested, errs) ->
@@ -210,7 +207,8 @@ let private prependNestedPending
     (ownResult : IObservable<GQLDeferredResponseContent>)
     (nested : IObservable<GQLDeferredResponseContent> voption)
     (completed : IObservable<GQLDeferredResponseContent> voption)
-    : IObservable<GQLDeferredResponseContent> =
+    : IObservable<GQLDeferredResponseContent>
+    =
     let appendCompletion events =
         match completed with
         | ValueSome completed -> events |> Observable.concat completed
@@ -274,26 +272,28 @@ let private deferResultsCompleted path (res : ResolverResult<obj>) : IObservable
 let collectFields
     (strategy : ExecutionStrategy)
     (rs : AsyncVal<ResolverResult<KeyValuePair<string, obj>>>[])
-    : AsyncVal<ResolverResult<KeyValuePair<string, obj>[]>> = asyncVal {
-    let! collected =
-        match strategy with
-        | Parallel -> AsyncVal.collectParallel rs
-        | Sequential -> AsyncVal.collectSequential rs
+    : AsyncVal<ResolverResult<KeyValuePair<string, obj>[]>>
+    =
+    asyncVal {
+        let! collected =
+            match strategy with
+            | Parallel -> AsyncVal.collectParallel rs
+            | Sequential -> AsyncVal.collectSequential rs
 
-    let data = Array.zeroCreate (collected.Length)
+        let data = Array.zeroCreate (collected.Length)
 
-    let merge r acc =
-        match (r, acc) with
-        | Ok (field, d, e), Ok (i, deferred, errs) ->
-            Array.set data i field
-            Ok (i - 1, ValueOption.mergeWith Observable.merge deferred d, e @ errs)
-        | Error e, Ok (_, _, errs) -> Error (e @ errs)
-        | Ok (_, _, e), Error errs -> Error (e @ errs)
-        | Error e, Error errs -> Error (e @ errs)
-    return
-        Array.foldBack merge collected (Ok (data.Length - 1, ValueNone, []))
-        |> ResolverResult.mapValue (fun _ -> data)
-}
+        let merge r acc =
+            match (r, acc) with
+            | Ok (field, d, e), Ok (i, deferred, errs) ->
+                Array.set data i field
+                Ok (i - 1, ValueOption.mergeWith Observable.merge deferred d, e @ errs)
+            | Error e, Ok (_, _, errs) -> Error (e @ errs)
+            | Ok (_, _, e), Error errs -> Error (e @ errs)
+            | Error e, Error errs -> Error (e @ errs)
+        return
+            Array.foldBack merge collected (Ok (data.Length - 1, ValueNone, []))
+            |> ResolverResult.mapValue (fun _ -> data)
+    }
 
 let rec private direct
     (returnDef : OutputDef)
@@ -302,7 +302,9 @@ let rec private direct
     (path : FieldPath)
     (parent : obj)
     (value : obj)
-    : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> =
+    : AsyncVal<ResolverResult<KeyValuePair<string, obj>>>
+    =
+
     let name = ctx.ExecutionInfo.Identifier
     match returnDef with
 
@@ -584,10 +586,8 @@ and private live (inputContext : InputExecutionContextProvider) (ctx : ResolveFi
     // TODO: Add tests for `Observable.merge deferred updates` correct order
     |> AsyncVal.map (
         Result.map (fun (data, deferred, errs) ->
-            (data,
-             ValueSome
-             <| ValueOption.foldBack Observable.merge deferred updates,
-             errs))
+            (data, ValueSome (ValueOption.foldBack Observable.merge deferred updates), errs)
+        )
     )
 
 /// Actually execute the resolvers.
@@ -597,7 +597,8 @@ and private executeResolvers
     (path : FieldPath)
     (parent : obj)
     (value : AsyncVal<obj voption>)
-    : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> =
+    : AsyncVal<ResolverResult<KeyValuePair<string, obj>>>
+    =
     let info = ctx.ExecutionInfo
     let name = info.Identifier
     let returnDef = info.ReturnDef
@@ -714,17 +715,9 @@ let internal compileField (fieldDef : FieldDef) : ExecuteField =
     | _ ->
         fun _ _ ->
             raise (
-                InvalidOperationException (
-                    sprintf
-                        "Field '%s' has been accessed, but no resolve function for that field definition was provided. Make sure, you've specified resolve function or declared field with Define.AutoField method"
-                        fieldDef.Name
-                )
+                InvalidOperationException
+                <| $"Field '{fieldDef.Name}' has been accessed, but no resolve function for that field definition was provided. Make sure, you've specified resolve function or declared field with Define.AutoField method"
             )
-
-let private (|String|Other|) (o : obj) =
-    match o with
-    | :? string as s -> String s
-    | _ -> Other
 
 let private executeQueryOrMutation
     (resultSet : (string * ExecutionInfo)[])
