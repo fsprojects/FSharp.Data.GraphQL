@@ -30,6 +30,15 @@ let private pendingPaths (result : SubscriptionExecutionResult voption) =
         |> List.map _.Path
     | ValueNone -> []
 
+let private pendingLabels (result : SubscriptionExecutionResult voption) =
+    match result with
+    | ValueSome r ->
+        r.Pending
+        |> Skippable.toValueOption
+        |> ValueOption.defaultValue []
+        |> List.map _.Label
+    | ValueNone -> []
+
 let private incrementalOf (result : SubscriptionExecutionResult voption) =
     match result with
     | ValueSome r ->
@@ -123,7 +132,7 @@ let ``A stream pending is emitted with the payload that exposes its containing d
     let delivery = IncrementalDelivery ()
     let parentPath = [ box "container" ]
     let streamPath = parentPath @ itemsPath
-    delivery.Apply (DeferredPending streamPath)
+    delivery.Apply (DeferredPending (streamPath, ValueNone, true))
     |> equals ValueNone
     let payload =
         delivery.Apply (DeferredResult (box (NameValueLookup.ofList [ "items", upcast [||] ]), parentPath))
@@ -141,7 +150,7 @@ let ``A nested stream pending waits for the deferred payload that exposes it`` (
     let parentPath = [ box "parent" ]
     let childPath = parentPath @ [ box "child" ]
     let streamPath = childPath @ [ box "items" ]
-    delivery.Apply (DeferredPending streamPath)
+    delivery.Apply (DeferredPending (streamPath, ValueNone, true))
     |> equals ValueNone
     let parentPayload =
         delivery.Apply (DeferredResult (box (NameValueLookup.ofList [ "child", null ]), parentPath))
@@ -156,29 +165,30 @@ let ``A nested stream pending is visible through F# list payloads`` () =
     let delivery = IncrementalDelivery ()
     let parentPath = [ box "parent" ]
     let streamPath = parentPath @ [ box "items"; box 0; box "children" ]
-    delivery.Apply (DeferredPending streamPath)
+    delivery.Apply (DeferredPending (streamPath, ValueNone, true))
     |> equals ValueNone
     let payload =
         delivery.Apply (
-            DeferredResult (
-                box (
-                    NameValueLookup.ofList [
-                        "items",
-                        upcast [
-                            box (NameValueLookup.ofList [ "children", upcast [] ])
-                        ]
-                    ]
-                ),
-                parentPath
-            )
+            DeferredResult (box (NameValueLookup.ofList [ "items", upcast [ box (NameValueLookup.ofList [ "children", upcast [] ]) ] ]), parentPath)
         )
-    pendingPaths payload
-    |> equals [ parentPath; streamPath ]
+    pendingPaths payload |> equals [ parentPath; streamPath ]
+
+[<Fact>]
+let ``A labeled defer pending is emitted with the deferred field payload`` () =
+    let delivery = IncrementalDelivery ()
+    let path = [ box "testData"; box "a" ]
+    delivery.Apply (DeferredPending (path, ValueSome "hero", false))
+    |> equals ValueNone
+    let payload = delivery.Apply (DeferredResult (box "value", path))
+    pendingPaths payload |> equals [ path ]
+    pendingLabels payload |> equals [ Include "hero" ]
+    let entry = incrementalOf payload |> single
+    entry.Data |> equals (Include (box "value"))
 
 [<Fact>]
 let ``A stream failing before any item completes with errors instead of replacing the list with null`` () =
     let delivery = IncrementalDelivery ()
-    delivery.Apply (DeferredPending [ box "failing" ])
+    delivery.Apply (DeferredPending ([ box "failing" ], ValueNone, true))
     |> equals ValueNone
     let error = fieldError "Boom acquiring the enumerator" [ box "failing" ]
     let pFail = delivery.Apply (DeferredErrors (null, [ error ], [ box "failing" ]))
@@ -191,7 +201,7 @@ let ``A stream failing before any item completes with errors instead of replacin
 [<Fact>]
 let ``An empty stream still produces a completed entry after being pre-announced`` () =
     let delivery = IncrementalDelivery ()
-    delivery.Apply (DeferredPending itemsPath)
+    delivery.Apply (DeferredPending (itemsPath, ValueNone, true))
     |> equals ValueNone
     let payload = delivery.Apply (DeferredCompleted itemsPath)
     pendingIds payload |> empty

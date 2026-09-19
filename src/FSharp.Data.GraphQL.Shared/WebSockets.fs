@@ -45,6 +45,8 @@ type PendingResult = {
     Id : string
     /// Gets the response path of the announced field.
     Path : FieldPath
+    /// Gets the optional label of the announced deferred field.
+    Label : string Skippable
 }
 
 /// <summary>
@@ -95,7 +97,7 @@ type SubscriptionExecutionResult = {
     /// This is an object for a complete or initial payload. It is always <see cref="Skip" /> for a subsequent
     /// payload, whose deltas are carried by <see cref="Incremental" /> and <see cref="Completed" /> instead.
     /// </remarks>
-    Data : obj Skippable
+    Data : objnull Skippable
     /// <summary>Gets the errors raised while producing the payload.</summary>
     /// <remarks>This is always <see cref="Skip" /> for a subsequent payload.</remarks>
     Errors : GQLProblemDetails list Skippable

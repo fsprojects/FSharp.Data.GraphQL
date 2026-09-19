@@ -130,7 +130,7 @@ let private hasProperty (name : string) (element : JsonElement) =
 
 [<Fact>]
 let ``Serializes initial incremental payload with pending and hasNext, but no top-level errors`` () =
-    let pending = [ { Id = "0"; Path = [ box "numbers" ] } ]
+    let pending = [ { Id = "0"; Path = [ box "numbers" ]; Label = Skip } ]
     let json =
         serializePayload (SubscriptionExecutionResult.CreateInitial (NameValueLookup.ofList [ "numbers", upcast [] ], [], pending))
     use document = JsonDocument.Parse json
@@ -175,7 +175,7 @@ let ``Serializes a subsequent payload with an incremental entry's items, and no 
 
 [<Fact>]
 let ``Serializes a subsequent payload's newly announced pending alongside its incremental entry`` () =
-    let pending = [ { Id = "1"; Path = [ box "testData"; box "a" ] } ]
+    let pending = [ { Id = "1"; Path = [ box "testData"; box "a" ]; Label = Skip } ]
     let incremental = [ { Id = "1"; Data = Include (box "value"); Items = Skip; Errors = Skip } ]
     let json =
         serializePayload (SubscriptionExecutionResult.CreateSubsequent (pending, incremental, [], true))
@@ -185,6 +185,17 @@ let ``Serializes a subsequent payload's newly announced pending alongside its in
     let incrementalEntry = payload.GetProperty("incremental")[0]
     Assert.Equal ("1", pendingEntry.GetProperty("id").GetString())
     Assert.Equal ("value", incrementalEntry.GetProperty("data").GetString())
+
+[<Fact>]
+let ``Serializes a pending label when present`` () =
+    let pending = [ { Id = "1"; Path = [ box "testData"; box "a" ]; Label = Include "hero" } ]
+    let incremental = [ { Id = "1"; Data = Include (box "value"); Items = Skip; Errors = Skip } ]
+    let json =
+        serializePayload (SubscriptionExecutionResult.CreateSubsequent (pending, incremental, [], true))
+    use document = JsonDocument.Parse json
+    let payload = document.RootElement.GetProperty "payload"
+    let pendingEntry = payload.GetProperty("pending")[0]
+    Assert.Equal ("hero", pendingEntry.GetProperty("label").GetString())
 
 [<Fact>]
 let ``Serializes a subsequent payload's completed entry with its errors`` () =

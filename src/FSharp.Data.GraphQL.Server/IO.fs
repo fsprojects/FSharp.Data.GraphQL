@@ -214,8 +214,8 @@ and GQLResponseContent =
 /// a <c>@live</c> field, which has no end of its own.
 /// </remarks>
 and GQLDeferredResponseContent =
-    /// Announces a streamed field before any of its items are delivered.
-    | DeferredPending of Path : FieldPath
+    /// Announces a deferred or streamed field before later payloads need to refer to it.
+    | DeferredPending of Path : FieldPath * Label : string voption * IsStream : bool
     /// Delivers the data of a deferred field or one or more streamed items at the given path.
     | DeferredResult of Data : obj * Path : FieldPath
     /// Delivers partial data together with execution errors at the given path.
