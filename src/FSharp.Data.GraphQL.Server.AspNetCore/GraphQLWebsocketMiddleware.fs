@@ -9,6 +9,7 @@ open System.Net.WebSockets
 open System.Text.Json
 open System.Text.Json.Serialization
 open System.Threading
+open System.Threading.Channels
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
@@ -127,6 +128,12 @@ module internal ObservableErrorHandling =
 
 open IncrementalPayloadSplitting
 open ObservableErrorHandling
+
+type private DeferredSubscriptionWorkerMessage =
+    | StartInitialPayload
+    | DeferredEvent of GQLDeferredResponseContent voption
+    | DeferredFaulted of exn
+    | DeferredSourceCompleted
 
 type GraphQLWebSocketMiddleware<'Root>
     (
@@ -384,81 +391,77 @@ type GraphQLWebSocketMiddleware<'Root>
             | ValueNone -> do! delivery.Finish () |> sendOutput id
         }
 
-        let addDeferredClientSubscription id data errors observableOutput =
+        let addDeferredClientSubscription id data errors observableOutput : Task =
             if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
                 invalidOp $"Subscriber for Id = '{id}' already exists"
 
             let delivery = IncrementalDelivery ()
-            let gate = obj ()
-            let queuedOutputs = Queue<GQLDeferredResponseContent voption>()
-            let mutable initialPayloadSent = false
-            let mutable pendingTerminal : Result<unit, exn> voption = ValueNone
-            let mutable sendChain : Task = Task.CompletedTask
+            let messageChannel =
+                Channel.CreateUnbounded<DeferredSubscriptionWorkerMessage>(
+                    UnboundedChannelOptions (SingleReader = true, SingleWriter = false, AllowSynchronousContinuations = false)
+                )
+
+            let channelWriteGate = obj ()
             let sendTerminalError (ex : exn) = sendMsg (Error (id, problemDetailsOfObservableError ex))
 
-            let enqueueSend (work : unit -> Task) =
-                lock gate (fun () ->
-                    let previous = sendChain
-                    let next : Task = task {
-                        try
-                            do! previous
-                        with _ ->
-                            ()
+            let enqueueWorkerMessage message =
+                lock channelWriteGate (fun () -> messageChannel.Writer.TryWrite message |> ignore)
 
+            let runWorker () : Task = task {
+                let bufferedMessages = ResizeArray<DeferredSubscriptionWorkerMessage>()
+                let mutable initialPayloadSent = false
+                let mutable keepProcessing = true
+
+                let processStartedMessage message : Task<bool> = task {
+                    match message with
+                    | StartInitialPayload -> return true
+                    | DeferredEvent output ->
+                        do! sendDeferredResponseOutput delivery id output
+                        return true
+                    | DeferredFaulted ex ->
+                        logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
                         try
-                            do! work ()
-                        with ex ->
-                            logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
+                            do! sendTerminalError ex
+                        finally
                             subscriptions
                             |> GraphQLSubscriptionsManagement.removeSubscription id
-                    }
+                        return false
+                    | DeferredSourceCompleted ->
+                        try
+                            do! sendMsg (Complete id)
+                        finally
+                            subscriptions
+                            |> GraphQLSubscriptionsManagement.removeSubscription id
+                        return false
+                }
 
-                    sendChain <- next
-                    next)
+                try
+                    while keepProcessing do
+                        let! message = messageChannel.Reader.ReadAsync ()
 
-            let flushQueuedOutputs () : Task = task {
-                let mutable continueDraining = true
-                let mutable terminal : Result<unit, exn> voption = ValueNone
+                        match initialPayloadSent, message with
+                        | false, DeferredEvent (ValueSome (DeferredPending _ as event)) -> delivery.Apply event |> ignore
+                        | false, StartInitialPayload ->
+                            do!
+                                SubscriptionExecutionResult.CreateInitial (data, errors, delivery.TakePendingVisibleIn data)
+                                |> sendOutput id
 
-                while continueDraining do
-                    match
-                        lock gate (fun () ->
-                            if queuedOutputs.Count > 0 then
-                                Choice1Of2 [
-                                    while queuedOutputs.Count > 0 do
-                                        queuedOutputs.Dequeue ()
-                                ]
-                            else
-                                match pendingTerminal with
-                                | ValueSome pending ->
-                                    pendingTerminal <- ValueNone
-                                    Choice2Of2 (ValueSome pending)
-                                | ValueNone ->
-                                    initialPayloadSent <- true
-                                    Choice2Of2 ValueNone)
-                    with
-                    | Choice1Of2 outputsToFlush ->
-                        for output in outputsToFlush do
-                            do! sendDeferredResponseOutput delivery id output
-                    | Choice2Of2 pending ->
-                        continueDraining <- false
-                        terminal <- pending
+                            initialPayloadSent <- true
 
-                match terminal with
-                | ValueSome (Result.Ok ()) ->
-                    try
-                        do! sendMsg (Complete id)
-                    finally
-                        subscriptions
-                        |> GraphQLSubscriptionsManagement.removeSubscription id
-                | ValueSome (Result.Error ex) ->
+                            for bufferedMessage in bufferedMessages do
+                                if keepProcessing then
+                                    let! shouldContinue = processStartedMessage bufferedMessage
+                                    keepProcessing <- shouldContinue
+
+                            bufferedMessages.Clear ()
+                        | false, _ -> bufferedMessages.Add message
+                        | true, _ ->
+                            let! shouldContinue = processStartedMessage message
+                            keepProcessing <- shouldContinue
+                with ex ->
                     logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
-                    try
-                        do! sendTerminalError ex
-                    finally
-                        subscriptions
-                        |> GraphQLSubscriptionsManagement.removeSubscription id
-                | ValueNone -> ()
+                    subscriptions
+                    |> GraphQLSubscriptionsManagement.removeSubscription id
             }
 
             let observer =
@@ -466,67 +469,13 @@ type GraphQLWebSocketMiddleware<'Root>
                     onNext =
                         (fun output ->
                             try
-                                match
-                                    lock gate (fun () ->
-                                        if initialPayloadSent then
-                                            ValueSome output
-                                        else
-                                            match output with
-                                            | ValueSome (DeferredPending _ as event) ->
-                                                delivery.Apply event |> ignore
-                                                ValueNone
-                                            | _ ->
-                                                queuedOutputs.Enqueue output
-                                                ValueNone)
-                                with
-                                | ValueSome output ->
-                                    enqueueSend (fun () -> sendDeferredResponseOutput delivery id output)
-                                    |> ignore
-                                | ValueNone -> ()
+                                enqueueWorkerMessage (DeferredEvent output)
                             with _ ->
                                 subscriptions
                                 |> GraphQLSubscriptionsManagement.removeSubscription id
                                 reraise ()),
-                    onError =
-                        (fun ex ->
-                            logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
-
-                            let shouldSendImmediately =
-                                lock gate (fun () ->
-                                    if initialPayloadSent then
-                                        true
-                                    else
-                                        pendingTerminal <- ValueSome (Result.Error ex)
-                                        false)
-
-                            if shouldSendImmediately then
-                                enqueueSend (fun () -> task {
-                                    try
-                                        do! sendTerminalError ex
-                                    finally
-                                        subscriptions
-                                        |> GraphQLSubscriptionsManagement.removeSubscription id
-                                })
-                                |> ignore),
-                    onCompleted =
-                        (fun () ->
-                            let shouldSendImmediately =
-                                lock gate (fun () ->
-                                    if initialPayloadSent then
-                                        true
-                                    else
-                                        pendingTerminal <- ValueSome (Result.Ok ())
-                                        false)
-
-                            if shouldSendImmediately then
-                                enqueueSend (fun () -> task {
-                                    try
-                                        do! sendMsg (Complete id)
-                                    finally
-                                        subscriptions
-                                        |> GraphQLSubscriptionsManagement.removeSubscription id
-                                })
-                                |> ignore)
+                    onError = (fun ex -> enqueueWorkerMessage (DeferredFaulted ex)),
+                    onCompleted = (fun () -> enqueueWorkerMessage DeferredSourceCompleted)
                 )
 
             let placeholder = new System.Reactive.Disposables.SingleAssignmentDisposable ()
@@ -535,24 +484,15 @@ type GraphQLWebSocketMiddleware<'Root>
             |> GraphQLSubscriptionsManagement.addSubscription (id, placeholder, (fun _ -> ()))
 
             try
+                runWorker () |> ignore
                 placeholder.Disposable <- (observableOutput |> Observable.withCompletionMarker).Subscribe(observer)
+                enqueueWorkerMessage StartInitialPayload
             with _ ->
                 subscriptions
                 |> GraphQLSubscriptionsManagement.removeSubscription id
                 reraise ()
 
-            enqueueSend (fun () -> task {
-                try
-                    do!
-                        SubscriptionExecutionResult.CreateInitial (data, errors, delivery.TakePendingVisibleIn data)
-                        |> sendOutput id
-                    do! flushQueuedOutputs ()
-                with ex ->
-                    lock gate (fun () ->
-                        initialPayloadSent <- true
-                        queuedOutputs.Clear ())
-                    return raise ex
-            })
+            Task.CompletedTask
 
         let applyPlanExecutionResult (id : SubscriptionId) (socket) (executionResult : GQLExecutionResult) : Task = task {
             match executionResult with
