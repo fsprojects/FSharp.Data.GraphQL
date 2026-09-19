@@ -80,9 +80,21 @@ and GQLResponseContent =
 /// a <c>@live</c> field, which has no end of its own.
 /// </remarks>
 and GQLDeferredResponseContent =
+    /// <summary>
+    /// Announces a streamed field before any of its items are delivered.
+    /// </summary>
     | DeferredPending of Path : FieldPath
+    /// <summary>
+    /// Delivers the data of a deferred field or one or more streamed items at the given path.
+    /// </summary>
     | DeferredResult of Data : obj * Path : FieldPath
+    /// <summary>
+    /// Delivers partial data together with execution errors at the given path.
+    /// </summary>
     | DeferredErrors of Data : obj * Errors : GQLProblemDetails list * Path : FieldPath
+    /// <summary>
+    /// Marks a deferred or streamed field as fully delivered.
+    /// </summary>
     | DeferredCompleted of Path : FieldPath
 
 and GQLSubscriptionResponseContent =
