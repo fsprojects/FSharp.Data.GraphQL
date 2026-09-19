@@ -410,28 +410,38 @@ type GraphQLWebSocketMiddleware<'Root>
                             |> GraphQLSubscriptionsManagement.removeSubscription id
                     }
 
-                    sendChain <- next)
+                    sendChain <- next
+                    next)
 
             let flushQueuedOutputs () : Task = task {
-                let outputsToFlush =
-                    lock gate (fun () ->
-                        initialPayloadSent <- true
-                        [
-                            while queuedOutputs.Count > 0 do
-                                queuedOutputs.Dequeue ()
-                        ])
+                let mutable continueDraining = true
+                let mutable terminal : Result<unit, exn> voption = ValueNone
 
-                for output in outputsToFlush do
-                    do! sendDeferredResponseOutput delivery id output
+                while continueDraining do
+                    match
+                        lock gate (fun () ->
+                            if queuedOutputs.Count > 0 then
+                                Choice1Of2 [
+                                    while queuedOutputs.Count > 0 do
+                                        queuedOutputs.Dequeue ()
+                                ]
+                            else
+                                match pendingTerminal with
+                                | ValueSome pending ->
+                                    pendingTerminal <- ValueNone
+                                    Choice2Of2 (ValueSome pending)
+                                | ValueNone ->
+                                    initialPayloadSent <- true
+                                    Choice2Of2 ValueNone)
+                    with
+                    | Choice1Of2 outputsToFlush ->
+                        for output in outputsToFlush do
+                            do! sendDeferredResponseOutput delivery id output
+                    | Choice2Of2 pending ->
+                        continueDraining <- false
+                        terminal <- pending
 
-                match
-                    lock gate (fun () ->
-                        match pendingTerminal with
-                        | ValueSome terminal ->
-                            pendingTerminal <- ValueNone
-                            ValueSome terminal
-                        | ValueNone -> ValueNone)
-                with
+                match terminal with
                 | ValueSome (Result.Ok ()) ->
                     try
                         do! sendMsg (Complete id)
@@ -466,7 +476,9 @@ type GraphQLWebSocketMiddleware<'Root>
                                                 queuedOutputs.Enqueue output
                                                 ValueNone)
                                 with
-                                | ValueSome output -> enqueueSend (fun () -> sendDeferredResponseOutput delivery id output)
+                                | ValueSome output ->
+                                    enqueueSend (fun () -> sendDeferredResponseOutput delivery id output)
+                                    |> ignore
                                 | ValueNone -> ()
                             with _ ->
                                 subscriptions
@@ -491,7 +503,8 @@ type GraphQLWebSocketMiddleware<'Root>
                                     finally
                                         subscriptions
                                         |> GraphQLSubscriptionsManagement.removeSubscription id
-                                })),
+                                })
+                                |> ignore),
                     onCompleted =
                         (fun () ->
                             let shouldSendImmediately =
@@ -509,7 +522,8 @@ type GraphQLWebSocketMiddleware<'Root>
                                     finally
                                         subscriptions
                                         |> GraphQLSubscriptionsManagement.removeSubscription id
-                                }))
+                                })
+                                |> ignore)
                 )
 
             let placeholder = new System.Reactive.Disposables.SingleAssignmentDisposable ()
@@ -524,12 +538,12 @@ type GraphQLWebSocketMiddleware<'Root>
                 |> GraphQLSubscriptionsManagement.removeSubscription id
                 reraise ()
 
-            task {
+            enqueueSend (fun () -> task {
                 do!
                     SubscriptionExecutionResult.CreateInitial (data, errors, delivery.TakePendingVisibleIn data)
                     |> sendOutput id
                 do! flushQueuedOutputs ()
-            }
+            })
 
         let applyPlanExecutionResult (id : SubscriptionId) (socket) (executionResult : GQLExecutionResult) : Task = task {
             match executionResult with

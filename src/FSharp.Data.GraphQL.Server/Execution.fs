@@ -5,6 +5,8 @@ module FSharp.Data.GraphQL.Execution
 open System
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Reactive.Disposables
+open System.Reactive.Subjects
 open System.Text.Json
 open FSharp.Control.Reactive
 open FsToolkit.ErrorHandling
@@ -167,17 +169,67 @@ let private ownDeferredResult path (res : ResolverResult<obj>) : IObservable<GQL
         ownResult, nested
     | Error errs -> Observable.singleton (DeferredErrors (null, errs, formattedPath)), None
 
+/// Replays the initial nested stream announcements before the containing payload that makes them visible, while
+/// keeping every later nested event in its original relative position afterwards.
+let private prependNestedPending
+    (ownResult : IObservable<GQLDeferredResponseContent>)
+    (nested : IObservable<GQLDeferredResponseContent> option)
+    (completed : IObservable<GQLDeferredResponseContent> option)
+    : IObservable<GQLDeferredResponseContent> =
+    let appendCompletion events =
+        match completed with
+        | Some completed -> events |> Observable.concat completed
+        | None -> events
+
+    match nested with
+    | None -> ownResult |> appendCompletion
+    | Some nested ->
+        { new IObservable<GQLDeferredResponseContent> with
+            member _.Subscribe(observer) =
+                let pendingPrefix = ResizeArray<GQLDeferredResponseContent>()
+                let tail = new ReplaySubject<GQLDeferredResponseContent>()
+                let mutable capturePendingPrefix = true
+
+                let nestedSubscription =
+                    nested.Subscribe(
+                        (fun event ->
+                            if capturePendingPrefix then
+                                match event with
+                                | DeferredPending _ -> pendingPrefix.Add event
+                                | _ ->
+                                    capturePendingPrefix <- false
+                                    tail.OnNext event
+                            else
+                                tail.OnNext event),
+                        (fun ex ->
+                            capturePendingPrefix <- false
+                            tail.OnError ex),
+                        (fun () ->
+                            capturePendingPrefix <- false
+                            tail.OnCompleted ())
+                    )
+
+                capturePendingPrefix <- false
+
+                let combined =
+                    Observable.ofSeq pendingPrefix
+                    |> Observable.concat ownResult
+                    |> Observable.concat (tail :> IObservable<GQLDeferredResponseContent>)
+                    |> appendCompletion
+
+                new CompositeDisposable(nestedSubscription, combined.Subscribe observer, tail) :> IDisposable
+        }
+
 let deferResults path (res : ResolverResult<obj>) : IObservable<GQLDeferredResponseContent> =
     let ownResult, nested = ownDeferredResult path res
-    Option.foldBack Observable.concat nested ownResult
+    prependNestedPending ownResult nested None
 
 /// As <see cref="deferResults"/>, followed by a <see cref="DeferredCompleted"/> for path once its own result and
 /// all of its nested deferred/streamed fields have been delivered.
 let private deferResultsCompleted path (res : ResolverResult<obj>) : IObservable<GQLDeferredResponseContent> =
     let ownResult, nested = ownDeferredResult path res
     let completed = Observable.singleton (DeferredCompleted (normalizeErrorPath path))
-    let ownResultCompleted = ownResult |> Observable.concat completed
-    Option.foldBack Observable.concat nested ownResultCompleted
+    prependNestedPending ownResult nested (Some completed)
 
 /// Collect together an array of results using the appropriate execution strategy.
 let collectFields (strategy : ExecutionStrategy) (rs : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> []) : AsyncVal<ResolverResult<KeyValuePair<string, obj> []>> = asyncVal {

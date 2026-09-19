@@ -894,6 +894,49 @@ let ``Nested Inner Object List Stream`` () =
         |> ignore
 
 [<Fact>]
+let ``Nested stream pending is emitted before the deferred payload that exposes it`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+           "testData", upcast NameValueLookup.ofList [
+                "b", upcast "Banana"
+                "innerList", upcast null
+            ]
+        ]
+    let expectedDeferred =
+        DeferredResult ([|
+                NameValueLookup.ofList [
+                    "a", upcast "Inner A"
+                    "innerList", upcast []
+                ]
+            |],
+            [ "testData"; "innerList" ]
+        )
+    let query = parse """{
+            testData {
+                b
+                innerList @defer {
+                    a
+                    innerList @stream {
+                        a
+                    }
+                }
+            }
+        }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+        use sub = Observer.create deferred
+        sub.WaitCompleted(3)
+        let expectedPending = DeferredPending [ box "testData"; box "innerList"; box 0; box "innerList" ]
+        match sub.Received |> Seq.toList with
+        | actualPending :: actualDeferred :: _ ->
+            Assert.Equal(expectedPending, actualPending)
+            Assert.Equal(expectedDeferred, actualDeferred)
+        | received ->
+            fail $"Expected the nested stream announcement before the containing deferred payload, but received %A{received}"
+
+[<Fact>]
 let ``Simple Defer and Stream`` () =
     let expectedDirect =
         NameValueLookup.ofList [
