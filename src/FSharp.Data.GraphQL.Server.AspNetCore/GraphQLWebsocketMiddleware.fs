@@ -390,7 +390,27 @@ type GraphQLWebSocketMiddleware<'Root>
             let queuedOutputs = Queue<GQLDeferredResponseContent voption>()
             let mutable initialPayloadSent = false
             let mutable pendingTerminal : Result<unit, exn> voption = ValueNone
+            let mutable sendChain : Task = Task.CompletedTask
             let sendTerminalError (ex : exn) = sendMsg (Error (id, problemDetailsOfObservableError ex))
+
+            let enqueueSend (work : unit -> Task) =
+                lock gate (fun () ->
+                    let previous = sendChain
+                    let next : Task = task {
+                        try
+                            do! previous
+                        with _ ->
+                            ()
+
+                        try
+                            do! work ()
+                        with ex ->
+                            logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
+                            subscriptions
+                            |> GraphQLSubscriptionsManagement.removeSubscription id
+                    }
+
+                    sendChain <- next)
 
             let flushQueuedOutputs () : Task = task {
                 let outputsToFlush =
@@ -446,7 +466,7 @@ type GraphQLWebSocketMiddleware<'Root>
                                                 queuedOutputs.Enqueue output
                                                 ValueNone)
                                 with
-                                | ValueSome output -> (sendDeferredResponseOutput delivery id output).Wait()
+                                | ValueSome output -> enqueueSend (fun () -> sendDeferredResponseOutput delivery id output)
                                 | ValueNone -> ()
                             with _ ->
                                 subscriptions
@@ -465,11 +485,13 @@ type GraphQLWebSocketMiddleware<'Root>
                                         false)
 
                             if shouldSendImmediately then
-                                try
-                                    (sendTerminalError ex).Wait()
-                                finally
-                                    subscriptions
-                                    |> GraphQLSubscriptionsManagement.removeSubscription id),
+                                enqueueSend (fun () -> task {
+                                    try
+                                        do! sendTerminalError ex
+                                    finally
+                                        subscriptions
+                                        |> GraphQLSubscriptionsManagement.removeSubscription id
+                                })),
                     onCompleted =
                         (fun () ->
                             let shouldSendImmediately =
@@ -481,11 +503,13 @@ type GraphQLWebSocketMiddleware<'Root>
                                         false)
 
                             if shouldSendImmediately then
-                                try
-                                    (sendMsg (Complete id)).Wait()
-                                finally
-                                    subscriptions
-                                    |> GraphQLSubscriptionsManagement.removeSubscription id)
+                                enqueueSend (fun () -> task {
+                                    try
+                                        do! sendMsg (Complete id)
+                                    finally
+                                        subscriptions
+                                        |> GraphQLSubscriptionsManagement.removeSubscription id
+                                }))
                 )
 
             let placeholder = new System.Reactive.Disposables.SingleAssignmentDisposable ()
