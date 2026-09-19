@@ -33,6 +33,9 @@ type GQLResponse = {
     /// <summary>
     /// Creates a response for a successfully executed operation.
     /// </summary>
+    /// <param name="documentId">The identifier of the executed document inside the request batch.</param>
+    /// <param name="data">The response data.</param>
+    /// <param name="errors">The response errors.</param>
     static member Direct (documentId, data : Output | null, errors) = {
         DocumentId = documentId
         Data = Include (data |> ValueOption.ofObj)
@@ -42,11 +45,14 @@ type GQLResponse = {
     /// <summary>
     /// Creates a response placeholder for a streaming GraphQL operation.
     /// </summary>
+    /// <param name="documentId">The identifier of the executed document inside the request batch.</param>
     static member Stream (documentId) = { DocumentId = documentId; Data = Include ValueNone; Errors = Skip }
 
     /// <summary>
     /// Creates a response for a request rejected before execution.
     /// </summary>
+    /// <param name="documentId">The identifier of the rejected document inside the request batch.</param>
+    /// <param name="errors">The request errors.</param>
     static member RequestError (documentId, errors) = { DocumentId = documentId; Data = Skip; Errors = Include errors }
 
 /// <summary>
@@ -70,6 +76,10 @@ type GQLExecutionResult = {
     /// <summary>
     /// Creates a direct execution result.
     /// </summary>
+    /// <param name="documentId">The identifier of the executed document inside the request batch.</param>
+    /// <param name="data">The execution data.</param>
+    /// <param name="errors">The execution errors.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member Direct (documentId, data : Output | null, errors, meta) = {
         DocumentId = documentId
         Content = Direct (data |> ValueOption.ofObj, errors)
@@ -79,6 +89,11 @@ type GQLExecutionResult = {
     /// <summary>
     /// Creates a deferred execution result.
     /// </summary>
+    /// <param name="documentId">The identifier of the executed document inside the request batch.</param>
+    /// <param name="data">The initial execution data.</param>
+    /// <param name="errors">The initial execution errors.</param>
+    /// <param name="deferred">The follow-up deferred payload stream.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member Deferred (documentId, data, errors, deferred, meta) = {
         DocumentId = documentId
         Content = Deferred (data, errors, deferred)
@@ -88,65 +103,100 @@ type GQLExecutionResult = {
     /// <summary>
     /// Creates a subscription execution result.
     /// </summary>
+    /// <param name="documentId">The identifier of the executed document inside the request batch.</param>
+    /// <param name="data">The subscription payload stream.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member Stream (documentId, data, meta) = { DocumentId = documentId; Content = Stream data; Metadata = meta }
 
     /// <summary>
     /// Creates an execution result for a request rejected before execution.
     /// </summary>
+    /// <param name="documentId">The identifier of the rejected document inside the request batch.</param>
+    /// <param name="errors">The request errors.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member RequestError (documentId, errors, meta) = { DocumentId = documentId; Content = RequestError errors; Metadata = meta }
 
     /// <summary>
     /// Creates an empty direct execution result.
     /// </summary>
+    /// <param name="documentId">The identifier of the executed document inside the request batch.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member Empty (documentId, meta) = GQLExecutionResult.Direct (documentId, Map.empty, [], meta)
 
     /// <summary>
     /// Creates a request-error execution result from problem details.
     /// </summary>
+    /// <param name="documentId">The identifier of the rejected document inside the request batch.</param>
+    /// <param name="errors">The request errors.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member Error (documentId, errors, meta) = GQLExecutionResult.RequestError (documentId, errors, meta)
 
     /// <summary>
     /// Creates a request-error execution result from a single problem detail.
     /// </summary>
+    /// <param name="documentId">The identifier of the rejected document inside the request batch.</param>
+    /// <param name="error">The request error.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member Error (documentId, error, meta) = GQLExecutionResult.RequestError (documentId, [ error ], meta)
 
     /// <summary>
     /// Creates a request-error execution result from a single GraphQL error.
     /// </summary>
+    /// <param name="documentId">The identifier of the rejected document inside the request batch.</param>
+    /// <param name="error">The GraphQL error.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member Error (documentId, error, meta) =
         GQLExecutionResult.RequestError (documentId, [ GQLProblemDetails.OfError error ], meta)
 
     /// <summary>
     /// Creates a request-error execution result from GraphQL errors.
     /// </summary>
+    /// <param name="documentId">The identifier of the rejected document inside the request batch.</param>
+    /// <param name="errors">The GraphQL errors.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member Error (documentId, errors, meta) =
         GQLExecutionResult.RequestError (documentId, errors |> List.map GQLProblemDetails.OfError, meta)
 
     /// <summary>
     /// Creates a request-error execution result from an error message.
     /// </summary>
+    /// <param name="documentId">The identifier of the rejected document inside the request batch.</param>
+    /// <param name="msg">The error message.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member Error (documentId, msg, meta) =
         GQLExecutionResult.RequestError (documentId, [ GQLProblemDetails.Create msg ], meta)
 
     /// <summary>
     /// Creates a request-error execution result from an exception.
     /// </summary>
+    /// <param name="documentId">The identifier of the rejected document inside the request batch.</param>
+    /// <param name="ex">The exception that caused the failure.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member ErrorFromException (documentId : int, ex : Exception, meta : Metadata) =
         GQLExecutionResult.RequestError (documentId, [ GQLProblemDetails.Create (ex.Message, ex) ], meta)
 
     /// <summary>
     /// Creates an invalid-request execution result.
     /// </summary>
+    /// <param name="documentId">The identifier of the rejected document inside the request batch.</param>
+    /// <param name="errors">The validation or request errors.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member Invalid (documentId, errors, meta) = GQLExecutionResult.RequestError (documentId, errors, meta)
 
     /// <summary>
     /// Creates an asynchronous request-error execution result from an error message.
     /// </summary>
+    /// <param name="documentId">The identifier of the rejected document inside the request batch.</param>
+    /// <param name="msg">The error message.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member ErrorAsync (documentId, msg : string, meta) = AsyncVal.wrap (GQLExecutionResult.Error (documentId, msg, meta))
 
     /// <summary>
     /// Creates an asynchronous request-error execution result from a single GraphQL error.
     /// </summary>
+    /// <param name="documentId">The identifier of the rejected document inside the request batch.</param>
+    /// <param name="error">The GraphQL error.</param>
+    /// <param name="meta">The execution metadata.</param>
     static member ErrorAsync (documentId, error : IGQLError, meta) = AsyncVal.wrap (GQLExecutionResult.Error (documentId, error, meta))
 
 /// <summary>
