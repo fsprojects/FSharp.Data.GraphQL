@@ -103,18 +103,22 @@ type IncrementalDelivery () =
     let flush (state : FieldState) =
         if state.Buffer.ContainsKey state.NextIndex then
             let items = ResizeArray ()
-            let mutable errors = []
+            let errors = ResizeArray ()
             while state.Buffer.ContainsKey state.NextIndex do
                 let item, itemErrors = state.Buffer[state.NextIndex]
                 items.Add item
-                errors <- errors @ itemErrors
+                errors.AddRange itemErrors
                 state.Buffer.Remove state.NextIndex |> ignore
                 state.NextIndex <- state.NextIndex + 1
             Some {
                 Id = state.Id
                 Data = Skip
                 Items = Include (items.ToArray ())
-                Errors = (if errors.IsEmpty then Skip else Include errors)
+                Errors =
+                    (if errors.Count = 0 then
+                         Skip
+                     else
+                         Include (List.ofSeq errors))
             }
         else
             None
