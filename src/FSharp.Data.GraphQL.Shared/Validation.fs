@@ -904,8 +904,8 @@ module Ast =
         =
         let visitCount =
             visited
-            |> List.filter (fun x -> x = fragName)
-            |> List.length
+            |> Seq.filter (fun x -> x = fragName)
+            |> Seq.length
         if visitCount > 1 then
             AstError.AsResult $"Fragment '%s{fragName}' is making a cyclic reference."
         else
@@ -961,7 +961,7 @@ module Ast =
             |> getFragmentAndParentTypes
             |> ValidationResult.collect (checkFragmentSpreadIsPossibleInSelection))
 
-    let private checkInputValue (schemaInfo : SchemaInfo) (variables : VariableDefinition list option) (selection : SelectionInfo) =
+    let private checkInputValue (schemaInfo : SchemaInfo) (variables : VariableDefinition list voption) (selection : SelectionInfo) =
         let rec checkIsCoercible (tref : IntrospectionTypeRef) (argName : string) (value : InputValue) =
             let canNotCoerce =
                 AstError.AsResult (
@@ -1045,15 +1045,15 @@ module Ast =
             | VariableName varName ->
                 let variableDefinition =
                     variables
-                    |> Option.defaultValue []
-                    |> List.tryPick (fun v ->
+                    |> ValueOption.defaultValue []
+                    |> List.vtryPick (fun v ->
                         if v.VariableName = varName then
-                            Some (v, schemaInfo.TryGetInputType (v.Type))
+                            ValueSome (v, schemaInfo.TryGetInputType (v.Type))
                         else
-                            None)
+                            ValueNone)
                 match variableDefinition with
-                | Some (vdef, Some vtype) when vdef.DefaultValue.IsSome -> checkIsCoercible vtype argName vdef.DefaultValue.Value
-                | Some (vdef, None) when vdef.DefaultValue.IsSome -> canNotCoerce
+                | ValueSome (vdef, Some vtype) when vdef.DefaultValue.IsSome -> checkIsCoercible vtype argName vdef.DefaultValue.Value
+                | ValueSome (vdef, None) when vdef.DefaultValue.IsSome -> canNotCoerce
                 | _ -> Success
         selection.Field.Arguments
         |> ValidationResult.collect (fun arg ->
@@ -1067,10 +1067,10 @@ module Ast =
     let internal validateInputValues (ctx : ValidationContext) =
         ctx.Definitions
         |> ValidationResult.collect (fun def ->
-            let (vars, selectionSet) =
+            let struct (vars, selectionSet) =
                 match def with
-                | OperationDefinitionInfo odef -> (Some odef.Definition.VariableDefinitions, odef.SelectionSet)
-                | FragmentDefinitionInfo fdef -> (None, fdef.SelectionSet)
+                | OperationDefinitionInfo odef -> struct (ValueSome odef.Definition.VariableDefinitions, odef.SelectionSet)
+                | FragmentDefinitionInfo fdef -> struct (ValueNone, fdef.SelectionSet)
             selectionSet
             |> ValidationResult.collect (checkInputValue ctx.Schema vars))
 
@@ -1096,7 +1096,7 @@ module Ast =
         let selectionSetDirectives =
             frag.SelectionSet
             |> List.collect (getDistinctDirectiveNamesInSelection path)
-        fragDirectives |> List.append selectionSetDirectives
+        fragDirectives @ selectionSetDirectives
 
     let internal validateDirectivesDefined (ctx : ValidationContext) =
         ctx.Definitions

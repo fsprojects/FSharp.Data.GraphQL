@@ -146,15 +146,15 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                     | Query -> Ok schema.Query
                     | Mutation ->
                         match schema.Mutation with
-                        | Some m -> Ok m
-                        | None -> Error <| [ GQLProblemDetails.CreateWithKind (
+                        | ValueSome m -> Ok m
+                        | ValueNone -> Error <| [ GQLProblemDetails.CreateWithKind (
                             "Operation to be executed is of type mutation, but no mutation root object was defined in current schema",
                             ErrorKind.Validation
                         )]
                     | Subscription ->
                         match schema.Subscription with
-                        | Some s -> Ok <| upcast s
-                        | None -> Error <| [ GQLProblemDetails.CreateWithKind (
+                        | ValueSome s -> Ok <| upcast s
+                        | ValueNone -> Error <| [ GQLProblemDetails.CreateWithKind (
                             "Operation to be executed is of type subscription, but no subscription root object was defined in the current schema",
                             ErrorKind.Validation
                         )]

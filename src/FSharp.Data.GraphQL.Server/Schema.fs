@@ -169,7 +169,7 @@ type SchemaConfig =
             Directives = [ IncludeDirective; SkipDirective; DeferDirective; streamDirective; LiveDirective ] }
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
-type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
+type Schema<'Root> (query: ObjectDef<'Root>, [<Struct>] ?mutation: ObjectDef<'Root>, [<Struct>] ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
 
     let schemaConfig =
         match config with
@@ -191,8 +191,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
               __Schema
               query ]
 
-        let m = mutation |> function Some (Named n) -> [n] | _ -> []
-        let s = subscription |> function Some (Named n) -> [n] | _ -> []
+        let m = mutation |> function ValueSome (Named n) -> [n] | _ -> []
+        let s = subscription |> function ValueSome (Named n) -> [n] | _ -> []
         seq { initialTypes; s; m; schemaConfig.Types } |> Seq.collect id |> TypeMap.FromSeq
 
     let getImplementations (typeMap : TypeMap) =
@@ -349,9 +349,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             |> List.map (introspectDirective inamed)
             |> List.toArray
         { QueryType = Map.find query.Name inamed
-          // TODO: `mutation`/`subscription` are still `'T option` (Schema's constructor is out of scope for this change) - convert here until that follow-up moves Schema to [<Struct>] ?.
-          MutationType = mutation |> ValueOption.ofOption |> ValueOption.map (fun m -> Map.find m.Name inamed)
-          SubscriptionType = subscription |> ValueOption.ofOption |> ValueOption.map(fun s -> Map.find s.Name inamed)
+          MutationType = mutation |> ValueOption.map (fun m -> Map.find m.Name inamed)
+          SubscriptionType = subscription |> ValueOption.map (fun s -> Map.find s.Name inamed)
           Types = itypes
           Directives = idirectives }
 
@@ -382,8 +381,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         member _.Directives = schemaConfig.Directives |> List.toArray
         member _.Introspected = introspected.Force()
         member _.Query = upcast query
-        member _.Mutation = mutation |> Option.map (fun x -> upcast x)
-        member _.Subscription = subscription |> Option.map (fun x -> upcast x)
+        member _.Mutation = mutation |> ValueOption.map (fun x -> upcast x)
+        member _.Subscription = subscription |> ValueOption.map (fun x -> upcast x)
         member _.TryFindType typeName = typeMap.TryFind(typeName, includeDefaultTypes = true)
         member _.GetPossibleTypes typedef = getPossibleTypes typedef
         member _.ParseError path exn = schemaConfig.ParseError path exn

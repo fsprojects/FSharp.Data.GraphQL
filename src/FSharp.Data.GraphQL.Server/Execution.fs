@@ -754,13 +754,13 @@ let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLExecutionRe
     | Query -> executeQueryOrMutation resultSet ctx ctx.Schema.Query ctx.RootValue
     | Mutation ->
         match ctx.Schema.Mutation with
-        | Some m -> executeQueryOrMutation resultSet ctx m ctx.RootValue
-        | None -> raise(InvalidOperationException("Attempted to make a mutation but no mutation schema was present!"))
+        | ValueSome m -> executeQueryOrMutation resultSet ctx m ctx.RootValue
+        | ValueNone -> raise(InvalidOperationException("Attempted to make a mutation but no mutation schema was present!"))
     | Subscription ->
         match ctx.Schema.Subscription with
-        | Some s ->
+        | ValueSome s ->
             match executeSubscription resultSet ctx.GetInputContext ctx s ctx.RootValue with
             | Ok data -> AsyncVal.wrap(GQLExecutionResult.Stream(ctx.ExecutionPlan.DocumentId, data, ctx.Metadata))
             | Error errs -> asyncVal { return GQLExecutionResult.Error(ctx.ExecutionPlan.DocumentId, errs, ctx.Metadata) }
 
-        | None -> raise(InvalidOperationException("Attempted to make a subscription but no subscription schema was present!"))
+        | ValueNone -> raise(InvalidOperationException("Attempted to make a subscription but no subscription schema was present!"))

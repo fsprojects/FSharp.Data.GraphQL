@@ -428,11 +428,11 @@ and ISchema =
 
         /// A mutation root object. Defines all top level operations,
         /// that can be performed from GraphQL mutations.
-        abstract Mutation : ObjectDef option
+        abstract Mutation : ObjectDef voption
 
         // A subscription root object. Defines all top level operations,
         // that can be performed from GraphQL subscriptions.
-        abstract Subscription : SubscriptionObjectDef option
+        abstract Subscription : SubscriptionObjectDef voption
 
         /// List of all directives supported by the current schema.
         abstract Directives : DirectiveDef[]
@@ -472,8 +472,8 @@ and ISchema<'Root> =
     interface
         inherit ISchema
         abstract Query : ObjectDef<'Root>
-        abstract Mutation : ObjectDef<'Root> option
-        abstract Subscription : SubscriptionObjectDef<'Root> option
+        abstract Mutation : ObjectDef<'Root> voption
+        abstract Subscription : SubscriptionObjectDef<'Root> voption
     end
 
 /// A type alias for a field execute compiler function.
