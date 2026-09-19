@@ -129,11 +129,18 @@ module internal ObservableErrorHandling =
 open IncrementalPayloadSplitting
 open ObservableErrorHandling
 
-type private DeferredSubscriptionWorkerMessage =
+type internal DeferredSubscriptionWorkerMessage =
     | StartInitialPayload
     | DeferredEvent of GQLDeferredResponseContent voption
     | DeferredFaulted of exn
     | DeferredSourceCompleted
+
+module internal DeferredSubscriptionWorker =
+
+    let bufferMessageBeforeInitial (delivery : IncrementalDelivery) (bufferedMessages : ResizeArray<DeferredSubscriptionWorkerMessage>) message =
+        match message with
+        | DeferredEvent (ValueSome (DeferredPending _ as event)) -> delivery.Apply event |> ignore
+        | _ -> bufferedMessages.Add message
 
 type GraphQLWebSocketMiddleware<'Root>
     (
@@ -402,10 +409,10 @@ type GraphQLWebSocketMiddleware<'Root>
                 )
 
             let channelWriteGate = obj ()
+            let startupBarrier = TaskCompletionSource (TaskCreationOptions.RunContinuationsAsynchronously)
             let sendTerminalError (ex : exn) = sendMsg (Error (id, problemDetailsOfObservableError ex))
 
-            let enqueueWorkerMessage message =
-                lock channelWriteGate (fun () -> messageChannel.Writer.TryWrite message |> ignore)
+            let tryEnqueueWorkerMessage message = lock channelWriteGate (fun () -> messageChannel.Writer.TryWrite message)
 
             let runWorker () : Task = task {
                 let bufferedMessages = ResizeArray<DeferredSubscriptionWorkerMessage>()
@@ -436,62 +443,124 @@ type GraphQLWebSocketMiddleware<'Root>
                 }
 
                 try
+                    do! startupBarrier.Task
+
                     while keepProcessing do
-                        let! message = messageChannel.Reader.ReadAsync ()
+                        let! canRead = messageChannel.Reader.WaitToReadAsync ()
 
-                        match initialPayloadSent, message with
-                        | false, DeferredEvent (ValueSome (DeferredPending _ as event)) -> delivery.Apply event |> ignore
-                        | false, StartInitialPayload ->
-                            do!
-                                SubscriptionExecutionResult.CreateInitial (data, errors, delivery.TakePendingVisibleIn data)
-                                |> sendOutput id
+                        if canRead then
+                            let mutable keepDraining = true
 
-                            initialPayloadSent <- true
+                            while keepProcessing && keepDraining do
+                                match messageChannel.Reader.TryRead () with
+                                | true, message ->
+                                    match initialPayloadSent, message with
+                                    | false, StartInitialPayload ->
+                                        do!
+                                            SubscriptionExecutionResult.CreateInitial (data, errors, delivery.TakePendingVisibleIn data)
+                                            |> sendOutput id
 
-                            for bufferedMessage in bufferedMessages do
-                                if keepProcessing then
-                                    let! shouldContinue = processStartedMessage bufferedMessage
-                                    keepProcessing <- shouldContinue
+                                        initialPayloadSent <- true
 
-                            bufferedMessages.Clear ()
-                        | false, _ -> bufferedMessages.Add message
-                        | true, _ ->
-                            let! shouldContinue = processStartedMessage message
-                            keepProcessing <- shouldContinue
+                                        for bufferedMessage in bufferedMessages do
+                                            if keepProcessing then
+                                                let! shouldContinue = processStartedMessage bufferedMessage
+                                                keepProcessing <- shouldContinue
+
+                                        bufferedMessages.Clear ()
+                                    | false, _ -> DeferredSubscriptionWorker.bufferMessageBeforeInitial delivery bufferedMessages message
+                                    | true, _ ->
+                                        let! shouldContinue = processStartedMessage message
+                                        keepProcessing <- shouldContinue
+                                | false, _ -> keepDraining <- false
+                        else
+                            keepProcessing <- false
                 with ex ->
                     logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
-                    subscriptions
-                    |> GraphQLSubscriptionsManagement.removeSubscription id
+
+                    try
+                        if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
+                            do! sendTerminalError ex
+                    finally
+                        subscriptions
+                        |> GraphQLSubscriptionsManagement.removeSubscription id
             }
+
+            let placeholder = new System.Reactive.Disposables.SingleAssignmentDisposable ()
+            let disposeAndRemoveSubscription () =
+                placeholder.Dispose ()
+                subscriptions
+                |> GraphQLSubscriptionsManagement.removeSubscription id
+            let observeWorkerTask (workerTask : Task) =
+                workerTask.ContinueWith (
+                    (fun (completedTask : Task) ->
+                        match completedTask.Exception with
+                        | null -> ()
+                        | aggregate ->
+                            let flattened = aggregate.Flatten ()
+                            let observed =
+                                if flattened.InnerExceptions.Count = 1 then
+                                    flattened.InnerExceptions[0]
+                                else
+                                    upcast flattened
+
+                            logger.LogError (observed, "Deferred subscription worker faulted unexpectedly for Id = '{id}'", id)
+
+                        if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
+                            subscriptions
+                            |> GraphQLSubscriptionsManagement.removeSubscription id),
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default
+                )
+                |> ignore
 
             let observer =
                 new Reactive.AnonymousObserver<GQLDeferredResponseContent voption> (
                     onNext =
                         (fun output ->
-                            try
-                                enqueueWorkerMessage (DeferredEvent output)
-                            with _ ->
-                                subscriptions
-                                |> GraphQLSubscriptionsManagement.removeSubscription id
-                                reraise ()),
-                    onError = (fun ex -> enqueueWorkerMessage (DeferredFaulted ex)),
-                    onCompleted = (fun () -> enqueueWorkerMessage DeferredSourceCompleted)
+                            if
+                                not (tryEnqueueWorkerMessage (DeferredEvent output))
+                                && subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id
+                            then
+                                disposeAndRemoveSubscription ()),
+                    onError =
+                        (fun ex ->
+                            if
+                                not (tryEnqueueWorkerMessage (DeferredFaulted ex))
+                                && subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id
+                            then
+                                disposeAndRemoveSubscription ()),
+                    onCompleted =
+                        (fun () ->
+                            if
+                                not (tryEnqueueWorkerMessage DeferredSourceCompleted)
+                                && subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id
+                            then
+                                disposeAndRemoveSubscription ())
                 )
 
-            let placeholder = new System.Reactive.Disposables.SingleAssignmentDisposable ()
-
             subscriptions
-            |> GraphQLSubscriptionsManagement.addSubscription (id, placeholder, (fun _ -> ()))
+            |> GraphQLSubscriptionsManagement.addSubscription (
+                id,
+                placeholder,
+                (fun _ ->
+                    startupBarrier.TrySetResult () |> ignore
+
+                    lock channelWriteGate (fun () -> messageChannel.Writer.TryComplete () |> ignore))
+            )
 
             try
-                runWorker () |> ignore
-                placeholder.Disposable <- (observableOutput |> Observable.withCompletionMarker).Subscribe(observer)
-                enqueueWorkerMessage StartInitialPayload
-            with _ ->
-                subscriptions
-                |> GraphQLSubscriptionsManagement.removeSubscription id
-                reraise ()
+                runWorker ()
+                |> fun workerTask -> observeWorkerTask workerTask
 
+                placeholder.Disposable <- (observableOutput |> Observable.withCompletionMarker).Subscribe(observer)
+                if not (tryEnqueueWorkerMessage StartInitialPayload) then
+                    invalidOp $"Deferred subscription worker for Id = '{id}' is not accepting messages"
+                startupBarrier.TrySetResult () |> ignore
+            with _ ->
+                disposeAndRemoveSubscription ()
+                reraise ()
             Task.CompletedTask
 
         let applyPlanExecutionResult (id : SubscriptionId) (socket) (executionResult : GQLExecutionResult) : Task = task {

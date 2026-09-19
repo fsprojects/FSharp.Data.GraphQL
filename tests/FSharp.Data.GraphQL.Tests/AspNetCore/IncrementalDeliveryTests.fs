@@ -1,5 +1,6 @@
 module FSharp.Data.GraphQL.Tests.AspNetCore.IncrementalDeliveryTests
 
+open System
 open System.Text.Json.Serialization
 open Xunit
 open FSharp.Data.GraphQL
@@ -207,6 +208,57 @@ let ``An empty stream still produces a completed entry after being pre-announced
     pendingIds payload |> empty
     incrementalOf payload |> empty
     (completedOf payload |> single).Errors |> equals Skip
+
+[<Fact>]
+let ``A pending stream buffered before worker initialization is emitted in the initial payload`` () =
+    let delivery = IncrementalDelivery ()
+    let bufferedMessages = ResizeArray<DeferredSubscriptionWorkerMessage>()
+    let data = NameValueLookup.ofList [ "items", upcast [||] ]
+
+    DeferredSubscriptionWorker.bufferMessageBeforeInitial
+        delivery
+        bufferedMessages
+        (DeferredEvent (ValueSome (DeferredPending (itemsPath, ValueNone, true))))
+
+    DeferredSubscriptionWorker.bufferMessageBeforeInitial delivery bufferedMessages DeferredSourceCompleted
+
+    let initial = SubscriptionExecutionResult.CreateInitial (data, [], delivery.TakePendingVisibleIn data)
+    pendingPaths (ValueSome initial) |> equals [ itemsPath ]
+    bufferedMessages
+    |> Seq.toList
+    |> equals [ DeferredSourceCompleted ]
+
+[<Fact>]
+let ``A completion buffered before worker initialization still leaves the initial payload first`` () =
+    let delivery = IncrementalDelivery ()
+    let bufferedMessages = ResizeArray<DeferredSubscriptionWorkerMessage>()
+    let data = NameValueLookup.ofList [ "items", upcast [||] ]
+
+    DeferredSubscriptionWorker.bufferMessageBeforeInitial delivery bufferedMessages DeferredSourceCompleted
+
+    let initial = SubscriptionExecutionResult.CreateInitial (data, [], delivery.TakePendingVisibleIn data)
+    initial.HasNext |> equals (Include true)
+    pendingPaths (ValueSome initial) |> empty
+    bufferedMessages
+    |> Seq.toList
+    |> equals [ DeferredSourceCompleted ]
+
+[<Fact>]
+let ``An error buffered before worker initialization still leaves the initial payload first`` () =
+    let delivery = IncrementalDelivery ()
+    let bufferedMessages = ResizeArray<DeferredSubscriptionWorkerMessage>()
+    let data = NameValueLookup.ofList [ "items", upcast [||] ]
+    let ex = InvalidOperationException "boom"
+
+    DeferredSubscriptionWorker.bufferMessageBeforeInitial delivery bufferedMessages (DeferredFaulted ex)
+
+    let initial = SubscriptionExecutionResult.CreateInitial (data, [], delivery.TakePendingVisibleIn data)
+    initial.HasNext |> equals (Include true)
+    pendingPaths (ValueSome initial) |> empty
+
+    match bufferedMessages |> Seq.toList with
+    | [ DeferredFaulted bufferedEx ] -> Assert.Same (ex, bufferedEx)
+    | other -> failwith $"Unexpected buffered messages: %A{other}"
 
 [<Fact>]
 let ``A defer field's own value is announced and delivered, then completes`` () =
