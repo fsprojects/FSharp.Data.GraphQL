@@ -214,8 +214,12 @@ module Helpers =
             let t = value.GetType()
             match t.FullName with
             | null -> ValueSome value
-            | fullName when fullName.StartsWith ReflectionHelper.OptionTypeName || fullName.StartsWith ReflectionHelper.ValueOptionTypeName ->
-                objectOptionCast value
+            | _ when t.IsGenericType ->
+                let genericTypeDefinition = t.GetGenericTypeDefinition()
+                match genericTypeDefinition.FullName with
+                | ReflectionHelper.OptionTypeName
+                | ReflectionHelper.ValueOptionTypeName -> objectOptionCast value
+                | _ -> ValueSome value
             | _ -> ValueSome value
 
     /// <summary>
