@@ -7,26 +7,16 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Types
 
-/// <summary>
 /// Represents a GraphQL response object keyed by field name.
-/// </summary>
 type Output = IDictionary<string, obj>
 
-/// <summary>
 /// Represents the serialized shape of a GraphQL response document.
-/// </summary>
 type GQLResponse = {
-    /// <summary>
     /// Gets the identifier of the executed document inside the request batch.
-    /// </summary>
     DocumentId : int
-    /// <summary>
     /// Gets the response data.
-    /// </summary>
     Data : Skippable<Output voption>
-    /// <summary>
     /// Gets the response errors.
-    /// </summary>
     Errors : Skippable<GQLProblemDetails list>
 } with
 
@@ -55,21 +45,13 @@ type GQLResponse = {
     /// <param name="errors">The request errors.</param>
     static member RequestError (documentId, errors) = { DocumentId = documentId; Data = Skip; Errors = Include errors }
 
-/// <summary>
 /// Represents the executor output together with request metadata.
-/// </summary>
 type GQLExecutionResult = {
-    /// <summary>
     /// Gets the identifier of the executed document inside the request batch.
-    /// </summary>
     DocumentId : int
-    /// <summary>
     /// Gets the execution content.
-    /// </summary>
     Content : GQLResponseContent
-    /// <summary>
     /// Gets the execution metadata.
-    /// </summary>
     Metadata : Metadata
 } with
 
@@ -199,9 +181,7 @@ type GQLExecutionResult = {
     /// <param name="meta">The execution metadata.</param>
     static member ErrorAsync (documentId, error : IGQLError, meta) = AsyncVal.wrap (GQLExecutionResult.Error (documentId, error, meta))
 
-/// <summary>
 /// Represents the different execution-content shapes produced by the executor.
-/// </summary>
 and GQLResponseContent =
     /// <summary>
     /// The request was rejected before execution started.
@@ -220,13 +200,9 @@ and GQLResponseContent =
     /// <see cref="RequestError" />.
     /// </remarks>
     | Direct of Data : Output voption * Errors : GQLProblemDetails list
-    /// <summary>
     /// An execution result with deferred follow-up payloads.
-    /// </summary>
     | Deferred of Data : Output * Errors : GQLProblemDetails list * Defer : IObservable<GQLDeferredResponseContent>
-    /// <summary>
     /// A subscription result stream.
-    /// </summary>
     | Stream of Stream : IObservable<GQLSubscriptionResponseContent>
 
 /// <summary>
@@ -238,32 +214,18 @@ and GQLResponseContent =
 /// a <c>@live</c> field, which has no end of its own.
 /// </remarks>
 and GQLDeferredResponseContent =
-    /// <summary>
     /// Announces a streamed field before any of its items are delivered.
-    /// </summary>
     | DeferredPending of Path : FieldPath
-    /// <summary>
     /// Delivers the data of a deferred field or one or more streamed items at the given path.
-    /// </summary>
     | DeferredResult of Data : obj * Path : FieldPath
-    /// <summary>
     /// Delivers partial data together with execution errors at the given path.
-    /// </summary>
     | DeferredErrors of Data : obj * Errors : GQLProblemDetails list * Path : FieldPath
-    /// <summary>
     /// Marks a deferred or streamed field as fully delivered.
-    /// </summary>
     | DeferredCompleted of Path : FieldPath
 
-/// <summary>
 /// Represents events emitted by a live GraphQL subscription.
-/// </summary>
 and GQLSubscriptionResponseContent =
-    /// <summary>
     /// Delivers a subscription data payload.
-    /// </summary>
     | SubscriptionResult of Data : Output
-    /// <summary>
     /// Delivers a subscription payload together with execution errors.
-    /// </summary>
     | SubscriptionErrors of Data : Output voption * Errors : GQLProblemDetails list
