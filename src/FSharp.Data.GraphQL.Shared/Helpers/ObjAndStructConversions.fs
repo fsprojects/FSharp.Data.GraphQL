@@ -95,6 +95,15 @@ module internal Array =
         else
             ValueSome array[index]
 
+    let vtryFind predicate (array : 'T array) =
+        let mutable i = 0
+        let mutable result = ValueNone
+        while i < array.Length && result.IsNone do
+            if predicate array[i] then
+                result <- ValueSome array[i]
+            i <- i + 1
+        result
+
 module internal Map =
 
     let vtryFind key (map : Map<_, _>) =

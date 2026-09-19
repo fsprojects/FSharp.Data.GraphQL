@@ -900,14 +900,14 @@ module internal Provider =
                                                             | None -> failwithf "Fragment field defines a type condition \"%s\", but that type was not found in the schema definition." fragf.TypeCondition
                                                         let field =
                                                             fragmentType.Fields
-                                                            |> ValueOption.bind (Array.tryFind (fun f -> f.Name = fragf.Name) >> ValueOption.ofOption)
+                                                            |> ValueOption.bind (Array.vtryFind (fun f -> f.Name = fragf.Name))
                                                         match field with
                                                         | ValueSome f -> f.Type
                                                         | ValueNone -> throw fragmentType.Name
                                                     | TypeField typef ->
                                                         let field =
                                                             introspectionType.Fields
-                                                            |> ValueOption.bind (Array.tryFind (fun f -> f.Name = typef.Name) >> ValueOption.ofOption)
+                                                            |> ValueOption.bind (Array.vtryFind (fun f -> f.Name = typef.Name))
                                                         match field with
                                                         | ValueSome f -> f.Type
                                                         | ValueNone -> throw introspectionType.Name

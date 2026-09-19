@@ -17,7 +17,7 @@ type GQLResponse = {
 
     static member Direct (documentId, data : Output | null, errors) = {
         DocumentId = documentId
-        Data = Include (Option.ofObj data |> ValueOption.ofOption)
+        Data = Include (data |> ValueOption.ofObj)
         Errors = Skippable.ofList errors
     }
     static member Stream (documentId) = { DocumentId = documentId; Data = Include ValueNone; Errors = Skip }
@@ -31,7 +31,7 @@ type GQLExecutionResult = {
 
     static member Direct (documentId, data : Output | null, errors, meta) = {
         DocumentId = documentId
-        Content = Direct (Option.ofObj data |> ValueOption.ofOption, errors)
+        Content = Direct (data |> ValueOption.ofObj, errors)
         Metadata = meta
     }
     static member Deferred (documentId, data, errors, deferred, meta) = {

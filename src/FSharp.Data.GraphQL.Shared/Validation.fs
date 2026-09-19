@@ -335,7 +335,7 @@ module Ast =
             |> ValueOption.map _.TypeCondition
             |> ValueOption.defaultValue x.ParentType
 
-    let private tryFindInArrayOption (finder : 'T -> bool) = ValueOption.bind (Array.tryFind finder >> ValueOption.ofOption)
+    let private tryFindInArrayOption (finder : 'T -> bool) = ValueOption.bind (Array.vtryFind finder)
 
     let private onAllSelections (ctx : ValidationContext) (onSelection : SelectionInfo -> ValidationResult<GQLProblemDetails>) =
         let rec traverseSelections selection =
@@ -657,9 +657,9 @@ module Ast =
                     |> ValueOption.ofOption
                     |> ValueOption.map _.ArgumentNames
                     |> ValueOption.defaultWith (fun () -> selection.InputValues |> Array.map _.Name)
-                match schemaArgumentNames |> Array.tryFind (fun x -> x = arg.Name) with
-                | Some _ -> Success
-                | None ->
+                match schemaArgumentNames |> Array.vtryFind (fun x -> x = arg.Name) with
+                | ValueSome _ -> Success
+                | ValueNone ->
                     AstError.AsResult (
                         $"Field '%s{selection.Field.Name}' of type '%s{selection.FragmentOrParentType.Name}' does not have an input named '%s{arg.Name}' in its definition.",
                         selection.Path
@@ -669,22 +669,22 @@ module Ast =
             |> ValidationResult.collect (fun directive ->
                 match
                     schemaInfo.Directives
-                    |> Array.tryFind (fun d -> d.Name = directive.Name)
+                    |> Array.vtryFind (fun d -> d.Name = directive.Name)
                 with
-                | Some directiveType ->
+                | ValueSome directiveType ->
                     directive.Arguments
                     |> ValidationResult.collect (fun arg ->
                         match
                             directiveType.Args
-                            |> Array.tryFind (fun argt -> argt.Name = arg.Name)
+                            |> Array.vtryFind (fun argt -> argt.Name = arg.Name)
                         with
-                        | Some _ -> Success
-                        | _ ->
+                        | ValueSome _ -> Success
+                        | ValueNone ->
                             AstError.AsResult (
                                 $"Directive '%s{directiveType.Name}' of field '%s{selection.Field.Name}' of type '%s{selection.FragmentOrParentType.Name}' does not have an argument named '%s{arg.Name}' in its definition.",
                                 selection.Path
                             ))
-                | None -> Success)
+                | ValueNone -> Success)
         argumentsValid @@ directivesValid
 
     let internal validateArgumentNames (ctx : ValidationContext) = onAllSelections ctx (checkFieldArgumentNames ctx.Schema)
@@ -718,9 +718,9 @@ module Ast =
                 | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
                     match
                         selection.Field.Arguments
-                        |> List.tryFind (fun arg -> arg.Name = argDef.Name)
+                        |> List.vtryFind (fun arg -> arg.Name = argDef.Name)
                     with
-                    | Some arg when arg.Value <> NullValue -> Success
+                    | ValueSome arg when arg.Value <> NullValue -> Success
                     | _ ->
                         AstError.AsResult (
                             $"Argument '%s{argDef.Name}' of field '%s{selection.Field.Name}' of type '%s{selection.FragmentOrParentType.Name}' is required and does not have a default value.",
@@ -732,25 +732,25 @@ module Ast =
             |> ValidationResult.collect (fun directive ->
                 match
                     schemaInfo.Directives
-                    |> Array.tryFind (fun d -> d.Name = directive.Name)
+                    |> Array.vtryFind (fun d -> d.Name = directive.Name)
                 with
-                | Some directiveType ->
+                | ValueSome directiveType ->
                     directiveType.Args
                     |> ValidationResult.collect (fun argDef ->
                         match argDef.Type.Kind with
                         | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
                             match
                                 directive.Arguments
-                                |> List.tryFind (fun arg -> arg.Name = argDef.Name)
+                                |> List.vtryFind (fun arg -> arg.Name = argDef.Name)
                             with
-                            | Some arg when arg.Value <> NullValue -> Success
+                            | ValueSome arg when arg.Value <> NullValue -> Success
                             | _ ->
                                 AstError.AsResult (
                                     $"Argument '%s{argDef.Name}' of directive '%s{directiveType.Name}' of field '%s{selection.Field.Name}' of type '%s{selection.FragmentOrParentType.Name}' is required and does not have a default value.",
                                     selection.Path
                                 )
                         | _ -> Success)
-                | None -> Success)
+                | ValueNone -> Success)
         inputsValid @@ directivesValid
 
     let internal validateRequiredArguments (ctx : ValidationContext) = onAllSelections ctx (checkRequiredArguments ctx.Schema)
@@ -923,10 +923,10 @@ module Ast =
         | FragmentSpread spread ->
             match
                 fragmentDefinitions
-                |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name)
+                |> List.vtryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name)
             with
-            | Some frag -> checkFragmentMustNotHaveCycles fragmentDefinitions visited spread.Name frag.SelectionSet
-            | None -> Success
+            | ValueSome frag -> checkFragmentMustNotHaveCycles fragmentDefinitions visited spread.Name frag.SelectionSet
+            | ValueNone -> Success
 
     let internal validateFragmentsMustNotFormCycles (ctx : ValidationContext) =
         let fragmentDefinitions =
@@ -1411,16 +1411,16 @@ module Ast =
             let usedInSpread =
                 match
                     fragmentDefinitions
-                    |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
+                    |> List.vtryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
                 with
-                | Some frag ->
+                | ValueSome frag ->
                     let usedInSelection =
                         frag.SelectionSet
                         |> List.exists (variableIsUsedInSelection name fragmentDefinitions (spread.Name :: visitedFragments))
                     usedInSelection
                     || (frag.Directives
                         |> List.exists (fun directive -> argumentsContains name directive.Arguments))
-                | None -> false
+                | ValueNone -> false
             usedInSpread
             || (spread.Directives
                 |> List.exists (fun directive -> argumentsContains name directive.Arguments))
@@ -1514,8 +1514,8 @@ module Ast =
                             $"A variable '$%s{varName}' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference.",
                             path
                         )
-                    match inputs |> Array.tryFind (fun x -> x.Name = arg.Name) with
-                    | Some input ->
+                    match inputs |> Array.vtryFind (fun x -> x.Name = arg.Name) with
+                    | ValueSome input ->
                         let locationTypeRef = input.Type
                         if
                             locationTypeRef.Kind = TypeKind.NON_NULL
@@ -1539,7 +1539,7 @@ module Ast =
                             err
                         else
                             Success
-                    | None -> Success
+                    | ValueNone -> Success
                 | None -> Success
             | _ -> Success)
 
