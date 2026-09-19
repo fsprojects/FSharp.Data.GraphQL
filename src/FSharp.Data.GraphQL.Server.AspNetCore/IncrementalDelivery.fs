@@ -276,11 +276,11 @@ type IncrementalDelivery () =
             // A plain (non-indexed) path: a @defer field's own value.
             let state, isNew = stateFor fieldPath
             let incremental = { Id = state.Id; Data = Include data; Items = Skip; Errors = Skip }
-            let pending = [
-                yield! pendingFor fieldPath state isNew
-                yield! takeFieldPending fieldPath
-                yield! takePendingVisibleIn fieldPath data
-            ]
+            let fieldPending =
+                match takeFieldPending fieldPath with
+                | [] -> pendingFor fieldPath state isNew
+                | pending -> pending
+            let pending = [ yield! fieldPending; yield! takePendingVisibleIn fieldPath data ]
             ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
         | DeferredErrors (data, errors, fieldPath) ->
             match fields.TryGetValue fieldPath with
@@ -295,11 +295,11 @@ type IncrementalDelivery () =
                 // A @defer field's own failure.
                 let state, isNew = stateFor fieldPath
                 let incremental = { Id = state.Id; Data = Include data; Items = Skip; Errors = Include errors }
-                let pending = [
-                    yield! pendingFor fieldPath state isNew
-                    yield! takeFieldPending fieldPath
-                    yield! takePendingVisibleIn fieldPath data
-                ]
+                let fieldPending =
+                    match takeFieldPending fieldPath with
+                    | [] -> pendingFor fieldPath state isNew
+                    | pending -> pending
+                let pending = [ yield! fieldPending; yield! takePendingVisibleIn fieldPath data ]
                 ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
         | DeferredCompleted fieldPath ->
             match fields.TryGetValue fieldPath with
