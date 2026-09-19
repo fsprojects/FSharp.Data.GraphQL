@@ -654,8 +654,8 @@ and private coerceVariableInputObject (ctx : CoerceVariableInputContext, getInpu
                 | false, _ when field.IsSkippable -> ValueNone
                 | false, _ ->
                     match field.DefaultValue with
-                    | Some value -> KeyValuePair (field.Name, Ok value)
-                    | None -> coerce (JsonDocument.Parse("null").RootElement)
+                    | ValueSome value -> KeyValuePair (field.Name, Ok value)
+                    | ValueNone -> coerce (JsonDocument.Parse("null").RootElement)
                     |> ValueSome)
             |> ImmutableDictionary.CreateRange
 

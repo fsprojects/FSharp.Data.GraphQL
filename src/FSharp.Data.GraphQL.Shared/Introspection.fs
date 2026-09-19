@@ -90,75 +90,75 @@ let rec __Type =
         fieldsFn =
             fun () -> [
                 Define.Field ("kind", __TypeKind, (fun _ t -> t.Kind))
-                Define.Field ("name", Nullable StringType, resolve = (fun _ t -> t.Name))
-                Define.Field ("description", Nullable StringType, resolve = (fun _ t -> t.Description))
+                Define.Field ("name", StructNullable StringType, resolve = (fun _ t -> t.Name))
+                Define.Field ("description", StructNullable StringType, resolve = (fun _ t -> t.Description))
                 Define.Field (
                     "fields",
-                    Nullable (ListOf __Field),
+                    StructNullable (ListOf __Field),
                     args = [ Define.Input ("includeDeprecated", BooleanType, false) ],
                     resolve =
                         fun ctx t ->
                             match t.Name with
-                            | None -> None
-                            | Some name ->
+                            | ValueNone -> ValueNone
+                            | ValueSome name ->
                                 let found = findIntrospected ctx name
                                 match ctx.TryArg "includeDeprecated" with
-                                | ValueSome true -> found.Fields |> Option.map Array.toSeq
+                                | ValueSome true -> found.Fields |> ValueOption.map Array.toSeq
                                 | _ ->
                                     found.Fields
-                                    |> Option.map (fun x -> upcast Array.filter (fun f -> not f.IsDeprecated) x)
+                                    |> ValueOption.map (fun x -> upcast Array.filter (fun f -> not f.IsDeprecated) x)
                 )
                 Define.Field (
                     "interfaces",
-                    Nullable (ListOf __Type),
+                    StructNullable (ListOf __Type),
                     resolve =
                         fun ctx t ->
                             match t.Name with
-                            | None -> None
-                            | Some name ->
+                            | ValueNone -> ValueNone
+                            | ValueSome name ->
                                 let found = findIntrospected ctx name
-                                found.Interfaces |> Option.map Array.toSeq
+                                found.Interfaces |> ValueOption.map Array.toSeq
                 )
                 Define.Field (
                     "possibleTypes",
-                    Nullable (ListOf __Type),
+                    StructNullable (ListOf __Type),
                     resolve =
                         fun ctx t ->
                             match t.Name with
-                            | None -> None
-                            | Some name ->
+                            | ValueNone -> ValueNone
+                            | ValueSome name ->
                                 let found = findIntrospected ctx name
-                                found.PossibleTypes |> Option.map Array.toSeq
+                                found.PossibleTypes |> ValueOption.map Array.toSeq
                 )
                 Define.Field (
                     "enumValues",
-                    Nullable (ListOf __EnumValue),
+                    StructNullable (ListOf __EnumValue),
                     args = [ Define.Input ("includeDeprecated", BooleanType, false) ],
                     resolve =
                         fun ctx t ->
                             match t.Name with
-                            | None -> None
-                            | Some name ->
+                            | ValueNone -> ValueNone
+                            | ValueSome name ->
                                 let found = findIntrospected ctx name
                                 match ctx.TryArg "includeDeprecated" with
                                 | ValueNone
-                                | ValueSome false -> found.EnumValues |> Option.map Array.toSeq
+                                | ValueSome false -> found.EnumValues |> ValueOption.map Array.toSeq
                                 | ValueSome true ->
                                     found.EnumValues
-                                    |> Option.map (fun x -> upcast (x |> Array.filter (fun f -> not f.IsDeprecated)))
+                                    |> ValueOption.map (fun x -> upcast (x |> Array.filter (fun f -> not f.IsDeprecated)))
                 )
                 Define.Field (
                     "inputFields",
-                    Nullable (ListOf __InputValue),
+                    StructNullable (ListOf __InputValue),
                     resolve =
                         fun ctx t ->
                             match t.Name with
-                            | None -> None
-                            | Some name ->
+                            | ValueNone -> ValueNone
+                            | ValueSome name ->
                                 let found = findIntrospected ctx name
-                                found.InputFields |> Option.map Array.toSeq
+                                found.InputFields |> ValueOption.map Array.toSeq
                 )
-                Define.Field ("ofType", Nullable __Type, resolve = (fun _ t -> t.OfType))
+                Define.Field ("ofType", StructNullable __Type, resolve = (fun _ t -> t.OfType))
             ]
     )
 
@@ -173,9 +173,9 @@ and __InputValue =
         fieldsFn =
             fun () -> [
                 Define.Field ("name", StringType, resolve = (fun _ f -> f.Name))
-                Define.Field ("description", Nullable StringType, resolve = (fun _ f -> f.Description))
+                Define.Field ("description", StructNullable StringType, resolve = (fun _ f -> f.Description))
                 Define.Field ("type", __Type, resolve = (fun _ f -> f.Type))
-                Define.Field ("defaultValue", Nullable StringType, (fun _ f -> f.DefaultValue))
+                Define.Field ("defaultValue", StructNullable StringType, (fun _ f -> f.DefaultValue))
             ]
     )
 
@@ -189,11 +189,11 @@ and __Field =
         fieldsFn =
             fun () -> [
                 Define.Field ("name", StringType, (fun _ f -> f.Name))
-                Define.Field ("description", Nullable StringType, (fun _ f -> f.Description))
+                Define.Field ("description", StructNullable StringType, (fun _ f -> f.Description))
                 Define.Field ("args", ListOf __InputValue, (fun _ f -> f.Args))
                 Define.Field ("type", __Type, (fun _ f -> f.Type))
                 Define.Field ("isDeprecated", BooleanType, resolve = (fun _ f -> f.IsDeprecated))
-                Define.Field ("deprecationReason", Nullable StringType, (fun _ f -> f.DeprecationReason))
+                Define.Field ("deprecationReason", StructNullable StringType, (fun _ f -> f.DeprecationReason))
             ]
     )
 
@@ -208,9 +208,9 @@ and __EnumValue =
         fieldsFn =
             fun () -> [
                 Define.Field ("name", StringType, resolve = (fun _ e -> e.Name))
-                Define.Field ("description", Nullable StringType, resolve = (fun _ e -> e.Description))
-                Define.Field ("isDeprecated", BooleanType, resolve = (fun _ e -> Option.isSome e.DeprecationReason))
-                Define.Field ("deprecationReason", Nullable StringType, resolve = (fun _ e -> e.DeprecationReason))
+                Define.Field ("description", StructNullable StringType, resolve = (fun _ e -> e.Description))
+                Define.Field ("isDeprecated", BooleanType, resolve = (fun _ e -> ValueOption.isSome e.DeprecationReason))
+                Define.Field ("deprecationReason", StructNullable StringType, resolve = (fun _ e -> e.DeprecationReason))
             ]
     )
 
@@ -231,7 +231,7 @@ and __Directive =
         fieldsFn =
             fun () -> [
                 Define.Field ("name", StringType, resolve = (fun _ directive -> directive.Name))
-                Define.Field ("description", Nullable StringType, resolve = (fun _ directive -> directive.Description))
+                Define.Field ("description", StructNullable StringType, resolve = (fun _ directive -> directive.Description))
                 Define.Field ("locations", ListOf __DirectiveLocation, resolve = (fun _ directive -> directive.Locations))
                 Define.Field ("args", ListOf __InputValue, resolve = (fun _ directive -> directive.Args))
                 Define.Field (
@@ -291,13 +291,13 @@ and __Schema =
                 )
                 Define.Field (
                     "mutationType",
-                    Nullable __Type,
+                    StructNullable __Type,
                     description = "If this server supports mutation, the type that mutation operations will be rooted at.",
                     resolve = fun _ schema -> schema.MutationType
                 )
                 Define.Field (
                     "subscriptionType",
-                    Nullable __Type,
+                    StructNullable __Type,
                     description = "If this server support subscription, the type that subscription operations will be rooted at.",
                     resolve = fun _ schema -> schema.SubscriptionType
                 )

@@ -35,7 +35,7 @@ module internal QuotationHelpers =
             let exprs = coerceValues (fun _ -> typ) instance
             Expr.NewArray(typ, exprs)
         let tupleExpr (tupleType : Type) (v : obj) =
-            let typ = FSharpType.GetTupleElements tupleType |> Array.mapi (fun i t -> i, t) |> Map.ofArray
+            let typ = FSharpType.GetTupleElements tupleType |> Seq.mapi (fun i t -> i, t) |> Map.ofSeq
             let fieldTypeLookup i = typ.[i]
             let fields = FSharpValue.GetTupleFields v
             let exprs = coerceValues fieldTypeLookup fields
@@ -107,19 +107,19 @@ module internal ProvidedEnum =
 
 type internal ProvidedTypeMetadata =
     { Name : string
-      Description : string option }
+      Description : string voption }
 
 module internal ProvidedInterface =
     let makeProvidedType(metadata : ProvidedTypeMetadata) =
         let tdef = ProvidedTypeDefinition("I" + metadata.Name.FirstCharUpper(), None, nonNullable = true, isInterface = true)
-        metadata.Description |> Option.iter tdef.AddXmlDoc
+        metadata.Description |> ValueOption.iter tdef.AddXmlDoc
         tdef
 
 type internal RecordPropertyMetadata =
     { Name : string
       Alias : string voption
-      Description : string option
-      DeprecationReason : string option
+      Description : string voption
+      DeprecationReason : string voption
       Type : Type }
     member x.AliasOrName =
         match x.Alias with
@@ -154,8 +154,8 @@ module internal ProvidedRecord =
                         | Some prop -> prop.Value
                         | None -> failwith $"""Expected to find property "%s{pname}", but the property was not found."""  @@>
                 let pdef = ProvidedProperty(pname, metadata.Type, getterCode)
-                metadata.Description |> Option.iter pdef.AddXmlDoc
-                metadata.DeprecationReason |> Option.iter pdef.AddObsoleteAttribute
+                metadata.Description |> ValueOption.iter pdef.AddXmlDoc
+                metadata.DeprecationReason |> ValueOption.iter pdef.AddObsoleteAttribute
                 pdef))
         let addConstructorDelayed (propertiesGetter : unit -> (string * string voption * Type) list) =
             tdef.AddMembersDelayed(fun _ ->
@@ -529,7 +529,7 @@ module internal Provider =
                 else
                     let getIntrospectionFields typeName =
                         match schemaTypes.TryGetValue typeName with
-                        | true, schematype -> schematype.Fields |> Option.defaultValue [||]
+                        | true, schematype -> schematype.Fields |> ValueOption.defaultValue [||]
                         | false, _ -> failwith $"""Could not find a schema type based on a type reference. The reference is to a "%s{typeName}" type, but that type was not found in the schema types."""
                     let getPropertyMetadata typeName (info : AstFieldInfo) : RecordPropertyMetadata =
                         let ifield =
@@ -587,11 +587,11 @@ module internal Provider =
         let schemaTypes = TypeMapping.getSchemaTypes schema
         let getSchemaType (tref : IntrospectionTypeRef) =
             match tref.Name with
-            | Some name ->
+            | ValueSome name ->
                 match schemaTypes.TryFind(name) with
                 | Some itype -> itype
                 | None -> failwithf "Type \"%s\" was not found on the schema custom types." name
-            | None -> failwith "Expected schema type to have a name, but it does not have one."
+            | ValueNone -> failwith "Expected schema type to have a name, but it does not have one."
         let typeModifier (modifier : Type -> Type) (metadata : RecordPropertyMetadata) = { metadata with Type = modifier metadata.Type }
         let makeOption = typeModifier TypeMapping.makeOption
         let makeArrayOption = typeModifier (TypeMapping.makeArray >> TypeMapping.makeOption)
@@ -629,7 +629,7 @@ module internal Provider =
                 { Name = field.Name
                   Alias = ValueNone
                   Description = field.Description
-                  DeprecationReason = None
+                  DeprecationReason = ValueNone
                   Type = providedType }
                 |> makeOption
             | _ when uploadInputTypeName.IsSome && field.Type.Name.IsSome && uploadInputTypeName.Value = field.Type.Name.Value && field.Type.Kind <> TypeKind.INPUT_OBJECT ->
@@ -646,7 +646,7 @@ module internal Provider =
                 { Name = field.Name
                   Alias = ValueNone
                   Description = field.Description
-                  DeprecationReason = None
+                  DeprecationReason = ValueNone
                   Type = providedType }
                 |> makeOption
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
@@ -661,7 +661,7 @@ module internal Provider =
                     providedTypes.Value <- providedTypes.Value.Add(itype.Name, tdef)
                     let properties =
                         itype.Fields
-                        |> Option.defaultValue [||]
+                        |> ValueOption.defaultValue [||]
                         |> Seq.map resolveFieldMetadata
                         |> Seq.toList
                     upcast ProvidedRecord.makeProvidedType(tdef, properties, explicitOptionalParameters)
@@ -670,7 +670,7 @@ module internal Provider =
                     providedTypes.Value <- providedTypes.Value.Add(itype.Name, tdef)
                     let properties =
                         itype.InputFields
-                        |> Option.defaultValue [||]
+                        |> ValueOption.defaultValue [||]
                         |> Seq.map resolveInputFieldMetadata
                         |> Seq.toList
                     upcast ProvidedRecord.makeProvidedType(tdef, properties, explicitOptionalParameters)
@@ -681,8 +681,8 @@ module internal Provider =
                 | TypeKind.ENUM ->
                     let items =
                         match itype.EnumValues with
-                        | Some values -> values |> Array.map (fun value -> value.Name)
-                        | None -> [||]
+                        | ValueSome values -> values |> Array.map (fun value -> value.Name)
+                        | ValueNone -> [||]
                     let tdef = ProvidedEnum.makeProvidedType(itype.Name, items)
                     providedTypes.Value <- providedTypes.Value.Add(itype.Name, tdef)
                     tdef
@@ -691,8 +691,8 @@ module internal Provider =
         schemaTypes |> Map.iter (fun _ itype -> if not (List.contains itype.Kind ignoredKinds) then resolveProvidedType itype |> ignore)
         let possibleTypes (itype : IntrospectionType) =
             match itype.PossibleTypes with
-            | Some trefs -> trefs |> Array.map (getSchemaType >> resolveProvidedType)
-            | None -> [||]
+            | ValueSome trefs -> trefs |> Array.map (getSchemaType >> resolveProvidedType)
+            | ValueNone -> [||]
         let getProvidedType typeName =
             match providedTypes.Value.TryFind(typeName) with
             | Some ptype -> ptype
@@ -833,16 +833,16 @@ module internal Provider =
                                         | Query -> schema.QueryType
                                         | Mutation ->
                                             match schema.MutationType with
-                                            | Some tref -> tref
-                                            | None -> failwith "The operation is a mutation operation, but the schema does not have a mutation type."
+                                            | ValueSome tref -> tref
+                                            | ValueNone -> failwith "The operation is a mutation operation, but the schema does not have a mutation type."
                                         | Subscription ->
                                             match schema.SubscriptionType with
-                                            | Some tref -> tref
-                                            | None -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
+                                            | ValueSome tref -> tref
+                                            | ValueNone -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
                                     let tinst =
                                         match tref.Name with
-                                        | Some name -> schema.Types |> Array.tryFind (fun t -> t.Name = name)
-                                        | None -> None
+                                        | ValueSome name -> schema.Types |> Array.tryFind (fun t -> t.Name = name)
+                                        | ValueNone -> None
                                     match tinst with
                                     | Some t -> { tref with Kind = t.Kind }
                                     | None -> failwith "The operation was found in the schema, but it does not have a name."
@@ -857,8 +857,8 @@ module internal Provider =
                                 let metadata = getOperationMetadata(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef, explicitOptionalParameters)
                                 let operationTypeName : TypeName =
                                     match operationTypeRef.Name with
-                                    | Some name -> name
-                                    | None -> failwith "Error parsing query. Operation type does not have a name."
+                                    | ValueSome name -> name
+                                    | ValueNone -> failwith "Error parsing query. Operation type does not have a name."
                                 let rec getKind (tref : IntrospectionTypeRef) =
                                     match tref.Kind with
                                     | TypeKind.NON_NULL | TypeKind.LIST  when tref.OfType.IsSome -> getKind tref.OfType.Value
@@ -868,8 +868,8 @@ module internal Provider =
                                     | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getTypeName tref.OfType.Value
                                     | _ ->
                                         match tref.Name with
-                                        | Some tname -> tname
-                                        | None -> failwithf "Expected type kind \"%s\" to have a name, but it does not have a name." (tref.Kind.ToString())
+                                        | ValueSome tname -> tname
+                                        | ValueNone -> failwithf "Expected type kind \"%s\" to have a name, but it does not have a name." (tref.Kind.ToString())
                                 let rec getIntrospectionType (tref : IntrospectionTypeRef) =
                                     match tref.Kind with
                                     | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getIntrospectionType tref.OfType.Value
@@ -891,7 +891,7 @@ module internal Provider =
                                                     | FragmentField fragf ->
                                                         let fragmentType =
                                                             let tref =
-                                                                Option.defaultValue [||] introspectionType.PossibleTypes
+                                                                ValueOption.defaultValue [||] introspectionType.PossibleTypes
                                                                 |> Array.map getIntrospectionType
                                                                 |> Array.append [|introspectionType|]
                                                                 |> Array.tryFind (fun pt -> pt.Name = fragf.TypeCondition)
@@ -900,19 +900,17 @@ module internal Provider =
                                                             | None -> failwithf "Fragment field defines a type condition \"%s\", but that type was not found in the schema definition." fragf.TypeCondition
                                                         let field =
                                                             fragmentType.Fields
-                                                            |> Option.map (Array.tryFind (fun f -> f.Name = fragf.Name))
-                                                            |> Option.flatten
+                                                            |> ValueOption.bind (Array.vtryFind (fun f -> f.Name = fragf.Name))
                                                         match field with
-                                                        | Some f -> f.Type
-                                                        | None -> throw fragmentType.Name
+                                                        | ValueSome f -> f.Type
+                                                        | ValueNone -> throw fragmentType.Name
                                                     | TypeField typef ->
                                                         let field =
                                                             introspectionType.Fields
-                                                            |> Option.map (Array.tryFind (fun f -> f.Name = typef.Name))
-                                                            |> Option.flatten
+                                                            |> ValueOption.bind (Array.vtryFind (fun f -> f.Name = typef.Name))
                                                         match field with
-                                                        | Some f -> f.Type
-                                                        | None -> throw introspectionType.Name
+                                                        | ValueSome f -> f.Type
+                                                        | ValueNone -> throw introspectionType.Name
                                                 let fields =
                                                     match getKind tref with
                                                     | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->

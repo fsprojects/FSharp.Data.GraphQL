@@ -179,7 +179,7 @@ let rec private coerceObjectListFilterInput (variables : Variables) inputValue :
 let ObjectListFilterType : InputCustomDefinition<ObjectListFilter> = {
     Name = "ObjectListFilter"
     Description =
-        Some
+        ValueSome
             (String.concat
                 " "
                 [

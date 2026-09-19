@@ -63,7 +63,7 @@ module Introspection =
         /// Directive name.
         Name : string
         /// Description of a target directive.
-        Description : string option
+        Description : string voption
         /// Array of AST locations, where it's valid to place target directive.
         Locations : DirectiveLocation[]
         /// Array of arguments, current directive can be parametrized with.
@@ -77,22 +77,22 @@ module Introspection =
         /// Type name. Must be unique in scope of the defined schema.
         Name : string
         /// Optional type description.
-        Description : string option
+        Description : string voption
         /// Array of field descriptors defined within current type.
         /// Only present for Object and Interface types.
-        Fields : IntrospectionField[] option
+        Fields : IntrospectionField[] voption
         /// Array of interfaces implemented by output object type definition.
-        Interfaces : IntrospectionTypeRef[] option
+        Interfaces : IntrospectionTypeRef[] voption
         /// Array of type references being possible implementation of current type.
         /// Only present for Union types (list of union cases) and Interface types
         /// (list of all objects implementing interface in scope of the schema).
-        PossibleTypes : IntrospectionTypeRef[] option
+        PossibleTypes : IntrospectionTypeRef[] voption
         /// Array of enum values defined by current Enum type.
-        EnumValues : IntrospectionEnumVal[] option
+        EnumValues : IntrospectionEnumVal[] voption
         /// Array of input fields defined by current InputObject type.
-        InputFields : IntrospectionInputVal[] option
+        InputFields : IntrospectionInputVal[] voption
         /// Type param reference - used only by List and NonNull types.
-        OfType : IntrospectionTypeRef option
+        OfType : IntrospectionTypeRef voption
     } with
 
         /// <summary>
@@ -100,16 +100,16 @@ module Introspection =
         /// </summary>
         /// <param name="name">Type name (unique in the scope of current schema).</param>
         /// <param name="description">Optional type description.</param>
-        static member Scalar (name : string, description : string option) = {
+        static member Scalar (name : string, description : string voption) = {
             Kind = TypeKind.SCALAR
             Name = name
             Description = description
-            Fields = None
-            Interfaces = None
-            PossibleTypes = None
-            EnumValues = None
-            InputFields = None
-            OfType = None
+            Fields = ValueNone
+            Interfaces = ValueNone
+            PossibleTypes = ValueNone
+            EnumValues = ValueNone
+            InputFields = ValueNone
+            OfType = ValueNone
         }
 
         /// <summary>
@@ -119,16 +119,16 @@ module Introspection =
         /// <param name="description">Optional type description.</param>
         /// <param name="fields">Array of fields defined in current object.</param>
         /// <param name="interfaces">Array of interfaces, current object implements.</param>
-        static member Object (name : string, description : string option, fields : IntrospectionField[], interfaces : IntrospectionTypeRef[]) = {
+        static member Object (name : string, description : string voption, fields : IntrospectionField[], interfaces : IntrospectionTypeRef[]) = {
             Kind = TypeKind.OBJECT
             Name = name
             Description = description
-            Fields = Some fields
-            Interfaces = Some interfaces
-            PossibleTypes = None
-            EnumValues = None
-            InputFields = None
-            OfType = None
+            Fields = ValueSome fields
+            Interfaces = ValueSome interfaces
+            PossibleTypes = ValueNone
+            EnumValues = ValueNone
+            InputFields = ValueNone
+            OfType = ValueNone
         }
 
         /// <summary>
@@ -137,16 +137,16 @@ module Introspection =
         /// <param name="name">Type name (unique in the scope of current schema).</param>
         /// <param name="description">Optional type description.</param>
         /// <param name="inputFields">Array of input fields defined in current input object.</param>
-        static member InputObject (name : string, description : string option, inputFields : IntrospectionInputVal[]) = {
+        static member InputObject (name : string, description : string voption, inputFields : IntrospectionInputVal[]) = {
             Kind = TypeKind.INPUT_OBJECT
             Name = name
             Description = description
-            Fields = None
-            Interfaces = None
-            PossibleTypes = None
-            EnumValues = None
-            InputFields = Some inputFields
-            OfType = None
+            Fields = ValueNone
+            Interfaces = ValueNone
+            PossibleTypes = ValueNone
+            EnumValues = ValueNone
+            InputFields = ValueSome inputFields
+            OfType = ValueNone
         }
 
         /// <summary>
@@ -155,16 +155,16 @@ module Introspection =
         /// <param name="name">Type name (unique in the scope of current schema).</param>
         /// <param name="description">Optional type description.</param>
         /// <param name="possibleTypes">Array of union case types. They can be any type defined in GraphQL schema.</param>
-        static member Union (name : string, description : string option, possibleTypes : IntrospectionTypeRef[]) = {
+        static member Union (name : string, description : string voption, possibleTypes : IntrospectionTypeRef[]) = {
             Kind = TypeKind.UNION
             Name = name
             Description = description
-            Fields = None
-            Interfaces = None
-            PossibleTypes = Some possibleTypes
-            EnumValues = None
-            InputFields = None
-            OfType = None
+            Fields = ValueNone
+            Interfaces = ValueNone
+            PossibleTypes = ValueSome possibleTypes
+            EnumValues = ValueNone
+            InputFields = ValueNone
+            OfType = ValueNone
         }
 
         /// <summary>
@@ -173,16 +173,16 @@ module Introspection =
         /// <param name="name">Type name (unique in the scope of current schema).</param>
         /// <param name="description">Optional type description.</param>
         /// <param name="enumValues">Array of enum value descriptors.</param>
-        static member Enum (name : string, description : string option, enumValues : IntrospectionEnumVal[]) = {
+        static member Enum (name : string, description : string voption, enumValues : IntrospectionEnumVal[]) = {
             Kind = TypeKind.ENUM
             Name = name
             Description = description
-            Fields = None
-            Interfaces = None
-            PossibleTypes = None
-            EnumValues = Some enumValues
-            InputFields = None
-            OfType = None
+            Fields = ValueNone
+            Interfaces = ValueNone
+            PossibleTypes = ValueNone
+            EnumValues = ValueSome enumValues
+            InputFields = ValueNone
+            OfType = ValueNone
         }
 
         /// <summary>
@@ -192,16 +192,16 @@ module Introspection =
         /// <param name="description">Optional type description.</param>
         /// <param name="fields">Array of fields being part of the interface contract.</param>
         /// <param name="possibleTypes">Array of schema objects implementing target interface.</param>
-        static member Interface (name : string, description : string option, fields : IntrospectionField[], possibleTypes : IntrospectionTypeRef[]) = {
+        static member Interface (name : string, description : string voption, fields : IntrospectionField[], possibleTypes : IntrospectionTypeRef[]) = {
             Kind = TypeKind.INTERFACE
             Name = name
             Description = description
-            Fields = Some fields
-            Interfaces = None
-            PossibleTypes = Some possibleTypes
-            EnumValues = None
-            InputFields = None
-            OfType = None
+            Fields = ValueSome fields
+            Interfaces = ValueNone
+            PossibleTypes = ValueSome possibleTypes
+            EnumValues = ValueNone
+            InputFields = ValueNone
+            OfType = ValueNone
         }
 
     /// Introspection type reference. Used to navigate between type dependencies inside introspected schema.
@@ -209,18 +209,23 @@ module Introspection =
         /// Referenced type kind.
         Kind : TypeKind
         /// Type name. None if referenced type is List or NonNull.
-        Name : string option
+        Name : string voption
         /// Optional type description.
-        Description : string option
+        Description : string voption
         /// Type param reference. Used only by List and NonNull types.
-        OfType : IntrospectionTypeRef option
+        OfType : IntrospectionTypeRef voption
     } with
 
         /// <summary>
         /// Constructs an introspection type reference for List types.
         /// </summary>
         /// <param name="inner">Type reference for type used as List's type param.</param>
-        static member List (inner : IntrospectionTypeRef) = { Kind = TypeKind.LIST; Name = None; Description = None; OfType = Some inner }
+        static member List (inner : IntrospectionTypeRef) = {
+            Kind = TypeKind.LIST
+            Name = ValueNone
+            Description = ValueNone
+            OfType = ValueSome inner
+        }
 
         /// <summary>
         /// Constructs an introspection type reference for NonNull types.
@@ -228,9 +233,9 @@ module Introspection =
         /// <param name="inner">Type reference for type used as NonNull's type param.</param>
         static member NonNull (inner : IntrospectionTypeRef) = {
             Kind = TypeKind.NON_NULL
-            Name = None
-            Description = None
-            OfType = Some inner
+            Name = ValueNone
+            Description = ValueNone
+            OfType = ValueSome inner
         }
 
         /// <summary>
@@ -240,9 +245,9 @@ module Introspection =
         /// <param name="inner">Introspection type descriptor to construct reference from.</param>
         static member Named (inner : IntrospectionType) = {
             Kind = inner.Kind
-            Name = Some inner.Name
+            Name = ValueSome inner.Name
             Description = inner.Description
-            OfType = None
+            OfType = ValueNone
         }
 
     /// Introspection descriptor for input values (InputObject fields or field arguments).
@@ -250,11 +255,11 @@ module Introspection =
         /// Input argument name.
         Name : string
         /// Optional input argument description.
-        Description : string option
+        Description : string voption
         /// Introspection reference to argument's type.
         Type : IntrospectionTypeRef
         /// Default arguments value, if provided.
-        DefaultValue : string option
+        DefaultValue : string voption
     }
 
     /// Introspection descriptor for enum values.
@@ -262,12 +267,12 @@ module Introspection =
         /// Enum value name - must be unique in scope of defining enum.
         Name : string
         /// Optional enum value description.
-        Description : string option
+        Description : string voption
         /// If true, marks current value as deprecated, but still
         /// available for compatibility reasons.
         IsDeprecated : bool
         /// If value is deprecated this field may describe a deprecation reason.
-        DeprecationReason : string option
+        DeprecationReason : string voption
     }
 
     /// Introspection descriptor for Object and Interface fields.
@@ -275,7 +280,7 @@ module Introspection =
         /// Field name. Must be unique in scope of the definin object/interface.
         Name : string
         /// Optional field description.
-        Description : string option
+        Description : string voption
         /// Array of field arguments. In GraphQL fields can be parametrized,
         /// working effectively like methods.
         Args : IntrospectionInputVal[]
@@ -285,7 +290,7 @@ module Introspection =
         /// available for compatibility reasons.
         IsDeprecated : bool
         /// If field is deprecated here a deprecation reason may be set.
-        DeprecationReason : string option
+        DeprecationReason : string voption
     }
 
     /// Introspection descriptor for target schema. Contains informations about
@@ -294,9 +299,9 @@ module Introspection =
         /// Introspection reference to schema's query root.
         QueryType : IntrospectionTypeRef
         /// Introspection reference to schema's mutation root.
-        MutationType : IntrospectionTypeRef option
+        MutationType : IntrospectionTypeRef voption
         /// Introspection reference to schema's subscription root.
-        SubscriptionType : IntrospectionTypeRef option
+        SubscriptionType : IntrospectionTypeRef voption
         /// Array of all introspection types defined within current schema.
         /// Includes types for queries, mutations and subscriptions.
         Types : IntrospectionType array
@@ -423,11 +428,11 @@ and ISchema =
 
         /// A mutation root object. Defines all top level operations,
         /// that can be performed from GraphQL mutations.
-        abstract Mutation : ObjectDef option
+        abstract Mutation : ObjectDef voption
 
         // A subscription root object. Defines all top level operations,
         // that can be performed from GraphQL subscriptions.
-        abstract Subscription : SubscriptionObjectDef option
+        abstract Subscription : SubscriptionObjectDef voption
 
         /// List of all directives supported by the current schema.
         abstract Directives : DirectiveDef[]
@@ -467,8 +472,8 @@ and ISchema<'Root> =
     interface
         inherit ISchema
         abstract Query : ObjectDef<'Root>
-        abstract Mutation : ObjectDef<'Root> option
-        abstract Subscription : SubscriptionObjectDef<'Root> option
+        abstract Mutation : ObjectDef<'Root> voption
+        abstract Subscription : SubscriptionObjectDef<'Root> voption
     end
 
 /// A type alias for a field execute compiler function.
@@ -1020,9 +1025,9 @@ and FieldDef =
         /// Name of the field.
         abstract Name : string
         /// Optional field description.
-        abstract Description : string option
+        abstract Description : string voption
         /// Optional field deprecation warning.
-        abstract DeprecationReason : string option
+        abstract DeprecationReason : string voption
         /// Field's GraphQL type definition.
         abstract TypeDef : OutputDef
         /// Field's arguments list.
@@ -1052,7 +1057,7 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
     { /// Name of the field.
       Name : string
       /// Optional field description.
-      Description : string option
+      Description : string voption
       /// Field's GraphQL type definition.
       TypeDef : OutputDef<'Res>
       /// Field resolution function.
@@ -1060,7 +1065,7 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
       /// Field's arguments list.
       Args : InputFieldDef []
       /// Optional field deprecation warning.
-      DeprecationReason : string option
+      DeprecationReason : string voption
       /// Field metadata definition.
       Metadata : Metadata }
 
@@ -1112,7 +1117,7 @@ and ScalarDef =
         /// Name of the scalar type.
         abstract Name : string
         /// Optional scalar type description.
-        abstract Description : string option
+        abstract Description : string voption
         /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
         abstract CoerceInput : InputParameterValue -> Result<obj, IGQLError list>
         /// A function used to serialize a .NET object and coerce its value to JSON compatible if needed.
@@ -1128,7 +1133,7 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Primitive, 'Val> = {
     /// Name of the scalar type.
     Name : string
     /// Optional type description.
-    Description : string option
+    Description : string voption
     /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
     CoerceInput : InputParameterValue -> Result<'Val, IGQLError list>
     /// A function used to set a surrogate representation to be
@@ -1180,7 +1185,7 @@ and FileDef =
         /// Name of the file type.
         abstract Name : string
         /// Optional scalar type description.
-        abstract Description : string option
+        abstract Description : string voption
         /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
         abstract Coerce : IInputExecutionContext -> InputParameterValue -> Result<obj, string>
         inherit TypeDef
@@ -1195,11 +1200,11 @@ and EnumVal =
         /// Identifier of the enum value.
         abstract Name : string
         /// Optional enum value description.
-        abstract Description : string option
+        abstract Description : string voption
         /// Value to be stringified as a result to the user.
         abstract Value : obj
         /// Optional description of the deprecation reason.
-        abstract DeprecationReason : string option
+        abstract DeprecationReason : string voption
     end
 
 /// A GraphQL representation of a single case of the enum type.
@@ -1210,9 +1215,9 @@ and EnumValue<'Val> = {
     /// Value to be stringified as a result to the user.
     Value : 'Val
     /// Optional enum value description.
-    Description : string option
+    Description : string voption
     /// Optional description of the deprecation reason.
-    DeprecationReason : string option
+    DeprecationReason : string voption
 } with
 
     interface EnumVal with
@@ -1231,7 +1236,7 @@ and EnumDef =
         /// Enum type name.
         abstract Name : string
         /// Optional enum type description.
-        abstract Description : string option
+        abstract Description : string voption
         /// List of available enum cases.
         abstract Options : EnumVal[]
         inherit TypeDef
@@ -1256,7 +1261,7 @@ and internal EnumDefinition<'Val> = {
     /// Enum type name.
     Name : string
     /// Optional enum type description.
-    Description : string option
+    Description : string voption
     /// List of available enum cases.
     Options : EnumValue<'Val>[]
 } with
@@ -1297,14 +1302,14 @@ and ObjectDef =
         /// Name of the object type definition.
         abstract Name : string
         /// Optional object definition description.
-        abstract Description : string option
+        abstract Description : string voption
         /// Collection of fields defined by the current object.
         abstract Fields : Map<string, FieldDef>
         /// Collection of interfaces implemented by the current object.
         abstract Implements : InterfaceDef[]
         /// Optional function used to recognize of provided
         /// .NET object is valid for this GraphQL object definition.
-        abstract IsTypeOf : (obj -> bool) option
+        abstract IsTypeOf : (obj -> bool) voption
         inherit TypeDef
         inherit NamedDef
         inherit OutputDef
@@ -1327,7 +1332,7 @@ and [<CustomEquality; NoComparison>] internal ObjectDefinition<'Val> = {
     /// Name of the object type definition.
     Name : string
     /// Optional object definition description.
-    Description : string option
+    Description : string voption
     /// Lazy resolver for the object fields. It must be lazy in
     /// order to allow self-recursive type references.
     FieldsFn : Lazy<Map<string, FieldDef<'Val>>>
@@ -1335,7 +1340,7 @@ and [<CustomEquality; NoComparison>] internal ObjectDefinition<'Val> = {
     Implements : InterfaceDef[]
     /// Optional function used to recognize of provided
     /// .NET object is valid for this GraphQL object definition.
-    IsTypeOf : (obj -> bool) option
+    IsTypeOf : (obj -> bool) voption
 } with
 
     interface TypeDef with
@@ -1382,14 +1387,14 @@ and InterfaceDef =
         /// Name of the interface type definition.
         abstract Name : string
         /// Optional interface description.
-        abstract Description : string option
+        abstract Description : string voption
         /// List of fields to be defined by implementing object
         /// definition in order to satisfy current interface.
         abstract Fields : FieldDef[]
         /// Optional funciton used to determine, which object
         /// definition is a concrete implementation of the current
         /// interface for provided .NET object.
-        abstract ResolveType : (obj -> ObjectDef) option
+        abstract ResolveType : (obj -> ObjectDef) voption
         inherit TypeDef
         inherit OutputDef
         inherit CompositeDef
@@ -1413,7 +1418,7 @@ and [<CustomEquality; NoComparison>] internal InterfaceDefinition<'Val> = {
     /// Name of the interface type definition.
     Name : string
     /// Optional interface description.
-    Description : string option
+    Description : string voption
     /// Lazy definition of fields to be defined by implementing
     /// object definition in order to satisfy current interface.
     /// Must be lazy in order to allow self-referencing types.
@@ -1421,7 +1426,7 @@ and [<CustomEquality; NoComparison>] internal InterfaceDefinition<'Val> = {
     /// Optional funciton used to determine, which object
     /// definition is a concrete implementation of the current
     /// interface for provided .NET object.
-    ResolveType : (obj -> ObjectDef) option
+    ResolveType : (obj -> ObjectDef) voption
 } with
 
     interface TypeDef with
@@ -1467,13 +1472,13 @@ and UnionDef =
         /// Name of the union type definition.
         abstract Name : string
         /// Optiona union type description.
-        abstract Description : string option
+        abstract Description : string voption
         /// Collection of object cases represented by this union.
         abstract Options : ObjectDef[]
         /// Optional funciton used to determine, which object
         /// definition is a concrete implementation of the current
         /// union for provided .NET object.
-        abstract ResolveType : (obj -> ObjectDef) option
+        abstract ResolveType : (obj -> ObjectDef) voption
         /// Helper function which provides ability to retrieve
         /// specific values, that are wrapped in F# discriminated unions.
         abstract ResolveValue : obj -> obj
@@ -1491,7 +1496,7 @@ and UnionDef<'In> =
         /// Optional funciton used to determine, which object
         /// definition is a concrete implementation of the current
         /// union for provided .NET object.
-        abstract ResolveType : ('In -> ObjectDef) option
+        abstract ResolveType : ('In -> ObjectDef) voption
         /// Helper function which provides ability to retrieve
         /// specific values, that are wrapped in F# discriminated unions.
         abstract ResolveValue : 'In -> obj
@@ -1505,13 +1510,13 @@ and [<CustomEquality; NoComparison>] internal UnionDefinition<'In, 'Out> = {
     /// Name of the union type definition.
     Name : string
     /// Optiona union type description.
-    Description : string option
+    Description : string voption
     /// Collection of object cases represented by this union.
     Options : ObjectDef[]
     /// Optional funciton used to determine, which object
     /// definition is a concrete implementation of the current
     /// union for provided .NET object.
-    ResolveType : ('In -> ObjectDef) option
+    ResolveType : ('In -> ObjectDef) voption
     /// Helper function which provides ability to retrieve
     /// specific values, that are wrapped in F# discriminated unions.
     ResolveValue : 'In -> 'Out
@@ -1536,7 +1541,7 @@ and [<CustomEquality; NoComparison>] internal UnionDefinition<'In, 'Out> = {
         member x.Options = x.Options
         member x.ResolveType =
             x.ResolveType
-            |> Option.map (fun fn -> (fun value -> fn (value :?> 'In)))
+            |> ValueOption.map (fun fn -> (fun value -> fn (value :?> 'In)))
         member x.ResolveValue value = upcast x.ResolveValue (value :?> 'In)
 
     interface UnionDef<'In> with
@@ -1702,7 +1707,7 @@ and InputObjectDef =
         /// Name of the input object.
         abstract Name : string
         /// Optional input object description.
-        abstract Description : string option
+        abstract Description : string voption
         /// Collection of input object fields.
         abstract Fields : InputFieldDef[]
         /// Validates if input object has a a valid combination of filed values.
@@ -1720,7 +1725,7 @@ and InputObjectDefinition<'Val> = {
     /// Name of the input object.
     Name : string
     /// Optional input object description.
-    Description : string option
+    Description : string voption
     /// Lazy resolver for the input object fields. It must be lazy in
     /// order to allow self-recursive type references.
     Fields : Lazy<InputFieldDef[]>
@@ -1771,13 +1776,13 @@ and InputFieldDef =
         /// Name of the input field / argument.
         abstract Name : string
         /// Optional input field / argument description.
-        abstract Description : string option
+        abstract Description : string voption
         /// Not applied to input object if field is missing but does not allow null.
         abstract IsSkippable : bool
         /// GraphQL type definition of the input type.
         abstract TypeDef : InputDef
         /// Optional default input value - used when no input was provided.
-        abstract DefaultValue : obj option
+        abstract DefaultValue : obj voption
         /// INTERNAL API: input execution function -
         /// compiled by the runtime.
         abstract ExecuteInput : ExecuteInput with get, set
@@ -1790,13 +1795,13 @@ and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> = {
     /// Name of the input field / argument.
     Name : string
     /// Optional input field / argument description.
-    Description : string option
+    Description : string voption
     /// Not applied to input object if field is missing but does not allow null.
     IsSkippable : bool
     /// GraphQL type definition of the input type.
     TypeDef : InputDef<'In>
     /// Optional default input value - used when no input was provided.
-    DefaultValue : 'In option
+    DefaultValue : 'In voption
     /// INTERNAL API: input execution function -
     /// compiled by the runtime.
     mutable ExecuteInput : ExecuteInput
@@ -1807,7 +1812,7 @@ and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> = {
         member x.Description = x.Description
         member x.IsSkippable = x.IsSkippable
         member x.TypeDef = upcast x.TypeDef
-        member x.DefaultValue = x.DefaultValue |> Option.map (fun x -> upcast x)
+        member x.DefaultValue = x.DefaultValue |> ValueOption.map (fun x -> upcast x)
 
         member x.ExecuteInput
             with get () = x.ExecuteInput
@@ -1833,7 +1838,7 @@ and internal InputCustomDef =
         /// Name of the input field / argument.
         abstract Name : string
         /// Optional input field / argument description.
-        abstract Description : string option
+        abstract Description : string voption
         /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
         abstract CoerceInput : InputExecutionContextProvider -> InputParameterValue -> Variables -> Result<obj, IGQLError list>
         inherit TypeDef
@@ -1844,7 +1849,7 @@ and internal InputCustomDef =
 
 and InputCustomDefinition<'Val> = internal {
     Name : string
-    Description : string option
+    Description : string voption
     CoerceInput : InputExecutionContextProvider -> InputParameterValue -> Variables -> Result<'Val, IGQLError list>
 } with
     interface TypeDef with
@@ -1902,8 +1907,8 @@ and SubscriptionFieldDef<'Root, 'Input, 'Output> =
 
 and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input, 'Output> = {
     Name : string
-    Description : string option
-    DeprecationReason : string option
+    Description : string voption
+    DeprecationReason : string voption
     // The type of the value that the subscription consumes, used to make sure that our filter function is properly typed
     OutputTypeDef : OutputDef<'Output>
     // The type of the root value, we need to thread this into our filter function
@@ -1970,7 +1975,7 @@ and SubscriptionObjectDef<'Val> =
 
 and [<CustomEquality; NoComparison>] SubscriptionObjectDefinition<'Val> = {
     Name : string
-    Description : string option
+    Description : string voption
     Fields : Map<string, SubscriptionFieldDef<'Val>>
 } with
 
@@ -1990,7 +1995,7 @@ and [<CustomEquality; NoComparison>] SubscriptionObjectDefinition<'Val> = {
         member x.Fields = x.Fields |> Map.map (fun _ f -> f :> FieldDef)
         member x.Implements = Array.empty : InterfaceDef[]
         // TODO: Actually add istypeof
-        member x.IsTypeOf = None
+        member x.IsTypeOf = ValueNone
     interface ObjectDef<'Val> with
         member x.Fields = x.Fields |> Map.map (fun _ f -> f :> FieldDef<'Val>)
 
@@ -2016,7 +2021,7 @@ and DirectiveDef = {
     /// Directive's name - it's NOT '@' prefixed.
     Name : string
     /// Optional directive description.
-    Description : string option
+    Description : string voption
     /// Directive location - describes, which part's of the query AST
     /// are valid places to include current directive to.
     Locations : DirectiveLocation

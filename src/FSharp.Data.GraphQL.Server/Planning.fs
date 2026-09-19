@@ -30,10 +30,10 @@ let TypeMetaFieldDef =
         typedef = StructNullable __Type,
         args = [
             { Name = "name"
-              Description = None
+              Description = ValueNone
               IsSkippable = false
               TypeDef = StringType
-              DefaultValue = None
+              DefaultValue = ValueNone
               ExecuteInput = variableOrElse(InlineConstant >> coerceStringInput >> Result.map box) }
         ],
         resolve = fun ctx (_:obj) ->
@@ -403,7 +403,7 @@ let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
           Metadata = ctx.Metadata }
     | Mutation ->
         match ctx.Schema.Mutation with
-        | Some mutationDef ->
+        | ValueSome mutationDef ->
             { DocumentId = ctx.DocumentId
               Operation = ctx.Operation
               RootDef = mutationDef
@@ -411,7 +411,7 @@ let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
               Variables = variables
               Strategy = Sequential
               Metadata = ctx.Metadata }
-        | None ->
+        | ValueNone ->
             Debug.Fail "Must be prevented by validation"
             raise (
                 MalformedGQLQueryException
@@ -419,7 +419,7 @@ let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
             )
     | Subscription ->
         match ctx.Schema.Subscription with
-        | Some subscriptionDef ->
+        | ValueSome subscriptionDef ->
             { DocumentId = ctx.DocumentId
               Operation = ctx.Operation
               RootDef = subscriptionDef
@@ -427,7 +427,7 @@ let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
               Variables = variables
               Strategy = Sequential
               Metadata = ctx.Metadata }
-        | None ->
+        | ValueNone ->
             Debug.Fail "Must be prevented by validation"
             raise (
                 MalformedGQLQueryException

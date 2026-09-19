@@ -474,7 +474,7 @@ module SchemaDefinitions =
     let IntType : ScalarDefinition<int> =
         { Name = "Int"
           Description =
-              Some
+              ValueSome
                   "The `Int` scalar type represents non-fractional signed whole numeric values. Int can represent values between -(2^31) and 2^31 - 1."
           CoerceInput = coerceIntInput
           CoerceOutput = coerceIntValue }
@@ -483,7 +483,7 @@ module SchemaDefinitions =
     let LongType : ScalarDefinition<int64> =
         { Name = "Long"
           Description =
-              Some
+              ValueSome
                   "The `Long` scalar type represents non-fractional signed whole numeric values. Long can represent values between -(2^63) and 2^63 - 1."
           CoerceInput = coerceLongInput
           CoerceOutput = coerceLongValue }
@@ -491,7 +491,7 @@ module SchemaDefinitions =
     /// GraphQL type of boolean
     let BooleanType : ScalarDefinition<bool> =
         { Name = "Boolean"
-          Description = Some "The `Boolean` scalar type represents `true` or `false`."
+          Description = ValueSome "The `Boolean` scalar type represents `true` or `false`."
           CoerceInput = coerceBoolInput
           CoerceOutput = coerceBoolValue }
 
@@ -499,7 +499,7 @@ module SchemaDefinitions =
     let FloatType : ScalarDefinition<double> =
         { Name = "Float"
           Description =
-              Some
+              ValueSome
                   "The `Float` scalar type represents signed double-precision fractional values as specified by [IEEE 754](http://en.wikipedia.org/wiki/IEEE_floating_point)."
           CoerceInput = coerceFloatInput
           CoerceOutput = coerceFloatValue }
@@ -508,7 +508,7 @@ module SchemaDefinitions =
     let StringType : ScalarDefinition<string> =
         { Name = "String"
           Description =
-              Some
+              ValueSome
                   "The `String` scalar type represents textual data, represented as UTF-8 character sequences. The `String` type is most often used by GraphQL to represent free-form human-readable text."
           CoerceInput = coerceStringInput
           CoerceOutput = coerceStringValue }
@@ -517,7 +517,7 @@ module SchemaDefinitions =
     let IDType : ScalarDefinition<string> =
         { Name = "ID"
           Description =
-              Some
+              ValueSome
                   "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The `ID` type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID."
           CoerceInput = coerceIdInput
           CoerceOutput = coerceIdValue }
@@ -525,7 +525,7 @@ module SchemaDefinitions =
     let ObjType : ScalarDefinition<obj> = {
             Name = "Object"
             Description =
-               Some
+               ValueSome
                   "The `Object` scalar type represents textual data, represented as UTF-8 character sequences. The `String` type is most often used by GraphQL to represent free-form human-readable text."
             CoerceInput = (fun o -> Ok (o))
             CoerceOutput = (fun o -> Some (o))
@@ -535,7 +535,7 @@ module SchemaDefinitions =
     let UriType : ScalarDefinition<Uri> =
         { Name = "URI"
           Description =
-              Some
+              ValueSome
                   "The `URI` scalar type represents a string resource identifier compatible with URI standard. The `URI` type appears in a JSON response as a String."
           CoerceInput = coerceUriInput
           CoerceOutput = coerceUriValue }
@@ -544,7 +544,7 @@ module SchemaDefinitions =
     let DateTimeOffsetType : ScalarDefinition<DateTimeOffset> =
         { Name = "DateTimeOffset"
           Description =
-              Some
+              ValueSome
                   "The `DateTimeOffset` scalar type represents a Date value with Time component. The `DateTimeOffset` type appears in a JSON response as a String representation compatible with ISO-8601 format."
           CoerceInput = coerceDateTimeOffsetInput
           CoerceOutput = coerceDateTimeOffsetValue }
@@ -553,7 +553,7 @@ module SchemaDefinitions =
     let DateOnlyType : ScalarDefinition<DateOnly> =
         { Name = "DateOnly"
           Description =
-              Some
+              ValueSome
                   "The `DateOnly` scalar type represents a Date value without Time component. The `DateOnly` type appears in a JSON response as a `String` representation of full-date value as specified by [IETF 3339](https://www.ietf.org/rfc/rfc3339.txt)."
           CoerceInput = coerceDateOnlyInput
           CoerceOutput = coerceDateOnlyValue }
@@ -562,7 +562,7 @@ module SchemaDefinitions =
     let TimeOnlyType : ScalarDefinition<TimeOnly> =
         { Name = "TimeOnly"
           Description =
-              Some
+              ValueSome
                   "The `TimeOnly` scalar type represents a Time value without Date component. The `TimeOnly` type appears in a JSON response as a `String` representation of full-time value as specified by [IETF 3339](https://www.ietf.org/rfc/rfc3339.txt)."
           CoerceInput = coerceTimeOnlyInput
           CoerceOutput = coerceTimeOnlyValue }
@@ -571,7 +571,7 @@ module SchemaDefinitions =
     let GuidType : ScalarDefinition<Guid> =
         { Name = "Guid"
           Description =
-              Some
+              ValueSome
                   "The `Guid` scalar type represents a Globally Unique Identifier value. It's a 128-bit long byte key, that can be serialized to string."
           CoerceInput = coerceGuidInput
           CoerceOutput = coerceGuidValue }
@@ -580,7 +580,7 @@ module SchemaDefinitions =
     let FileType : InputCustomDefinition<FileData> = {
         Name = "File"
         Description =
-            Some
+            ValueSome
                 "The `File` type represents a file on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query."
         CoerceInput =
             (fun inputContext input variables ->
@@ -613,35 +613,35 @@ module SchemaDefinitions =
     let IncludeDirective : DirectiveDef =
         { Name = "include"
           Description =
-              Some "Directs the executor to include this field or fragment only when the `if` argument is true."
+              ValueSome "Directs the executor to include this field or fragment only when the `if` argument is true."
           Locations =
               DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
           Args =
               [| { InputFieldDefinition.Name = "if"
-                   Description = Some "Included when true."
+                   Description = ValueSome "Included when true."
                    IsSkippable = false
                    TypeDef = BooleanType
-                   DefaultValue = None
+                   DefaultValue = ValueNone
                    ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box) } |] }
 
     /// GraphQL @skip directive.
     let SkipDirective : DirectiveDef =
         { Name = "skip"
-          Description = Some "Directs the executor to skip this field or fragment when the `if` argument is true."
+          Description = ValueSome "Directs the executor to skip this field or fragment when the `if` argument is true."
           Locations =
               DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
           Args =
               [| { InputFieldDefinition.Name = "if"
-                   Description = Some "Skipped when true."
+                   Description = ValueSome "Skipped when true."
                    IsSkippable = false
                    TypeDef = BooleanType
-                   DefaultValue = None
+                   DefaultValue = ValueNone
                    ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box) } |] }
 
     /// GraphQL @defer directive.
     let DeferDirective : DirectiveDef =
         { Name = "defer"
-          Description = Some "Defers the resolution of this field or fragment"
+          Description = ValueSome "Defers the resolution of this field or fragment"
           Locations =
             DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
           Args = [||] }
@@ -649,7 +649,7 @@ module SchemaDefinitions =
     /// GraphQL @stream directive.
     let StreamDirective : DirectiveDef =
         { Name = "stream"
-          Description = Some "Streams the resolution of this field or fragment"
+          Description = ValueSome "Streams the resolution of this field or fragment"
           Locations =
             DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
           Args = [||] }
@@ -657,7 +657,7 @@ module SchemaDefinitions =
     /// GraphQL @live directive.
     let LiveDirective : DirectiveDef =
         { Name = "live"
-          Description = Some "Subscribes for live updates of this field or fragment"
+          Description = ValueSome "Subscribes for live updates of this field or fragment"
           Locations =
             DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
           Args = [||] }
@@ -676,7 +676,7 @@ module SchemaDefinitions =
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member Scalar(name : string, coerceInput : InputParameterValue -> Result<'T, string>,
-                             coerceOutput : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
+                             coerceOutput : obj -> 'T option, [<Struct>] ?description : string) : ScalarDefinition<'T> =
             { Name = name
               Description = description
               CoerceInput = coerceInput >> Result.mapError (fun msg -> { new IGQLError with member _.Message = msg } |> List.singleton)
@@ -690,7 +690,7 @@ module SchemaDefinitions =
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member Scalar(name : string, coerceInput : InputParameterValue -> Result<'T, string list>,
-                             coerceOutput : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
+                             coerceOutput : obj -> 'T option, [<Struct>] ?description : string) : ScalarDefinition<'T> =
             { Name = name
               Description = description
               CoerceInput = coerceInput >> Result.mapError (List.map (fun msg -> { new IGQLError with member _.Message = msg }))
@@ -704,7 +704,7 @@ module SchemaDefinitions =
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member Scalar(name : string, coerceInput : InputParameterValue -> Result<'T, IGQLError>,
-                             coerceOutput : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
+                             coerceOutput : obj -> 'T option, [<Struct>] ?description : string) : ScalarDefinition<'T> =
             { Name = name
               Description = description
               CoerceInput = coerceInput >> Result.mapError List.singleton
@@ -718,7 +718,7 @@ module SchemaDefinitions =
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member Scalar(name : string, coerceInput : InputParameterValue -> Result<'T, IGQLError list>,
-                             coerceOutput : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
+                             coerceOutput : obj -> 'T option, [<Struct>] ?description : string) : ScalarDefinition<'T> =
             { Name = name
               Description = description
               CoerceInput = coerceInput
@@ -732,7 +732,7 @@ module SchemaDefinitions =
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, string>,
-                                    coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
+                                    coerceOutput : obj -> 'Primitive option, [<Struct>] ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
               CoerceInput = coerceInput >> Result.mapError (fun msg -> { new IGQLError with member _.Message = msg } |> List.singleton)
@@ -746,7 +746,7 @@ module SchemaDefinitions =
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, string list>,
-                                    coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
+                                    coerceOutput : obj -> 'Primitive option, [<Struct>] ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
               CoerceInput = coerceInput >> Result.mapError (List.map (fun msg -> { new IGQLError with member _.Message = msg }))
@@ -760,7 +760,7 @@ module SchemaDefinitions =
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, IGQLError>,
-                                    coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
+                                    coerceOutput : obj -> 'Primitive option, [<Struct>] ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
               CoerceInput = coerceInput >> Result.mapError List.singleton
@@ -774,7 +774,7 @@ module SchemaDefinitions =
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, IGQLError list>,
-                                    coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
+                                    coerceOutput : obj -> 'Primitive option, [<Struct>] ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
               CoerceInput = coerceInput
@@ -786,7 +786,7 @@ module SchemaDefinitions =
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="options">List of enum value cases.</param>
         /// <param name="description">Optional enum description. Usefull for generating documentation.</param>
-        static member Enum(name : string, options : EnumValue<'Val> list, ?description : string) : EnumDef<'Val> =
+        static member Enum(name : string, options : EnumValue<'Val> list, [<Struct>] ?description : string) : EnumDef<'Val> =
             upcast { EnumDefinition.Name = name
                      Description = description
                      Options = options |> List.toArray }
@@ -801,7 +801,7 @@ module SchemaDefinitions =
         /// </param>
         /// <param name="description">Optional enum value description. Usefull for generating documentation.</param>
         /// <param name="deprecationReason">If set, marks an enum value as deprecated.</param>
-        static member EnumValue(name : string, value : 'Val, ?description : string, ?deprecationReason : string) : EnumValue<'Val> =
+        static member EnumValue(name : string, value : 'Val, [<Struct>] ?description : string, [<Struct>] ?deprecationReason : string) : EnumValue<'Val> =
             { Name = name
               Description = description
               Value = value
@@ -820,15 +820,15 @@ module SchemaDefinitions =
         /// <param name="isTypeOf">
         /// Optional function used to determine if provided .NET object instance matches current object definition.
         /// </param>
-        static member Object(name : string, fields : FieldDef<'Val> list, ?description : string,
-                             ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> =
+        static member Object(name : string, fields : FieldDef<'Val> list, [<Struct>] ?description : string,
+                             [<Struct>] ?interfaces : InterfaceDef list, [<Struct>] ?isTypeOf : obj -> bool) : ObjectDef<'Val> =
             upcast { ObjectDefinition.Name = name
                      Description = description
                      FieldsFn =
                          lazy (fields
                                |> List.map (fun f -> f.Name, f)
                                |> Map.ofList)
-                     Implements = defaultArg (Option.map List.toArray interfaces) [||]
+                     Implements = defaultValueArg (ValueOption.map List.toArray interfaces) [||]
                      IsTypeOf = isTypeOf }
 
         /// <summary>
@@ -839,7 +839,7 @@ module SchemaDefinitions =
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="fields">List of input fields defined by the current input object. </param>
         /// <param name="description">Optional input object description. Useful for generating documentation.</param>
-        static member InputObject(name : string, fields : InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
+        static member InputObject(name : string, fields : InputFieldDef list, [<Struct>] ?description : string) : InputObjectDefinition<'Out> =
             { Name = name
               Description = description
               Fields = lazy (fields |> List.toArray)
@@ -855,7 +855,7 @@ module SchemaDefinitions =
         /// <param name="fields">List of input fields defined by the current input object. </param>
         /// <param name="validator">Object validator.</param>
         /// <param name="description">Optional input object description. Useful for generating documentation.</param>
-        static member InputObject(name : string, fields : InputFieldDef list, validator: GQLValidator<'Out>, ?description : string) : InputObjectDefinition<'Out> =
+        static member InputObject(name : string, fields : InputFieldDef list, validator: GQLValidator<'Out>, [<Struct>] ?description : string) : InputObjectDefinition<'Out> =
             { Name = name
               Description = description
               Fields = lazy (fields |> List.toArray)
@@ -868,7 +868,7 @@ module SchemaDefinitions =
         /// <param name="name">Top level name. Must be unique in scope of the current schema.</param>
         /// <param name="fields">List of subscription fields to be defined for the schema. </param>
         /// <param name="description">Optional description. Usefull for generating documentation.</param>
-        static member SubscriptionObject<'Val>(name: string, fields: SubscriptionFieldDef<'Val> list, ?description: string):SubscriptionObjectDefinition<'Val> =
+        static member SubscriptionObject<'Val>(name: string, fields: SubscriptionFieldDef<'Val> list, [<Struct>] ?description: string):SubscriptionObjectDefinition<'Val> =
             { Name = name
               Fields = (fields |> List.map (fun f -> f.Name, f) |> Map.ofList)
               Description = description }
@@ -882,12 +882,12 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">Optional list of arguments used to parametrize field resolution.</param>
         /// <param name="deprecationReason">If set, marks current field as deprecated.</param>
-        static member AutoField(name : string, typedef : #OutputDef<'Res>, ?description: string, ?args: InputFieldDef list, ?deprecationReason: string) : FieldDef<'Val, 'Res> =
+        static member AutoField(name : string, typedef : #OutputDef<'Res>, [<Struct>] ?description: string, [<Struct>] ?args: InputFieldDef list, [<Struct>] ?deprecationReason: string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = description
                      TypeDef = typedef
                      Resolve = Resolve.defaultResolve<'Val, 'Res> name
-                     Args = defaultArg args [] |> Array.ofList
+                     Args = defaultValueArg args [] |> Array.ofList
                      DeprecationReason = deprecationReason
                      Metadata = Metadata.Empty }
 
@@ -898,9 +898,9 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
-        static member Field(name : string, typedef : #OutputDef<'Res>, ?deprecationReason : string) : FieldDef<'Val, 'Res> =
+        static member Field(name : string, typedef : #OutputDef<'Res>, [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
-                     Description = None
+                     Description = ValueNone
                      TypeDef = typedef
                      Resolve = Undefined
                      Args = [||]
@@ -916,9 +916,9 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member Field(name : string, typedef : #OutputDef<'Res>,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?deprecationReason : string) : FieldDef<'Val, 'Res> =
+                            [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
-                     Description = None
+                     Description = ValueNone
                      TypeDef = typedef
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
@@ -935,10 +935,10 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?deprecationReason : string) : FieldDef<'Val, 'Res> =
+                            [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Res> =
 
             upcast { FieldDefinition.Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      TypeDef = typedef
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
@@ -955,9 +955,9 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member Field(name : string, typedef : #OutputDef<'Res>, args : InputFieldDef list,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?deprecationReason : string) : FieldDef<'Val, 'Res> =
+                            [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
-                     Description = None
+                     Description = ValueNone
                      TypeDef = typedef
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
@@ -974,9 +974,9 @@ module SchemaDefinitions =
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?deprecationReason : string) : FieldDef<'Val, 'Res> =
+                            [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      TypeDef = typedef
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
@@ -992,9 +992,9 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?deprecationReason : string) : FieldDef<'Val, 'Res> =
+                                 [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
-                     Description = None
+                     Description = ValueNone
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
@@ -1011,9 +1011,9 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?deprecationReason : string) : FieldDef<'Val, 'Res> =
+                                 [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
@@ -1030,9 +1030,9 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, args : InputFieldDef list,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?deprecationReason : string) : FieldDef<'Val, 'Res> =
+                                 [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
-                     Description = None
+                     Description = ValueNone
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
@@ -1051,9 +1051,9 @@ module SchemaDefinitions =
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
                                  args : InputFieldDef list,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?deprecationReason : string) : FieldDef<'Val, 'Res> =
+                                 [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
@@ -1088,9 +1088,9 @@ module SchemaDefinitions =
                                    [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item>>,
                                    [<Struct>] ?batching : StreamBatching<'Item>,
                                    [<Struct>] ?maxConcurrency : int,
-                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq> =
+                                   [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Item seq> =
             upcast { FieldDefinition.Name = name
-                     Description = None
+                     Description = ValueNone
                      TypeDef = typedef
                      Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
                      Args = [||]
@@ -1126,9 +1126,9 @@ module SchemaDefinitions =
                                    [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item>>,
                                    [<Struct>] ?batching : StreamBatching<'Item>,
                                    [<Struct>] ?maxConcurrency : int,
-                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq> =
+                                   [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Item seq> =
             upcast { FieldDefinition.Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      TypeDef = typedef
                      Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
                      Args = [||]
@@ -1164,9 +1164,9 @@ module SchemaDefinitions =
                                    [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item>>,
                                    [<Struct>] ?batching : StreamBatching<'Item>,
                                    [<Struct>] ?maxConcurrency : int,
-                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq> =
+                                   [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Item seq> =
             upcast { FieldDefinition.Name = name
-                     Description = None
+                     Description = ValueNone
                      TypeDef = typedef
                      Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
                      Args = args |> List.toArray
@@ -1203,9 +1203,9 @@ module SchemaDefinitions =
                                    [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item>>,
                                    [<Struct>] ?batching : StreamBatching<'Item>,
                                    [<Struct>] ?maxConcurrency : int,
-                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq> =
+                                   [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Item seq> =
             upcast { FieldDefinition.Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      TypeDef = typedef
                      Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
                      Args = args |> List.toArray
@@ -1240,9 +1240,9 @@ module SchemaDefinitions =
                                    [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item> option>,
                                    [<Struct>] ?batching : StreamBatching<'Item>,
                                    [<Struct>] ?maxConcurrency : int,
-                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq option> =
+                                   [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Item seq option> =
             upcast { FieldDefinition.Name = name
-                     Description = None
+                     Description = ValueNone
                      TypeDef = typedef
                      Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
                      Args = [||]
@@ -1278,9 +1278,9 @@ module SchemaDefinitions =
                                    [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item> option>,
                                    [<Struct>] ?batching : StreamBatching<'Item>,
                                    [<Struct>] ?maxConcurrency : int,
-                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq option> =
+                                   [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Item seq option> =
             upcast { FieldDefinition.Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      TypeDef = typedef
                      Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
                      Args = [||]
@@ -1316,9 +1316,9 @@ module SchemaDefinitions =
                                    [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item> option>,
                                    [<Struct>] ?batching : StreamBatching<'Item>,
                                    [<Struct>] ?maxConcurrency : int,
-                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq option> =
+                                   [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Item seq option> =
             upcast { FieldDefinition.Name = name
-                     Description = None
+                     Description = ValueNone
                      TypeDef = typedef
                      Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
                      Args = args |> List.toArray
@@ -1355,9 +1355,9 @@ module SchemaDefinitions =
                                    [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item> option>,
                                    [<Struct>] ?batching : StreamBatching<'Item>,
                                    [<Struct>] ?maxConcurrency : int,
-                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq option> =
+                                   [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Item seq option> =
             upcast { FieldDefinition.Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      TypeDef = typedef
                      Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
                      Args = args |> List.toArray
@@ -1392,9 +1392,9 @@ module SchemaDefinitions =
                                    [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item> voption>,
                                    [<Struct>] ?batching : StreamBatching<'Item>,
                                    [<Struct>] ?maxConcurrency : int,
-                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq voption> =
+                                   [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Item seq voption> =
             upcast { FieldDefinition.Name = name
-                     Description = None
+                     Description = ValueNone
                      TypeDef = typedef
                      Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
                      Args = [||]
@@ -1430,9 +1430,9 @@ module SchemaDefinitions =
                                    [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item> voption>,
                                    [<Struct>] ?batching : StreamBatching<'Item>,
                                    [<Struct>] ?maxConcurrency : int,
-                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq voption> =
+                                   [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Item seq voption> =
             upcast { FieldDefinition.Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      TypeDef = typedef
                      Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
                      Args = [||]
@@ -1468,9 +1468,9 @@ module SchemaDefinitions =
                                    [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item> voption>,
                                    [<Struct>] ?batching : StreamBatching<'Item>,
                                    [<Struct>] ?maxConcurrency : int,
-                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq voption> =
+                                   [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Item seq voption> =
             upcast { FieldDefinition.Name = name
-                     Description = None
+                     Description = ValueNone
                      TypeDef = typedef
                      Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
                      Args = args |> List.toArray
@@ -1507,9 +1507,9 @@ module SchemaDefinitions =
                                    [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> IAsyncEnumerable<'Item> voption>,
                                    [<Struct>] ?batching : StreamBatching<'Item>,
                                    [<Struct>] ?maxConcurrency : int,
-                                   ?deprecationReason : string) : FieldDef<'Val, 'Item seq voption> =
+                                   [<Struct>] ?deprecationReason : string) : FieldDef<'Val, 'Item seq voption> =
             upcast { FieldDefinition.Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      TypeDef = typedef
                      Resolve = TaskSeq(typeof<'Val>, typeof<'Item>, resolve, StreamBatching<'Item>.ToStreamingOptions (batching, maxConcurrency))
                      Args = args |> List.toArray
@@ -1523,11 +1523,11 @@ module SchemaDefinitions =
         /// <param name="execField">Expression used to execute the field.</param>
         static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val, obj> =
             upcast { FieldDefinition.Name = name
-                     Description = None
+                     Description = ValueNone
                      TypeDef = ObjType
                      Resolve = ResolveExpr(execField)
                      Args = [||]
-                     DeprecationReason = None
+                     DeprecationReason = ValueNone
                      Metadata = Metadata.Empty }
 
         /// <summary>
@@ -1540,10 +1540,10 @@ module SchemaDefinitions =
         static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                         [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = None
+                     Description = ValueNone
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = None
+                     DeprecationReason = ValueNone
                      Args = [||]
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1561,10 +1561,10 @@ module SchemaDefinitions =
                                         [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
                                         tagsResolver : TagsResolver): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = None
+                     Description = ValueNone
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = None
+                     DeprecationReason = ValueNone
                      Args = [||]
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1582,10 +1582,10 @@ module SchemaDefinitions =
                                         description: string,
                                         [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = None
+                     DeprecationReason = ValueNone
                      Args = [||]
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1605,10 +1605,10 @@ module SchemaDefinitions =
                                         [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
                                         tagsResolver : TagsResolver): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = None
+                     DeprecationReason = ValueNone
                      Args = [||]
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1628,10 +1628,10 @@ module SchemaDefinitions =
                                         args: InputFieldDef list,
                                         [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = None
+                     DeprecationReason = ValueNone
                      Args = args |> List.toArray
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1653,10 +1653,10 @@ module SchemaDefinitions =
                                         [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
                                         tagsResolver : TagsResolver): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = None
+                     DeprecationReason = ValueNone
                      Args = args |> List.toArray
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1678,10 +1678,10 @@ module SchemaDefinitions =
                                         [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
                                         deprecationReason : string): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = Some deprecationReason
+                     DeprecationReason = ValueSome deprecationReason
                      Args = args |> List.toArray
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1705,10 +1705,10 @@ module SchemaDefinitions =
                                         tagsResolver : TagsResolver,
                                         deprecationReason : string): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = Some deprecationReason
+                     DeprecationReason = ValueSome deprecationReason
                      Args = args |> List.toArray
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1724,10 +1724,10 @@ module SchemaDefinitions =
         static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                              [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = None
+                     Description = ValueNone
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = None
+                     DeprecationReason = ValueNone
                      Args = [||]
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1745,10 +1745,10 @@ module SchemaDefinitions =
                                              [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
                                              tagsResolver : TagsResolver): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = None
+                     Description = ValueNone
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = None
+                     DeprecationReason = ValueNone
                      Args = [||]
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1766,10 +1766,10 @@ module SchemaDefinitions =
                                              description: string,
                                              [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = None
+                     DeprecationReason = ValueNone
                      Args = [||]
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1789,10 +1789,10 @@ module SchemaDefinitions =
                                              [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
                                              tagsResolver : TagsResolver): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = None
+                     DeprecationReason = ValueNone
                      Args = [||]
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1812,10 +1812,10 @@ module SchemaDefinitions =
                                              args: InputFieldDef list,
                                              [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = None
+                     DeprecationReason = ValueNone
                      Args = args |> List.toArray
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1837,10 +1837,10 @@ module SchemaDefinitions =
                                              [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
                                              tagsResolver : TagsResolver): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = None
+                     DeprecationReason = ValueNone
                      Args = args |> List.toArray
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1862,10 +1862,10 @@ module SchemaDefinitions =
                                              [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
                                              deprecationReason : string): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = Some deprecationReason
+                     DeprecationReason = ValueSome deprecationReason
                      Args = args |> List.toArray
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1889,10 +1889,10 @@ module SchemaDefinitions =
                                              tagsResolver : TagsResolver,
                                              deprecationReason : string): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
-                     Description = Some description
+                     Description = ValueSome description
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
-                     DeprecationReason = Some deprecationReason
+                     DeprecationReason = ValueSome deprecationReason
                      Args = args |> List.toArray
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty
@@ -1909,7 +1909,7 @@ module SchemaDefinitions =
         /// <param name="typedef">GraphQL type definition of the current input type</param>
         /// <param name="defaultValue">If defined, this value will be used when no matching input has been provided by the requester.</param>
         /// <param name="description">Optional input description. Usefull for generating documentation.</param>
-        static member Input(name : string, typedef : #InputDef<'In>, ?defaultValue : 'In, ?description : string) : InputFieldDef =
+        static member Input(name : string, typedef : #InputDef<'In>, [<Struct>] ?defaultValue : 'In, [<Struct>] ?description : string) : InputFieldDef =
             upcast { InputFieldDefinition.Name = name
                      Description = description
                      IsSkippable = false
@@ -1927,16 +1927,16 @@ module SchemaDefinitions =
         /// <param name="typedef">GraphQL type definition of the current input type</param>
         /// <param name="defaultValue">If defined, this value will be used when no matching input has been provided by the requester.</param>
         /// <param name="description">Optional input description. Usefull for generating documentation.</param>
-        static member SkippableInput(name : string, typedef : #InputDef<'In>, ?description : string) : InputFieldDef =
+        static member SkippableInput(name : string, typedef : #InputDef<'In>, [<Struct>] ?description : string) : InputFieldDef =
             let typedef : InputDef<'In> = upcast typedef
             upcast { InputFieldDefinition.Name = name
-                     Description = description |> Option.map (fun s -> s + " Skip this field if you want to avoid saving it")
+                     Description = description |> ValueOption.map (fun s -> s + " Skip this field if you want to avoid saving it")
                      IsSkippable = true
                      TypeDef =
                          match (box typedef) with
                          | :? NullableDef<'In> as n -> (n :> InputDef<'In option>)
                          | _ -> Nullable typedef
-                     DefaultValue = None
+                     DefaultValue = ValueNone
                      ExecuteInput = Unchecked.defaultof<ExecuteInput> }
 
         /// <summary>
@@ -1946,8 +1946,8 @@ module SchemaDefinitions =
         /// <param name="fields">List of fields defined by the current interface.</param>
         /// <param name="description">Optional input description. Usefull for generating documentation.</param>
         /// <param name="resolveType">Optional function used to resolve actual Object definition of the .NET object provided as an input.</param>
-        static member Interface(name : string, fields : FieldDef<'Val> list, ?description : string,
-                                ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> =
+        static member Interface(name : string, fields : FieldDef<'Val> list, [<Struct>] ?description : string,
+                                [<Struct>] ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> =
             upcast { InterfaceDefinition.Name = name
                      Description = description
                      FieldsFn = fun () -> fields |> List.toArray
@@ -1964,7 +1964,7 @@ module SchemaDefinitions =
         /// <param name="resolveType">Resolves an Object definition of one of possible types, give input object.</param>
         /// <param name="description">Optional union description. Usefull for generating documentation.</param>
         static member Union(name : string, options : ObjectDef list, resolveValue : 'In -> 'Out,
-                            ?resolveType : 'In -> ObjectDef, ?description : string) : UnionDef<'In> =
+                            [<Struct>] ?resolveType : 'In -> ObjectDef, [<Struct>] ?description : string) : UnionDef<'In> =
             upcast { UnionDefinition.Name = name
                      Description = description
                      Options = options |> List.toArray
@@ -1991,15 +1991,15 @@ module SchemaDefinitions =
         /// <param name="isTypeOf">
         /// Optional function used to determine if provided .NET object instance matches current object definition.
         /// </param>
-        static member Object(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string,
-                             ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> =
+        static member Object(name : string, fieldsFn : unit -> FieldDef<'Val> list, [<Struct>] ?description : string,
+                             [<Struct>] ?interfaces : InterfaceDef list, [<Struct>] ?isTypeOf : obj -> bool) : ObjectDef<'Val> =
             upcast { ObjectDefinition.Name = name
                      Description = description
                      FieldsFn =
                          lazy (fieldsFn()
                                |> List.map (fun f -> f.Name, f)
                                |> Map.ofList)
-                     Implements = defaultArg (Option.map List.toArray interfaces) [||]
+                     Implements = defaultValueArg (ValueOption.map List.toArray interfaces) [||]
                      IsTypeOf = isTypeOf }
 
         /// <summary>
@@ -2012,7 +2012,7 @@ module SchemaDefinitions =
         /// Function which generates a list of input fields defined by the current input object. Useful, when object defines recursive dependencies.
         /// </param>
         /// <param name="description">Optional input object description. Useful for generating documentation.</param>
-        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
+        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, [<Struct>] ?description : string) : InputObjectDefinition<'Out> =
             { Name = name
               Fields = lazy (fieldsFn () |> List.toArray)
               Description = description
@@ -2030,7 +2030,7 @@ module SchemaDefinitions =
         /// </param>
         /// <param name="validator">Object validator.</param>
         /// <param name="description">Optional input object description. Useful for generating documentation.</param>
-        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, validator: GQLValidator<'Out>, ?description : string) : InputObjectDefinition<'Out> =
+        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, validator: GQLValidator<'Out>, [<Struct>] ?description : string) : InputObjectDefinition<'Out> =
             { Name = name
               Fields = lazy (fieldsFn () |> List.toArray)
               Description = description
@@ -2047,8 +2047,8 @@ module SchemaDefinitions =
         /// </param>
         /// <param name="description">Optional input description. Usefull for generating documentation.</param>
         /// <param name="resolveType">Optional function used to resolve actual Object definition of the .NET object provided as an input.</param>
-        static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string,
-                                ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> =
+        static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> list, [<Struct>] ?description : string,
+                                [<Struct>] ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> =
             upcast { InterfaceDefinition.Name = name
                      Description = description
                      FieldsFn = fun () -> fieldsFn() |> List.toArray

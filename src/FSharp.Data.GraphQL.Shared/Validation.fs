@@ -160,13 +160,15 @@ module Ast =
         match tref.Kind with
         | TypeKind.NON_NULL
         | TypeKind.LIST when tref.OfType.IsSome -> tryGetSchemaTypeByRef schemaTypes tref.OfType.Value
-        | _ -> tref.Name |> Option.bind schemaTypes.TryFind
+        | _ ->
+            tref.Name
+            |> ValueOption.bind (schemaTypes.TryFind >> ValueOption.ofOption)
 
     type SchemaInfo = {
         SchemaTypes : Map<string, IntrospectionType>
-        QueryType : IntrospectionType option
-        SubscriptionType : IntrospectionType option
-        MutationType : IntrospectionType option
+        QueryType : IntrospectionType voption
+        SubscriptionType : IntrospectionType voption
+        MutationType : IntrospectionType voption
         Directives : IntrospectionDirective[]
     } with
 
@@ -178,10 +180,10 @@ module Ast =
                 QueryType = tryGetSchemaTypeByRef schemaTypes schema.QueryType
                 MutationType =
                     schema.MutationType
-                    |> Option.bind (tryGetSchemaTypeByRef schemaTypes)
+                    |> ValueOption.bind (tryGetSchemaTypeByRef schemaTypes)
                 SubscriptionType =
                     schema.SubscriptionType
-                    |> Option.bind (tryGetSchemaTypeByRef schemaTypes)
+                    |> ValueOption.bind (tryGetSchemaTypeByRef schemaTypes)
                 Directives = schema.Directives
             }
         member x.TryGetOperationType (ot : OperationType) =
@@ -333,9 +335,7 @@ module Ast =
             |> ValueOption.map _.TypeCondition
             |> ValueOption.defaultValue x.ParentType
 
-    let private tryFindInArrayOption (finder : 'T -> bool) =
-        ValueOption.ofOption
-        >> ValueOption.bind (Array.tryFind finder >> ValueOption.ofOption)
+    let private tryFindInArrayOption (finder : 'T -> bool) = ValueOption.bind (Array.vtryFind finder)
 
     let private onAllSelections (ctx : ValidationContext) (onSelection : SelectionInfo -> ValidationResult<GQLProblemDetails>) =
         let rec traverseSelections selection =
@@ -540,8 +540,8 @@ module Ast =
             else
                 let exists =
                     selection.FragmentOrParentType.Fields
-                    |> Option.map (Array.exists (fun f -> f.Name = selection.Field.Name))
-                    |> Option.defaultValue false
+                    |> ValueOption.map (Array.exists (fun f -> f.Name = selection.Field.Name))
+                    |> ValueOption.defaultValue false
                 if not exists then
                     AstError.AsResult (
                         $"Field '%s{selection.Field.Name}' is not defined in schema type '%s{selection.FragmentOrParentType.Name}'.",
@@ -553,14 +553,14 @@ module Ast =
     let private typesAreApplicable (parentType : IntrospectionType, fragmentType : IntrospectionType) =
         let parentPossibleTypes =
             parentType.PossibleTypes
-            |> Option.defaultValue [||]
-            |> Seq.choose _.Name
+            |> ValueOption.defaultValue [||]
+            |> Seq.vchoose _.Name
             |> Seq.append (Seq.singleton parentType.Name)
             |> Set.ofSeq
         let fragmentPossibleTypes =
             fragmentType.PossibleTypes
-            |> Option.defaultValue [||]
-            |> Seq.choose _.Name
+            |> ValueOption.defaultValue [||]
+            |> Seq.vchoose _.Name
             |> Seq.append (Seq.singleton fragmentType.Name)
             |> Set.ofSeq
         let applicableTypes = Set.intersect parentPossibleTypes fragmentPossibleTypes
@@ -657,9 +657,9 @@ module Ast =
                     |> ValueOption.ofOption
                     |> ValueOption.map _.ArgumentNames
                     |> ValueOption.defaultWith (fun () -> selection.InputValues |> Array.map _.Name)
-                match schemaArgumentNames |> Array.tryFind (fun x -> x = arg.Name) with
-                | Some _ -> Success
-                | None ->
+                match schemaArgumentNames |> Array.vtryFind (fun x -> x = arg.Name) with
+                | ValueSome _ -> Success
+                | ValueNone ->
                     AstError.AsResult (
                         $"Field '%s{selection.Field.Name}' of type '%s{selection.FragmentOrParentType.Name}' does not have an input named '%s{arg.Name}' in its definition.",
                         selection.Path
@@ -669,22 +669,22 @@ module Ast =
             |> ValidationResult.collect (fun directive ->
                 match
                     schemaInfo.Directives
-                    |> Array.tryFind (fun d -> d.Name = directive.Name)
+                    |> Array.vtryFind (fun d -> d.Name = directive.Name)
                 with
-                | Some directiveType ->
+                | ValueSome directiveType ->
                     directive.Arguments
                     |> ValidationResult.collect (fun arg ->
                         match
                             directiveType.Args
-                            |> Array.tryFind (fun argt -> argt.Name = arg.Name)
+                            |> Array.vtryFind (fun argt -> argt.Name = arg.Name)
                         with
-                        | Some _ -> Success
-                        | _ ->
+                        | ValueSome _ -> Success
+                        | ValueNone ->
                             AstError.AsResult (
                                 $"Directive '%s{directiveType.Name}' of field '%s{selection.Field.Name}' of type '%s{selection.FragmentOrParentType.Name}' does not have an argument named '%s{arg.Name}' in its definition.",
                                 selection.Path
                             ))
-                | None -> Success)
+                | ValueNone -> Success)
         argumentsValid @@ directivesValid
 
     let internal validateArgumentNames (ctx : ValidationContext) = onAllSelections ctx (checkFieldArgumentNames ctx.Schema)
@@ -718,9 +718,9 @@ module Ast =
                 | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
                     match
                         selection.Field.Arguments
-                        |> List.tryFind (fun arg -> arg.Name = argDef.Name)
+                        |> List.vtryFind (fun arg -> arg.Name = argDef.Name)
                     with
-                    | Some arg when arg.Value <> NullValue -> Success
+                    | ValueSome arg when arg.Value <> NullValue -> Success
                     | _ ->
                         AstError.AsResult (
                             $"Argument '%s{argDef.Name}' of field '%s{selection.Field.Name}' of type '%s{selection.FragmentOrParentType.Name}' is required and does not have a default value.",
@@ -732,25 +732,25 @@ module Ast =
             |> ValidationResult.collect (fun directive ->
                 match
                     schemaInfo.Directives
-                    |> Array.tryFind (fun d -> d.Name = directive.Name)
+                    |> Array.vtryFind (fun d -> d.Name = directive.Name)
                 with
-                | Some directiveType ->
+                | ValueSome directiveType ->
                     directiveType.Args
                     |> ValidationResult.collect (fun argDef ->
                         match argDef.Type.Kind with
                         | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
                             match
                                 directive.Arguments
-                                |> List.tryFind (fun arg -> arg.Name = argDef.Name)
+                                |> List.vtryFind (fun arg -> arg.Name = argDef.Name)
                             with
-                            | Some arg when arg.Value <> NullValue -> Success
+                            | ValueSome arg when arg.Value <> NullValue -> Success
                             | _ ->
                                 AstError.AsResult (
                                     $"Argument '%s{argDef.Name}' of directive '%s{directiveType.Name}' of field '%s{selection.Field.Name}' of type '%s{selection.FragmentOrParentType.Name}' is required and does not have a default value.",
                                     selection.Path
                                 )
                         | _ -> Success)
-                | None -> Success)
+                | ValueNone -> Success)
         inputsValid @@ directivesValid
 
     let internal validateRequiredArguments (ctx : ValidationContext) = onAllSelections ctx (checkRequiredArguments ctx.Schema)
@@ -904,8 +904,8 @@ module Ast =
         =
         let visitCount =
             visited
-            |> List.filter (fun x -> x = fragName)
-            |> List.length
+            |> Seq.filter (fun x -> x = fragName)
+            |> Seq.length
         if visitCount > 1 then
             AstError.AsResult $"Fragment '%s{fragName}' is making a cyclic reference."
         else
@@ -923,10 +923,10 @@ module Ast =
         | FragmentSpread spread ->
             match
                 fragmentDefinitions
-                |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name)
+                |> List.vtryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name)
             with
-            | Some frag -> checkFragmentMustNotHaveCycles fragmentDefinitions visited spread.Name frag.SelectionSet
-            | None -> Success
+            | ValueSome frag -> checkFragmentMustNotHaveCycles fragmentDefinitions visited spread.Name frag.SelectionSet
+            | ValueNone -> Success
 
     let internal validateFragmentsMustNotFormCycles (ctx : ValidationContext) =
         let fragmentDefinitions =
@@ -961,7 +961,7 @@ module Ast =
             |> getFragmentAndParentTypes
             |> ValidationResult.collect (checkFragmentSpreadIsPossibleInSelection))
 
-    let private checkInputValue (schemaInfo : SchemaInfo) (variables : VariableDefinition list option) (selection : SelectionInfo) =
+    let private checkInputValue (schemaInfo : SchemaInfo) (variables : VariableDefinition list voption) (selection : SelectionInfo) =
         let rec checkIsCoercible (tref : IntrospectionTypeRef) (argName : string) (value : InputValue) =
             let canNotCoerce =
                 AstError.AsResult (
@@ -978,21 +978,21 @@ module Ast =
             | _ when tref.Kind = TypeKind.NON_NULL -> checkIsCoercible tref.OfType.Value argName value
             | IntValue _ ->
                 match tref.Name, tref.Kind with
-                | Some ("ID" | "Int" | "Long" | "Float"), TypeKind.SCALAR -> Success
+                | ValueSome ("ID" | "Int" | "Long" | "Float"), TypeKind.SCALAR -> Success
                 | _ -> canNotCoerce
             | FloatValue _ ->
                 match tref.Name, tref.Kind with
-                | Some "Float", TypeKind.SCALAR -> Success
+                | ValueSome "Float", TypeKind.SCALAR -> Success
                 | _ -> canNotCoerce
             | BooleanValue _ ->
                 match tref.Name, tref.Kind with
-                | Some "Boolean", TypeKind.SCALAR -> Success
+                | ValueSome "Boolean", TypeKind.SCALAR -> Success
                 | _ -> canNotCoerce
             | StringValue _ ->
                 let invalidScalars = [| "Int"; "Float"; "Boolean" |]
                 match tref.Name, tref.Kind with
-                | (Some x, TypeKind.SCALAR) when not (Array.contains x invalidScalars) -> Success
-                | (Some x, TypeKind.INPUT_OBJECT) when x = FileType.Name -> Success
+                | (ValueSome x, TypeKind.SCALAR) when not (Array.contains x invalidScalars) -> Success
+                | (ValueSome x, TypeKind.INPUT_OBJECT) when x = FileType.Name -> Success
                 | _ -> canNotCoerce
             | EnumValue _ ->
                 match tref.Kind with
@@ -1011,10 +1011,10 @@ module Ast =
                 | TypeKind.UNION
                 | TypeKind.INPUT_OBJECT when tref.Name.IsSome ->
                     match schemaInfo.TryGetTypeByRef (tref) with
-                    | Some itype ->
+                    | ValueSome itype ->
                         let fieldMap =
                             itype.InputFields
-                            |> Option.defaultValue [||]
+                            |> ValueOption.defaultValue [||]
                             |> Array.fold (fun acc inputVal -> Map.add inputVal.Name inputVal.Type acc) Map.empty
                         let canCoerceFields =
                             fieldMap
@@ -1040,20 +1040,20 @@ module Ast =
                                         selection.Path
                                     ))
                         canCoerceFields @@ canCoerceProps
-                    | None -> canNotCoerce
+                    | ValueNone -> canNotCoerce
                 | _ -> canNotCoerce
             | VariableName varName ->
                 let variableDefinition =
                     variables
-                    |> Option.defaultValue []
-                    |> List.tryPick (fun v ->
+                    |> ValueOption.defaultValue []
+                    |> List.vtryPick (fun v ->
                         if v.VariableName = varName then
-                            Some (v, schemaInfo.TryGetInputType (v.Type))
+                            ValueSome (v, schemaInfo.TryGetInputType (v.Type))
                         else
-                            None)
+                            ValueNone)
                 match variableDefinition with
-                | Some (vdef, Some vtype) when vdef.DefaultValue.IsSome -> checkIsCoercible vtype argName vdef.DefaultValue.Value
-                | Some (vdef, None) when vdef.DefaultValue.IsSome -> canNotCoerce
+                | ValueSome (vdef, Some vtype) when vdef.DefaultValue.IsSome -> checkIsCoercible vtype argName vdef.DefaultValue.Value
+                | ValueSome (vdef, None) when vdef.DefaultValue.IsSome -> canNotCoerce
                 | _ -> Success
         selection.Field.Arguments
         |> ValidationResult.collect (fun arg ->
@@ -1067,10 +1067,10 @@ module Ast =
     let internal validateInputValues (ctx : ValidationContext) =
         ctx.Definitions
         |> ValidationResult.collect (fun def ->
-            let (vars, selectionSet) =
+            let struct (vars, selectionSet) =
                 match def with
-                | OperationDefinitionInfo odef -> (Some odef.Definition.VariableDefinitions, odef.SelectionSet)
-                | FragmentDefinitionInfo fdef -> (None, fdef.SelectionSet)
+                | OperationDefinitionInfo odef -> struct (ValueSome odef.Definition.VariableDefinitions, odef.SelectionSet)
+                | FragmentDefinitionInfo fdef -> struct (ValueNone, fdef.SelectionSet)
             selectionSet
             |> ValidationResult.collect (checkInputValue ctx.Schema vars))
 
@@ -1096,7 +1096,7 @@ module Ast =
         let selectionSetDirectives =
             frag.SelectionSet
             |> List.collect (getDistinctDirectiveNamesInSelection path)
-        fragDirectives |> List.append selectionSetDirectives
+        fragDirectives @ selectionSetDirectives
 
     let internal validateDirectivesDefined (ctx : ValidationContext) =
         ctx.Definitions
@@ -1411,16 +1411,16 @@ module Ast =
             let usedInSpread =
                 match
                     fragmentDefinitions
-                    |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
+                    |> List.vtryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
                 with
-                | Some frag ->
+                | ValueSome frag ->
                     let usedInSelection =
                         frag.SelectionSet
                         |> List.exists (variableIsUsedInSelection name fragmentDefinitions (spread.Name :: visitedFragments))
                     usedInSelection
                     || (frag.Directives
                         |> List.exists (fun directive -> argumentsContains name directive.Arguments))
-                | None -> false
+                | ValueNone -> false
             usedInSpread
             || (spread.Directives
                 |> List.exists (fun directive -> argumentsContains name directive.Arguments))
@@ -1514,8 +1514,8 @@ module Ast =
                             $"A variable '$%s{varName}' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference.",
                             path
                         )
-                    match inputs |> Array.tryFind (fun x -> x.Name = arg.Name) with
-                    | Some input ->
+                    match inputs |> Array.vtryFind (fun x -> x.Name = arg.Name) with
+                    | ValueSome input ->
                         let locationTypeRef = input.Type
                         if
                             locationTypeRef.Kind = TypeKind.NON_NULL
@@ -1539,7 +1539,7 @@ module Ast =
                             err
                         else
                             Success
-                    | None -> Success
+                    | ValueNone -> Success
                 | None -> Success
             | _ -> Success)
 
