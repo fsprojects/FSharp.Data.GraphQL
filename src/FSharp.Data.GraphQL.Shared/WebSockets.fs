@@ -121,7 +121,7 @@ type SubscriptionExecutionResult = {
         HasNext = Skip
     }
 
-    /// Creates a payload that carries only errors.
+    /// Creates a payload that carries only errors, omitting the top-level <c>data</c> property.
     static member CreateErrors (errors : GQLProblemDetails list) = {
         Data = Skip
         Errors = Include errors
