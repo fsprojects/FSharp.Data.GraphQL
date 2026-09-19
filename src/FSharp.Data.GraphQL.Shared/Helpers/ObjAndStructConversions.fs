@@ -1,6 +1,5 @@
 namespace rec FSharp.Data.GraphQL
 
-open System.Linq
 open System.Collections.Generic
 open FsToolkit.ErrorHandling
 
@@ -27,17 +26,30 @@ module internal ValueTuple =
 [<AutoOpen>]
 module Seq =
 
+    let vtryHead (source : 'T seq) =
+        use enumerator = source.GetEnumerator ()
+        if not (enumerator.MoveNext ()) then
+            ValueNone
+        else
+            ValueSome enumerator.Current
+
+    let vtryLast (source : 'T seq) =
+        use enumerator = source.GetEnumerator ()
+        if not (enumerator.MoveNext ()) then
+            ValueNone
+        else
+            let mutable last = enumerator.Current
+            while enumerator.MoveNext () do
+                last <- enumerator.Current
+            ValueSome last
+
     let vchoose mapping seq =
         seq
         |> Seq.map mapping
         |> Seq.where ValueOption.isSome
         |> Seq.map ValueOption.get
 
-    let vtryFind predicate seq =
-        seq
-        |> Seq.where predicate
-        |> Seq.map ValueSome
-        |> _.FirstOrDefault()
+    let vtryFind predicate (source : 'T seq) = source |> Seq.where predicate |> Seq.vtryHead
 
     let vtryItem index (source : 'T seq) =
         if index < 0 then
@@ -57,32 +69,11 @@ module Seq =
 
             result
 
-    let vtryHead (source : 'T seq) =
-        use enumerator = source.GetEnumerator ()
-        if not (enumerator.MoveNext ()) then
-            ValueNone
-        else
-            match enumerator.Current with
-            | null -> ValueNone
-            | head -> ValueSome head
-
-    let vtryLast (source : 'T seq) =
-        use enumerator = source.GetEnumerator ()
-        if not (enumerator.MoveNext ()) then
-            ValueNone
-        else
-            let mutable last = enumerator.Current
-            while enumerator.MoveNext () do
-                last <- enumerator.Current
-            match last with
-            | null -> ValueNone
-            | last -> ValueSome last
-
 module internal List =
 
-    let vchoose mapping list = list |> Seq.ofList |> Seq.vchoose mapping |> Seq.toList
+    let vchoose mapping list = list |> Seq.vchoose mapping |> Seq.toList
 
-    let vtryFind predicate list = list |> Seq.ofList |> Seq.vtryFind predicate
+    let vtryFind predicate list = list |> Seq.where predicate |> Seq.vtryHead
 
     let vtryItem index list =
         let rec loop currentIndex list =
@@ -96,13 +87,13 @@ module internal List =
 
 module internal Array =
 
-    let vchoose mapping array = array |> Seq.vchoose mapping |> Array.ofSeq
+    let vchoose mapping array = array |> Seq.vchoose mapping |> Seq.toArray
 
     let vtryItem index (array : 'T array) =
         if index < 0 || index >= array.Length then
             ValueNone
         else
-            ValueSome array.[index]
+            ValueSome array[index]
 
 module internal Map =
 
