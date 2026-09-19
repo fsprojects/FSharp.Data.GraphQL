@@ -171,6 +171,35 @@ module Observer =
     let createWithCallback (onReceive : TestObserver<'T> -> 'T -> unit) (sub : IObservable<'T>) =
         new TestObserver<'T>(sub, onReceive)
 
+/// <summary>
+/// Drops every <see cref="GQLDeferredResponseContent.DeferredPending"/> marker from a sequence of deferred,
+/// streamed, or live results.
+/// </summary>
+/// <remarks>
+/// The engine now announces streamed fields before their first item so the transport can translate them into
+/// <c>pending</c> entries; tests of the raw engine events usually assert only the value-carrying payloads and
+/// filter this announcement out.
+/// </remarks>
+let withoutPending (events : GQLDeferredResponseContent seq) =
+    events |> Seq.filter (function DeferredPending _ -> false | _ -> true)
+
+/// <summary>
+/// Drops every <see cref="GQLDeferredResponseContent.DeferredPending"/> and
+/// <see cref="GQLDeferredResponseContent.DeferredCompleted"/> marker from a sequence of deferred, streamed, or
+/// live results.
+/// </summary>
+/// <remarks>
+/// Tests written before these transport-oriented markers existed assert exact positions and counts of
+/// <see cref="GQLDeferredResponseContent.DeferredResult"/> and
+/// <see cref="GQLDeferredResponseContent.DeferredErrors"/> payloads; filtering the markers out before those
+/// assertions keeps them unchanged and correct, since neither carries field data of its own. Tests of the markers
+/// themselves, or of the <c>graphql-transport-ws</c> translation that relies on them, do not use this helper.
+/// </remarks>
+let withoutCompleted (events : GQLDeferredResponseContent seq) =
+    events
+    |> withoutPending
+    |> Seq.filter (function DeferredCompleted _ -> false | _ -> true)
+
 open System.Runtime.CompilerServices
 
 [<Extension>]

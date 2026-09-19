@@ -68,7 +68,7 @@ let execAndValidateNode (query : string) expectedDirect expectedDeferred =
             data |> equals (upcast NameValueLookup.ofList [ "node", upcast expectedDirect ])
             use sub = Observer.create deferred
             sub.WaitCompleted (expectedItemCount)
-            sub.Received
+            (sub.Received |> withoutCompleted)
             |> Seq.cast<GQLDeferredResponseContent>
             |> Seq.iter (fun ad -> expectedDeferred |> contains ad |> ignore)
     | None ->
