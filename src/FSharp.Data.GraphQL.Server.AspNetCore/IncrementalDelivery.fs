@@ -110,6 +110,11 @@ type IncrementalDelivery () =
             | true, value -> pathExistsInData tail value
             | false, _ -> false
         | (:? int as index) :: tail, (:? (obj[]) as items) when index >= 0 && index < items.Length -> pathExistsInData tail items[index]
+        | (:? int as index) :: tail, (:? System.Collections.IEnumerable as items) when index >= 0 ->
+            items
+            |> Seq.cast<obj>
+            |> Seq.tryItem index
+            |> Option.exists (pathExistsInData tail)
         | _ -> false
 
     let takePendingWhen predicate =
