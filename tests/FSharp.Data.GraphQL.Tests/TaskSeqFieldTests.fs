@@ -178,7 +178,7 @@ let ``TaskSeq field without directives waits for a sequence that suspends`` () :
 let ``TaskSeq field with defer directive delivers the whole list in one deferred payload`` () =
     let executor =
         executorFor [
-            Define.TaskSeqField ("numbers", Nullable (ListOf IntType), fun _ _ -> Some (asyncItems [ 1; 2; 3 ]))
+            Define.TaskSeqField ("numbers", StructNullable (ListOf IntType), fun _ _ -> ValueSome (asyncItems [ 1; 2; 3 ]))
         ]
     let expectedData = NameValueLookup.ofList [ "numbers", null ]
     let result = executeQuery executor "{ numbers @defer }"
