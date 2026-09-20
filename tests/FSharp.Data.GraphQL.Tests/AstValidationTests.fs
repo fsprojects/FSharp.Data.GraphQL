@@ -1507,7 +1507,7 @@ let private expectValidationError (expected : GQLProblemDetails) (result : Valid
     | ValidationError errors -> errors |> contains expected |> ignore
     | Success -> fail $"Expected the validation error '%s{expected.Message}' but the document was accepted"
 
-[<Fact(Skip = "Not implemented: StreamDirectiveOnListField validation rule")>]
+[<Fact>]
 let ``Validation should grant that stream is only applied to list fields`` () =
     let query =
         """{
@@ -1522,7 +1522,7 @@ let ``Validation should grant that stream is only applied to list fields`` () =
             "Directive 'stream' on field 'name' of type 'Human' must be applied to a list field."
     )
 
-[<Fact(Skip = "Not implemented: DeferStreamDirectiveOnValidOperations validation rule")>]
+[<Fact>]
 let ``Validation should grant that defer and stream are not used in subscription operations`` () =
     let query =
         """subscription {
@@ -1535,7 +1535,7 @@ let ``Validation should grant that defer and stream are not used in subscription
             "Directive 'defer' is not allowed in a subscription operation. Disable it with `if: false` instead."
     )
 
-[<Fact(Skip = "Not implemented: DeferStreamDirectiveOnRootField validation rule")>]
+[<Fact>]
 let ``Validation should grant that defer and stream are not used on mutation root fields`` () =
     let query =
         """mutation {
@@ -1548,7 +1548,7 @@ let ``Validation should grant that defer and stream are not used on mutation roo
             "Directive 'defer' cannot be applied to a root field of the mutation type 'Mutation'."
     )
 
-[<Fact(Skip = "Not implemented: DeferStreamDirectiveLabel validation rule")>]
+[<Fact>]
 let ``Validation should grant that defer and stream labels are unique in the document`` () =
     let query =
         """{
@@ -1566,7 +1566,7 @@ let ``Validation should grant that defer and stream labels are unique in the doc
             "Label 'x' of directive 'defer' is used more than once. Defer and stream labels must be unique in the document."
     )
 
-[<Fact(Skip = "Not implemented: DeferStreamDirectiveLabel validation rule")>]
+[<Fact>]
 let ``Validation should grant that defer and stream labels are string literals`` () =
     let query =
         """query ($l: String) {
