@@ -1730,7 +1730,7 @@ let ``Deferred field inside a mutation payload`` () =
             DeferredCompleted [ "touch"; "a" ]
         ]
 
-[<Fact(Skip = "Not implemented: if argument of @defer")>]
+[<Fact>]
 let ``Defer directive with if false executes the field inline as if the directive were absent`` () =
     let expectedDirect =
         NameValueLookup.ofList [
@@ -1750,7 +1750,7 @@ let ``Defer directive with if false executes the field inline as if the directiv
         empty errors
         data |> equals (upcast expectedDirect)
 
-[<Fact(Skip = "Not implemented: if argument of @defer")>]
+[<Fact>]
 let ``Defer directive with if given through a true variable still defers the field`` () =
     let query = parse """query ($d: Boolean!) {
         testData {
@@ -1767,7 +1767,7 @@ let ``Defer directive with if given through a true variable still defers the fie
         |> single
         |> equals (DeferredResult ("Apple", [ "testData"; "a" ]))
 
-[<Fact(Skip = "Not implemented: if argument of @stream")>]
+[<Fact>]
 let ``Stream directive with if false returns the whole list inline`` () =
     let expectedDirect =
         NameValueLookup.ofList [
@@ -1790,7 +1790,7 @@ let ``Stream directive with if false returns the whole list inline`` () =
         empty errors
         data |> equals (upcast expectedDirect)
 
-[<Fact(Skip = "Not implemented: initialCount argument of @stream")>]
+[<Fact>]
 let ``Stream directive initialCount delivers the first items in the initial payload and streams the rest`` () =
     let expectedDirect =
         NameValueLookup.ofList [
@@ -1821,7 +1821,7 @@ let ``Stream directive initialCount delivers the first items in the initial payl
             DeferredCompleted [ "testData"; "ifaceList" ]
         ]
 
-[<Fact(Skip = "Not implemented: label argument of @stream")>]
+[<Fact>]
 let ``Stream directive label is announced in the stream's pending marker`` () =
     let query = parse """{
         testData {
@@ -1924,7 +1924,7 @@ let ``The same fragment deferred twice at the same path is delivered once`` () =
             DeferredCompleted [ "testData" ]
         ]
 
-[<Fact(Skip = "Not implemented: DeferStreamDirectiveLabel validation rule")>]
+[<Fact>]
 let ``A deferred label given through a variable is rejected instead of being dropped`` () =
     // The spec forbids variables for `label`; today the executor asserts in Debug and silently drops the label in Release
     let query = parse """query ($l: String) {
@@ -1936,3 +1936,28 @@ let ``A deferred label given through a variable is rejected instead of being dro
     let result = executor.AsyncExecute(query, getMockInputContext, variables = variables) |> sync
     ensureRequestError result <| fun errors ->
         errors |> hasError "label"
+
+[<Fact>]
+let ``Top-level announcements of several deferred and streamed fields precede every payload in field order`` () =
+    let query = parse """{
+        testData {
+            a @defer(label: "first")
+            ifaceList @stream {
+                id
+            }
+            b @defer(label: "third")
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun _ errors deferred ->
+        empty errors
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> List.take 3
+        |> equals [
+            DeferredPending ([ "testData"; "a" ], ValueSome "first", false)
+            DeferredPending ([ "testData"; "ifaceList" ], ValueNone, true)
+            DeferredPending ([ "testData"; "b" ], ValueSome "third", false)
+        ]

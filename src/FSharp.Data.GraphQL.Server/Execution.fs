@@ -6,9 +6,8 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Diagnostics
-open System.Reactive.Disposables
-open System.Reactive.Subjects
 open System.Text.Json
+open System.Threading
 open FSharp.Control.Reactive
 open FsToolkit.ErrorHandling
 
@@ -118,6 +117,54 @@ let private resolveField (execute : ExecuteField) (ctx : ResolveFieldContext) (p
 
 type ResolverResult<'T> = Result<'T * IObservable<GQLDeferredResponseContent> voption * GQLProblemDetails list, GQLProblemDetails list>
 
+/// <summary>
+/// A deferred event stream whose leading <see cref="GQLDeferredResponseContent.DeferredPending"/> announcements are
+/// known up front, so a containing payload can replay them before itself without subscribing first. Subscribing
+/// yields the announcements, then the events.
+/// </summary>
+/// <remarks>
+/// Kept private to the execution engine: outside of it the stream is an ordinary <see cref="IObservable{T}"/>, which
+/// keeps <see cref="ResolverResult{T}"/> unchanged.
+/// </remarks>
+[<Sealed>]
+type private AnnouncedEvents
+    (announcements : GQLDeferredResponseContent list, events : IObservable<GQLDeferredResponseContent>)
+    =
+    member _.Announcements = announcements
+    member _.Events = events
+
+    interface IObservable<GQLDeferredResponseContent> with
+        member _.Subscribe observer =
+            match announcements with
+            | [] -> events.Subscribe observer
+            | _ -> (Observable.ofSeq announcements |> Observable.concat events).Subscribe observer
+
+[<RequireQualifiedAccess>]
+module private AnnouncedEvents =
+
+    /// The announcements carried by the stream, none for a stream that does not carry any.
+    let announcementsOf (events : IObservable<GQLDeferredResponseContent>) =
+        match events with
+        | :? AnnouncedEvents as announced -> announced.Announcements
+        | _ -> []
+
+    /// The stream without its announcements.
+    let eventsOf (events : IObservable<GQLDeferredResponseContent>) =
+        match events with
+        | :? AnnouncedEvents as announced -> announced.Events
+        | _ -> events
+
+    /// The stream, announced by the given event before anything it produces.
+    let announced (announcement : GQLDeferredResponseContent) (events : IObservable<GQLDeferredResponseContent>) : IObservable<GQLDeferredResponseContent> =
+        AnnouncedEvents ([ announcement ], events)
+
+    /// The announcements of first before those of second, and their events merged with first subscribed first.
+    let merge (first : IObservable<GQLDeferredResponseContent>) (second : IObservable<GQLDeferredResponseContent>) : IObservable<GQLDeferredResponseContent> =
+        AnnouncedEvents (
+            [ yield! announcementsOf first; yield! announcementsOf second ],
+            Observable.merge (eventsOf second) (eventsOf first)
+        )
+
 [<RequireQualifiedAccess>]
 module ResolverResult =
 
@@ -166,16 +213,53 @@ let private resolved name v : AsyncVal<ResolverResult<KeyValuePair<string, obj>>
     |> ResolverResult.data
     |> AsyncVal.wrap
 
-let private deferLabel (field : Field) = voption {
-    let! directive =  field.Directives |> List.vtryFind (fun directive -> directive.Name = "defer")
+/// The `label` argument of the @defer or @stream directive on the field, which validation requires to be a literal.
+let private directiveLabel (directiveName : string) (field : Field) = voption {
+    let! directive = field.Directives |> List.vtryFind (fun directive -> directive.Name = directiveName)
     let! argument = directive.Arguments |> List.vtryFind (fun argument -> argument.Name = "label")
     match argument.Value with
     | StringValue label -> return label
     | NullValue -> return! ValueNone
-    | _ ->
-        Debug.Fail "Must be prevented by validation"
-        return! ValueNone
+    | value ->
+        return
+            raise (
+                MalformedGQLQueryException
+                    $"Argument 'label' of directive '@%s{directiveName}' on field '%s{field.AliasOrName}' must be a string literal, but '%O{value}' was provided"
+            )
 }
+
+/// Whether the @defer or @stream directive on the field applies: its `if` argument, true by default, evaluated
+/// against the variables of the request.
+let private isDirectiveEnabled (directiveName : string) (field : Field) (variables : ImmutableDictionary<string, obj>) =
+    voption {
+        let! directive = field.Directives |> List.vtryFind (fun directive -> directive.Name = directiveName)
+        let! argument = directive.Arguments |> List.vtryFind (fun argument -> argument.Name = "if")
+        match argument.Value with
+        | BooleanValue enabled -> return enabled
+        | VariableName name ->
+            match variables.TryGetValue name with
+            | true, (:? bool as enabled) -> return enabled
+            | _ -> return true
+        | _ -> return true
+    }
+    |> ValueOption.defaultValue true
+
+/// The `initialCount` argument of the @stream directive on the field: how many items go into the initial payload.
+let private streamInitialCount (field : Field) (variables : ImmutableDictionary<string, obj>) =
+    voption {
+        let! directive = field.Directives |> List.vtryFind (fun directive -> directive.Name = "stream")
+        let! argument = directive.Arguments |> List.vtryFind (fun argument -> argument.Name = "initialCount")
+        match argument.Value with
+        | IntValue count -> return int count
+        | VariableName name ->
+            match variables.TryGetValue name with
+            | true, (:? int as count) -> return count
+            | true, (:? int64 as count) -> return int count
+            | _ -> return 0
+        | _ -> return 0
+    }
+    |> ValueOption.defaultValue 0
+    |> max 0
 
 /// The result at path itself, not including any of its own nested deferred/streamed fields.
 let private ownDeferredResult
@@ -194,72 +278,45 @@ let private ownDeferredResult
         ownResult, nested
     | Error errs -> Observable.singleton (DeferredErrors (null, errs, formattedPath)), ValueNone
 
-/// Replays the initial nested stream announcements before the containing payload that makes them visible, while
-/// keeping every later nested event in its original relative position afterwards.
-let private prependNestedPending
+/// <summary>
+/// Replays the announcements of the nested deferred and streamed fields before the containing payload that makes
+/// them visible, then the payload itself, its completion, and every later nested event in its original order.
+/// </summary>
+/// <remarks>
+/// The announcements are data carried by the nested stream (see <see cref="AnnouncedEvents"/>), so nothing has to be
+/// subscribed, captured or synchronized to find them: the result is a plain concatenation.
+/// </remarks>
+let private withNestedEvents
     (ownResult : IObservable<GQLDeferredResponseContent>)
     (nested : IObservable<GQLDeferredResponseContent> voption)
     (completed : IObservable<GQLDeferredResponseContent> voption)
     : IObservable<GQLDeferredResponseContent>
     =
-    let appendCompletion events =
+    let ownAndCompletion =
         match completed with
-        | ValueSome completed -> events |> Observable.concat completed
-        | ValueNone -> events
+        | ValueSome completed -> ownResult |> Observable.concat completed
+        | ValueNone -> ownResult
 
     match nested with
-    | ValueNone -> ownResult |> appendCompletion
-    | ValueSome nested -> {
-        new IObservable<GQLDeferredResponseContent> with
-            member _.Subscribe (observer) =
-                let gate = obj ()
-                let pendingPrefix = ResizeArray<GQLDeferredResponseContent>()
-                let tail = new ReplaySubject<GQLDeferredResponseContent> ()
-                let mutable capturePendingPrefix = true
-                let handleNestedEvent event =
-                    lock gate (fun () ->
-                        if capturePendingPrefix then
-                            match event with
-                            | DeferredPending _ -> pendingPrefix.Add event
-                            | _ ->
-                                capturePendingPrefix <- false
-                                tail.OnNext event
-                        else
-                            tail.OnNext event)
+    | ValueNone -> ownAndCompletion
+    | ValueSome nested ->
+        let withAnnouncements =
+            match AnnouncedEvents.announcementsOf nested with
+            | [] -> ownAndCompletion
+            | announcements -> Observable.ofSeq announcements |> Observable.concat ownAndCompletion
 
-                let handleNestedError ex =
-                    lock gate (fun () ->
-                        capturePendingPrefix <- false
-                        tail.OnError ex)
-
-                let handleNestedCompletion () =
-                    lock gate (fun () ->
-                        capturePendingPrefix <- false
-                        tail.OnCompleted ())
-
-                let nestedSubscription = nested.Subscribe (handleNestedEvent, handleNestedError, handleNestedCompletion)
-
-                lock gate (fun () -> capturePendingPrefix <- false)
-
-                let combined =
-                    Observable.ofSeq pendingPrefix
-                    |> Observable.concat ownResult
-                    |> appendCompletion
-                    |> Observable.concat (tail :> IObservable<GQLDeferredResponseContent>)
-
-                new CompositeDisposable (nestedSubscription, combined.Subscribe observer, tail) :> IDisposable
-      }
+        withAnnouncements |> Observable.concat (AnnouncedEvents.eventsOf nested)
 
 let deferResults path (res : ResolverResult<obj>) : IObservable<GQLDeferredResponseContent> =
     let ownResult, nested = ownDeferredResult path res
-    prependNestedPending ownResult nested ValueNone
+    withNestedEvents ownResult nested ValueNone
 
 /// As <see cref="deferResults"/>, followed by a <see cref="DeferredCompleted"/> for path once that field's own
 /// payload has been delivered; any nested deferred or streamed fields keep using their own pending ids afterwards.
 let private deferResultsCompleted path (res : ResolverResult<obj>) : IObservable<GQLDeferredResponseContent> =
     let ownResult, nested = ownDeferredResult path res
     let completed = Observable.singleton (DeferredCompleted (normalizeErrorPath path))
-    prependNestedPending ownResult nested (ValueSome completed)
+    withNestedEvents ownResult nested (ValueSome completed)
 
 /// Collect together an array of results using the appropriate execution strategy.
 let collectFields
@@ -279,7 +336,8 @@ let collectFields
             match (r, acc) with
             | Ok (field, d, e), Ok (i, deferred, errs) ->
                 Array.set data i field
-                Ok (i - 1, ValueOption.mergeWith Observable.merge deferred d, e @ errs)
+                // Folded from the last field back, so the current field comes before the ones already merged
+                Ok (i - 1, ValueOption.mergeWith (fun later current -> AnnouncedEvents.merge current later) deferred d, e @ errs)
             | Error e, Ok (_, _, errs) -> Error (e @ errs)
             | Ok (_, _, e), Error errs -> Error (e @ errs)
             | Error e, Error errs -> Error (e @ errs)
@@ -404,19 +462,18 @@ let rec private direct
 
 and deferred (inputContext : InputExecutionContextProvider) (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
     let info = ctx.ExecutionInfo
-    let deferred =
+    let events =
         executeResolvers inputContext ctx path parent (toValueOption value |> AsyncVal.wrap)
         |> Observable.ofAsyncVal
         |> Observable.bind (
             ResolverResult.mapValue (_.Value)
             >> deferResultsCompleted path
         )
-        |> fun events ->
-            match deferLabel info.Ast with
-            | ValueSome label ->
-                Observable.singleton (DeferredPending (normalizeErrorPath path, ValueSome label, false))
-                |> Observable.concat events
-            | ValueNone -> events
+    // A labeled field is announced up front, so its pending entry can be sent with the payload that exposes it
+    let deferred =
+        match directiveLabel "defer" info.Ast with
+        | ValueSome label -> AnnouncedEvents.announced (DeferredPending (normalizeErrorPath path, ValueSome label, false)) events
+        | ValueNone -> events
     ResolverResult.defered (KeyValuePair (info.Identifier, null)) deferred
     |> AsyncVal.wrap
 
@@ -457,7 +514,7 @@ and private streamed
                 match r with
                 | Ok (item, d, e) ->
                     Array.set data i item.Value
-                    (i - 1, box index :: indices, ValueOption.mergeWith Observable.merge deferred d, e @ errs)
+                    (i - 1, box index :: indices, ValueOption.mergeWith (fun later current -> AnnouncedEvents.merge current later) deferred d, e @ errs)
                 | Error e -> (i - 1, box index :: indices, deferred, e @ errs)
             let (_, indices, deferred, errs) = List.foldBack merge chunk (chunk.Length - 1, [], ValueNone, [])
             deferResults (box indices :: path) (Ok (box data, deferred, errs))
@@ -498,9 +555,12 @@ and private streamed
         events
         |> Observable.concat (Observable.singleton (DeferredCompleted (normalizeErrorPath path)))
 
+    /// A streamed field is announced up front, so its pending entry can be sent with the payload that exposes its list
     let announceStream (events : IObservable<GQLDeferredResponseContent>) =
-        Observable.singleton (DeferredPending (normalizeErrorPath path, ValueNone, true))
-        |> Observable.concat events
+        AnnouncedEvents.announced (DeferredPending (normalizeErrorPath path, directiveLabel "stream" info.Ast, true)) events
+
+    let streamEvents (items : IObservable<StreamEvent>) =
+        items |> buffer |> withStreamCompleted |> announceStream
 
     let resolveItem index item = asyncVal {
         let! result =
@@ -508,32 +568,98 @@ and private streamed
         return (index, result)
     }
 
+    /// Resolves the items the initial payload carries, like the items of an ordinary list field, and attaches the
+    /// stream of the remaining ones, if any, as the field's deferred part
+    let withInitialItems (initialItems : obj[]) (rest : IObservable<GQLDeferredResponseContent> voption) = asyncVal {
+        let! resolved =
+            initialItems
+            |> Array.mapi (fun index item -> executeResolvers inputContext innerCtx (box index :: path) parent (toValueOption item |> AsyncVal.wrap))
+            |> collectFields Parallel
+        match resolved with
+        | Error errs -> return Error errs
+        | Ok (items, nested, errs) ->
+            let deferred =
+                match nested, rest with
+                | ValueSome nested, ValueSome rest -> ValueSome (AnnouncedEvents.merge nested rest)
+                | ValueSome nested, ValueNone -> ValueSome nested
+                | ValueNone, rest -> rest
+            return Ok (KeyValuePair (name, items |> Array.map _.Value |> box), deferred, errs)
+    }
+
+    let initialCount = streamInitialCount info.Ast ctx.Variables
+
     match value with
-    | :? IAsyncEnumerableFieldValue as fieldValue ->
+    | :? IAsyncEnumerableFieldValue as fieldValue when initialCount = 0 ->
         let resolveStreamedItem index item = resolveItem index item |> AsyncVal.map StreamedItem
         let stream : IObservable<GQLDeferredResponseContent> =
             fieldValue.Items
             // At most fieldValue.MaxConcurrency items are pulled from the source and resolved at the same time,
             // each emitted as soon as it is resolved; a failure of the source itself is emitted last
             |> Observable.ofAsyncEnumerableResolved fieldValue.MaxConcurrency resolveStreamedItem StreamFailure
-            |> buffer
-            |> announceStream
-            |> withStreamCompleted
+            |> streamEvents
         ResolverResult.defered (KeyValuePair (name, box [])) stream
         |> AsyncVal.wrap
+    | :? IAsyncEnumerableFieldValue as fieldValue ->
+        // The initial items are pulled here, then the rest of the sequence is streamed through the same enumerator;
+        // a pull already pending when a resolution fails can therefore only be awaited, not cancelled
+        let resolveStreamedItem index item = resolveItem index item |> AsyncVal.map StreamedItem
+        async {
+            let enumerator = fieldValue.Items.GetAsyncEnumerator CancellationToken.None
+            let! pulled = async {
+                try
+                    let items = ResizeArray<obj> ()
+                    let mutable exhausted = false
+                    while items.Count < initialCount && not exhausted do
+                        let! moved = enumerator.MoveNextAsync().AsTask () |> Async.AwaitTask
+                        if moved then
+                            items.Add enumerator.Current
+                        else
+                            exhausted <- true
+                    return Ok (items.ToArray (), exhausted)
+                with e ->
+                    // A failure while pulling the initial items is the list field's own failure, as for a plain list
+                    return Error (resolverError path ctx e)
+            }
+            match pulled with
+            | Error errs ->
+                let! _ = Observable.disposeEnumerator (ValueSome enumerator) ValueNone |> Async.AwaitTask
+                return Error errs
+            | Ok (initialItems, true) ->
+                // The sequence ended within the initial items: delivered whole, nothing is announced or streamed
+                let! _ = Observable.disposeEnumerator (ValueSome enumerator) ValueNone |> Async.AwaitTask
+                return! withInitialItems initialItems ValueNone |> AsyncVal.toAsync
+            | Ok (initialItems, false) ->
+                let remaining =
+                    { new IAsyncEnumerable<obj> with
+                        member _.GetAsyncEnumerator _ = enumerator
+                    }
+                let stream =
+                    remaining
+                    |> Observable.ofAsyncEnumerableResolved
+                        fieldValue.MaxConcurrency
+                        (fun index item -> resolveStreamedItem (index + initialItems.Length) item)
+                        StreamFailure
+                    |> streamEvents
+                return! withInitialItems initialItems (ValueSome stream) |> AsyncVal.toAsync
+        }
+        |> AsyncVal.ofAsync
     | :? System.Collections.IEnumerable as enumerable ->
+        let items = enumerable |> Seq.cast<obj> |> Seq.toArray
+        let initialItems, streamedItems = items |> Array.splitAt (min initialCount items.Length)
         let stream : IObservable<GQLDeferredResponseContent> =
-            enumerable
-            |> Seq.cast<obj>
-            |> Seq.toArray
-            |> Array.mapi resolveItem
+            streamedItems
+            |> Array.mapi (fun index item -> resolveItem (index + initialItems.Length) item)
             |> Observable.ofAsyncValSeq
             |> Observable.map StreamedItem
-            |> buffer
-            |> announceStream
-            |> withStreamCompleted
-        ResolverResult.defered (KeyValuePair (name, box [])) stream
-        |> AsyncVal.wrap
+            |> streamEvents
+        if initialItems.Length = 0 then
+            ResolverResult.defered (KeyValuePair (name, box [])) stream
+            |> AsyncVal.wrap
+        elif streamedItems.Length = 0 then
+            // Every item went into the initial payload: delivered whole, nothing is announced or streamed
+            withInitialItems initialItems ValueNone
+        else
+            withInitialItems initialItems (ValueSome stream)
     | _ ->
         raise
         <| GQLMessageException (ErrorMessages.expectedEnumerableValue ctx.ExecutionInfo.Identifier (value.GetType ()))
@@ -579,7 +705,8 @@ and private live (inputContext : InputExecutionContextProvider) (ctx : ResolveFi
     // TODO: Add tests for `Observable.merge deferred updates` correct order
     |> AsyncVal.map (
         Result.map (fun (data, deferred, errs) ->
-            (data, ValueSome (ValueOption.foldBack Observable.merge deferred updates), errs)
+            // The updates are subscribed first; the nested deferred fields of the initial value keep their announcements
+            (data, ValueSome (ValueOption.foldBack (fun nested updates -> AnnouncedEvents.merge updates nested) deferred updates), errs)
         )
     )
 
@@ -636,6 +763,13 @@ and private executeResolvers
     }
 
     match info.Kind, returnDef with
+    // Disabled with `if: false` given through a variable: resolved inline, as if the directive were absent
+    | ResolveDeferred innerInfo, _ when not (isDirectiveEnabled "defer" innerInfo.Ast ctx.Variables) ->
+        direct returnDef inputContext
+        |> resolveWith { ctx with ExecutionInfo = innerInfo }
+    | ResolveStreamed (innerInfo, _), _ when not (isDirectiveEnabled "stream" innerInfo.Ast ctx.Variables) ->
+        direct returnDef inputContext
+        |> resolveWith { ctx with ExecutionInfo = innerInfo }
     | ResolveDeferred innerInfo, _ when innerInfo.IsNullable -> // We can only defer nullable fields
         deferred inputContext
         |> resolveWith { ctx with ExecutionInfo = innerInfo }

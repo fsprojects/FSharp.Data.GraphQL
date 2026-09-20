@@ -638,27 +638,49 @@ module SchemaDefinitions =
                    DefaultValue = ValueNone
                    ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box) } |] }
 
-    /// GraphQL @defer directive.
+    /// The `if` argument of the @defer and @stream directives: the directive applies only when it is true.
+    let private incrementalIfArgument =
+        { InputFieldDefinition.Name = "if"
+          Description = ValueSome "Deferred or streamed only when true."
+          IsSkippable = false
+          TypeDef = BooleanType
+          DefaultValue = ValueSome true
+          ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box) }
+
+    /// The `label` argument of the @defer and @stream directives, carried by the pending entry that announces the payload.
+    let private incrementalLabelArgument =
+        { InputFieldDefinition.Name = "label"
+          Description = ValueSome "An optional label identifying the deferred or streamed payload."
+          IsSkippable = false
+          TypeDef = Nullable StringType
+          DefaultValue = ValueNone
+          ExecuteInput = variableOrElse (InlineConstant >> coerceStringInput >> Result.map box) }
+
+    /// <summary>GraphQL @defer directive.</summary>
+    /// <remarks>
+    /// The specification allows it on fragment spreads and inline fragments; applying it to a single field is an
+    /// extension of this library.
+    /// </remarks>
     let DeferDirective : DirectiveDef =
         { Name = "defer"
           Description = ValueSome "Defers the resolution of this field or fragment"
-          Locations =
-            DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
-          Args =
-              [| { InputFieldDefinition.Name = "label"
-                   Description = ValueSome "An optional label identifying the deferred payload."
-                   IsSkippable = false
-                   TypeDef = Nullable StringType
-                   DefaultValue = ValueNone
-                   ExecuteInput = variableOrElse (InlineConstant >> coerceStringInput >> Result.map box) } |] }
+          Locations = DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
+          Args = [| incrementalIfArgument; incrementalLabelArgument |] }
 
     /// GraphQL @stream directive.
     let StreamDirective : DirectiveDef =
         { Name = "stream"
           Description = ValueSome "Streams the resolution of this field or fragment"
-          Locations =
-            DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
-          Args = [||] }
+          Locations = DirectiveLocation.FIELD
+          Args =
+              [| incrementalIfArgument
+                 incrementalLabelArgument
+                 { InputFieldDefinition.Name = "initialCount"
+                   Description = ValueSome "The number of list items delivered with the initial payload; the rest is streamed."
+                   IsSkippable = false
+                   TypeDef = Nullable IntType
+                   DefaultValue = ValueSome (Some 0)
+                   ExecuteInput = variableOrElse (InlineConstant >> coerceIntInput >> Result.map box) } |] }
 
     /// GraphQL @live directive.
     let LiveDirective : DirectiveDef =

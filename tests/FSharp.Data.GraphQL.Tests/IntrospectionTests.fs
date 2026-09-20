@@ -1484,13 +1484,20 @@ let ``Introspection executes an introspection query`` () =
                         "description", upcast "Defers the resolution of this field or fragment"
                         "locations", upcast [
                             box <| "FIELD";
-                            upcast "FRAGMENT_DEFINITION";
                             upcast "FRAGMENT_SPREAD";
                             upcast "INLINE_FRAGMENT";]
                         "args", upcast [
                             box <| NameValueLookup.ofList [
+                                "name", upcast "if"
+                                "description", upcast "Deferred or streamed only when true."
+                                "type", upcast NameValueLookup.ofList [
+                                    "kind", upcast "SCALAR"
+                                    "name", upcast "Boolean"
+                                    "ofType", null]
+                                "defaultValue", upcast "true"]
+                            upcast NameValueLookup.ofList [
                                 "name", upcast "label"
-                                "description", upcast "An optional label identifying the deferred payload."
+                                "description", upcast "An optional label identifying the deferred or streamed payload."
                                 "type", upcast NameValueLookup.ofList [
                                     "kind", upcast "SCALAR"
                                     "name", upcast "String"
@@ -1499,12 +1506,32 @@ let ``Introspection executes an introspection query`` () =
                     upcast NameValueLookup.ofList [
                         "name", upcast "stream"
                         "description", upcast "Streams the resolution of this field or fragment"
-                        "locations", upcast [
-                            box <| "FIELD";
-                            upcast "FRAGMENT_DEFINITION";
-                            upcast "FRAGMENT_SPREAD";
-                            upcast "INLINE_FRAGMENT";]
-                        "args", upcast []]
+                        "locations", upcast [ box <| "FIELD"; ]
+                        "args", upcast [
+                            box <| NameValueLookup.ofList [
+                                "name", upcast "if"
+                                "description", upcast "Deferred or streamed only when true."
+                                "type", upcast NameValueLookup.ofList [
+                                    "kind", upcast "SCALAR"
+                                    "name", upcast "Boolean"
+                                    "ofType", null]
+                                "defaultValue", upcast "true"]
+                            upcast NameValueLookup.ofList [
+                                "name", upcast "label"
+                                "description", upcast "An optional label identifying the deferred or streamed payload."
+                                "type", upcast NameValueLookup.ofList [
+                                    "kind", upcast "SCALAR"
+                                    "name", upcast "String"
+                                    "ofType", null]
+                                "defaultValue", null]
+                            upcast NameValueLookup.ofList [
+                                "name", upcast "initialCount"
+                                "description", upcast "The number of list items delivered with the initial payload; the rest is streamed."
+                                "type", upcast NameValueLookup.ofList [
+                                    "kind", upcast "SCALAR"
+                                    "name", upcast "Int"
+                                    "ofType", null]
+                                "defaultValue", upcast "0"]]]
                     upcast NameValueLookup.ofList [
                         "name", upcast "live"
                         "description", upcast "Subscribes for live updates of this field or fragment"
@@ -1518,7 +1545,7 @@ let ``Introspection executes an introspection query`` () =
         empty errors
         data |> equals (upcast expected)
 
-[<Fact(Skip = "Not implemented: if, label and initialCount arguments of @defer and @stream")>]
+[<Fact>]
 let ``Defer and stream directives expose the spec arguments`` () =
     let root = Define.Object("Query", [ Define.Field("onlyField", StringType, "The only field", [], fun _ _ -> "Only value") ])
     let schema = Schema(root)
@@ -1558,14 +1585,15 @@ let ``Defer and stream directives expose the spec arguments`` () =
             |> Seq.cast<System.Collections.Generic.IDictionary<string, obj>>
             |> Seq.map (fun directive -> string directive["name"], directive["args"])
             |> Map.ofSeq
+        // An argument with a default value is exposed as nullable, as this library does for every input with a default
         NameValueLookup.ofList [ "args", directives["defer"] ]
-        |> equals (NameValueLookup.ofList [ "args", upcast [ arg "if" (box "true") (nonNull "Boolean"); arg "label" null (scalar "String") ] ])
+        |> equals (NameValueLookup.ofList [ "args", upcast [ arg "if" (box "true") (scalar "Boolean"); arg "label" null (scalar "String") ] ])
         NameValueLookup.ofList [ "args", directives["stream"] ]
         |> equals (
             NameValueLookup.ofList [
                 "args",
                 upcast [
-                    arg "if" (box "true") (nonNull "Boolean")
+                    arg "if" (box "true") (scalar "Boolean")
                     arg "label" null (scalar "String")
                     arg "initialCount" (box "0") (scalar "Int")
                 ]

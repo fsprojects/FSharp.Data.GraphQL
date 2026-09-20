@@ -239,7 +239,7 @@ let ``Can subscribe to tagged async field and do not get results with unexpected
         ensureThat (fun () -> Seq.isEmpty sub.Received) 50 "Should not get results with given tag"
     | _ -> failwith "Expected Stream GQLResponse"
 
-[<Fact(Skip = "Not implemented: if argument of @defer; @defer inside subscriptions is rejected by validation unless disabled")>]
+[<Fact>]
 let ``Defer directive disabled with if false inside a subscription payload executes inline`` () =
     let expected = SubscriptionResult (NameValueLookup.ofList [
             "watchData", upcast NameValueLookup.ofList [
