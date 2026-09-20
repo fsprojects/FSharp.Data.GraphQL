@@ -22,6 +22,7 @@ open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Shared
 open FSharp.Data.GraphQL.Shared.WebSockets
 
 /// <summary>
@@ -134,6 +135,27 @@ type internal DeferredSubscriptionWorkerMessage =
     | DeferredEvent of GQLDeferredResponseContent voption
     | DeferredFaulted of exn
     | DeferredSourceCompleted
+
+module internal GraphQLWebSocketMessagePatterns =
+
+    let (|DeferredEventWithErrors|DeferredEventPayload|DeferredEventCompleted|) output =
+        match output with
+        | ValueSome (DeferredErrors (_, errors, _) as event) -> DeferredEventWithErrors (event, errors)
+        | ValueSome event -> DeferredEventPayload event
+        | ValueNone -> DeferredEventCompleted
+
+    let (|InvalidReceivedMessage|EmptyReceivedMessage|ReceivedClientMessage|) receivedMessage =
+        match receivedMessage with
+        | Result.Error (InvalidMessage (code, explanation)) -> InvalidReceivedMessage (code, explanation)
+        | Ok ValueNone -> EmptyReceivedMessage
+        | Ok (ValueSome message) -> ReceivedClientMessage message
+
+    let (|ConnectionInitReceived|SubscribeBeforeConnectionInit|InvalidConnectionInitMessage|UnexpectedConnectionInitMessage|) receivedMessage =
+        match receivedMessage with
+        | Ok (ValueSome (ConnectionInit _)) -> ConnectionInitReceived
+        | Ok (ValueSome (Subscribe _)) -> SubscribeBeforeConnectionInit
+        | Result.Error (InvalidMessage (code, explanation)) -> InvalidConnectionInitMessage (code, explanation)
+        | _ -> UnexpectedConnectionInitMessage
 
 module internal DeferredSubscriptionWorker =
 
@@ -349,6 +371,8 @@ type GraphQLWebSocketMiddleware<'Root>
     let tryToGracefullyCloseSocketWithDefaultBehavior sendGate cancellationToken =
         tryToGracefullyCloseSocket sendGate cancellationToken (WebSocketCloseStatus.NormalClosure, "Normal Closure")
 
+    let awaitBlocking (operation : Task) = operation |> Async.AwaitTask |> Async.RunSynchronously
+
     let handleMessages (sendGate : SemaphoreSlim) (cancellationToken : CancellationToken) (httpContext : HttpContext) (socket : WebSocket) : Task =
         let subscriptions = Dictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction>()
         // ---------->
@@ -382,19 +406,18 @@ type GraphQLWebSocketMiddleware<'Root>
         // completed/hasNext wire format by an IncrementalDelivery scoped to this one subscription.
         let sendDeferredResponseOutput (delivery : IncrementalDelivery) id event : Task = task {
             match event with
-            | ValueSome (DeferredErrors (_, errors, _) as event) ->
+            | GraphQLWebSocketMessagePatterns.DeferredEventWithErrors (event, errors) ->
                 // TODO: Use StringBuilder
                 let errorsString = (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
                 logger.LogWarning ("Deferred response errors: {deferredErrors}", errorsString)
                 match delivery.Apply event with
                 | ValueSome payload -> do! sendOutput id payload
                 | ValueNone -> ()
-            | ValueSome event ->
+            | GraphQLWebSocketMessagePatterns.DeferredEventPayload event ->
                 match delivery.Apply event with
                 | ValueSome payload -> do! sendOutput id payload
                 | ValueNone -> ()
-            | ValueNone ->
-                do! delivery.Finish () |> sendOutput id
+            | GraphQLWebSocketMessagePatterns.DeferredEventCompleted -> do! delivery.Finish () |> sendOutput id
         }
 
         let addDeferredClientSubscription id data errors observableOutput : Task =
@@ -410,6 +433,15 @@ type GraphQLWebSocketMiddleware<'Root>
             let channelWriteGate = obj ()
             let startupBarrier = TaskCompletionSource (TaskCreationOptions.RunContinuationsAsynchronously)
             let sendTerminalError (ex : exn) = sendMsg (Error (id, problemDetailsOfObservableError ex))
+            let sendServerMessageAndRemoveSubscription serverMessage : Task<bool> = task {
+                try
+                    do! sendMsg serverMessage
+                finally
+                    subscriptions
+                    |> GraphQLSubscriptionsManagement.removeSubscription id
+
+                return false
+            }
 
             let tryEnqueueWorkerMessage message = lock channelWriteGate (fun () -> messageChannel.Writer.TryWrite message)
 
@@ -426,19 +458,8 @@ type GraphQLWebSocketMiddleware<'Root>
                         return true
                     | DeferredFaulted ex ->
                         logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
-                        try
-                            do! sendTerminalError ex
-                        finally
-                            subscriptions
-                            |> GraphQLSubscriptionsManagement.removeSubscription id
-                        return false
-                    | DeferredSourceCompleted ->
-                        try
-                            do! sendMsg (Complete id)
-                        finally
-                            subscriptions
-                            |> GraphQLSubscriptionsManagement.removeSubscription id
-                        return false
+                        return! sendServerMessageAndRemoveSubscription (Error (id, problemDetailsOfObservableError ex))
+                    | DeferredSourceCompleted -> return! sendServerMessageAndRemoveSubscription (Complete id)
                 }
 
                 try
@@ -513,30 +534,18 @@ type GraphQLWebSocketMiddleware<'Root>
                     TaskScheduler.Default
                 )
                 |> ignore
+            let enqueueWorkerCallbackMessage message =
+                if
+                    not (tryEnqueueWorkerMessage message)
+                    && subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id
+                then
+                    disposeAndRemoveSubscription ()
 
             let observer =
                 new Reactive.AnonymousObserver<GQLDeferredResponseContent voption> (
-                    onNext =
-                        (fun output ->
-                            if
-                                not (tryEnqueueWorkerMessage (DeferredEvent output))
-                                && subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id
-                            then
-                                disposeAndRemoveSubscription ()),
-                    onError =
-                        (fun ex ->
-                            if
-                                not (tryEnqueueWorkerMessage (DeferredFaulted ex))
-                                && subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id
-                            then
-                                disposeAndRemoveSubscription ()),
-                    onCompleted =
-                        (fun () ->
-                            if
-                                not (tryEnqueueWorkerMessage DeferredSourceCompleted)
-                                && subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id
-                            then
-                                disposeAndRemoveSubscription ())
+                    onNext = (fun output -> enqueueWorkerCallbackMessage (DeferredEvent output)),
+                    onError = (fun ex -> enqueueWorkerCallbackMessage (DeferredFaulted ex)),
+                    onCompleted = (fun () -> enqueueWorkerCallbackMessage DeferredSourceCompleted)
                 )
 
             subscriptions
@@ -595,6 +604,55 @@ type GraphQLWebSocketMiddleware<'Root>
 
         let logMsgWithIdReceived (id : string) (msgAsStr : string) = logger.LogTrace ($"{msgAsStr}. Id = '{{messageId}}'", id)
 
+        let executeSubscriptionRequest id (query : GQLRequestContent) : Task = task {
+            try
+                nameof Subscribe |> logMsgWithIdReceived id
+                if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
+                    do!
+                        let warningMsg : FormattableString = $"Subscriber for Id = '{id}' already exists"
+                        logger.LogWarning (String.Format (warningMsg.Format, "id"), id)
+                        socket
+                        |> tryToGracefullyCloseSocket
+                            sendGate
+                            cancellationToken
+                            (enum CustomWebSocketStatus.SubscriberAlreadyExists, warningMsg.ToString ())
+                else
+                    let variables = query.Variables |> Skippable.toValueOption
+                    let getInputContext () = httpContext.RequestServices.GetRequiredService<IInputExecutionContext>()
+                    let! planExecutionResult =
+                        let root = options.RootFactory httpContext
+                        options.SchemaExecutor.AsyncExecute (query.Query, getInputContext, root, ?variables = variables)
+                    do! planExecutionResult |> applyPlanExecutionResult id socket
+            with ex ->
+                logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
+                do! sendMsg (Error (id, [ GQLProblemDetails.Create UnexpectedObservableErrorMessage ]))
+        }
+
+        let handleClientMessage (msg : ClientMessage) : Task = task {
+            match msg with
+            | ConnectionInit p ->
+                nameof ConnectionInit |> logMsgReceivedWithOptionalPayload p
+                do!
+                    socket
+                    |> tryToGracefullyCloseSocket
+                        sendGate
+                        cancellationToken
+                        (enum CustomWebSocketStatus.TooManyInitializationRequests, "Too many initialization requests")
+            | ClientPing p ->
+                nameof ClientPing |> logMsgReceivedWithOptionalPayload p
+                match pingHandler with
+                | ValueSome func ->
+                    let! customP = p |> func serviceProvider
+                    do! ServerPong customP |> sendMsg
+                | ValueNone -> do! ServerPong p |> sendMsg
+            | ClientPong p -> nameof ClientPong |> logMsgReceivedWithOptionalPayload p
+            | Subscribe (id, query) -> do! executeSubscriptionRequest id query
+            | ClientComplete id ->
+                "ClientComplete" |> logMsgWithIdReceived id
+                subscriptions
+                |> GraphQLSubscriptionsManagement.removeSubscription (id)
+        }
+
         // <--------------
         // <-- Helpers --|
         // <--------------
@@ -609,59 +667,15 @@ type GraphQLWebSocketMiddleware<'Root>
                           && socket |> isSocketOpen do
                         let! receivedMessage = rcv ()
                         match receivedMessage with
-                        | Result.Error failureMessages ->
+                        | GraphQLWebSocketMessagePatterns.InvalidReceivedMessage (code, explanation) ->
                             nameof InvalidMessage
                             |> logMsgReceivedWithOptionalPayload ValueNone
-                            match failureMessages with
-                            | InvalidMessage (code, explanation) ->
-                                do!
-                                    socket
-                                    |> tryToGracefullyCloseSocket sendGate cancellationToken (enum code, explanation)
-                        | Ok ValueNone -> logger.LogTrace ("WebSocket received empty message! State = '{socketState}'", socket.State)
-                        | Ok (ValueSome msg) ->
-                            match msg with
-                            | ConnectionInit p ->
-                                nameof ConnectionInit |> logMsgReceivedWithOptionalPayload p
-                                do!
-                                    socket
-                                    |> tryToGracefullyCloseSocket
-                                        sendGate
-                                        cancellationToken
-                                        (enum CustomWebSocketStatus.TooManyInitializationRequests, "Too many initialization requests")
-                            | ClientPing p ->
-                                nameof ClientPing |> logMsgReceivedWithOptionalPayload p
-                                match pingHandler with
-                                | ValueSome func ->
-                                    let! customP = p |> func serviceProvider
-                                    do! ServerPong customP |> sendMsg
-                                | ValueNone -> do! ServerPong p |> sendMsg
-                            | ClientPong p -> nameof ClientPong |> logMsgReceivedWithOptionalPayload p
-                            | Subscribe (id, query) ->
-                                try
-                                    nameof Subscribe |> logMsgWithIdReceived id
-                                    if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
-                                        do!
-                                            let warningMsg : FormattableString = $"Subscriber for Id = '{id}' already exists"
-                                            logger.LogWarning (String.Format (warningMsg.Format, "id"), id)
-                                            socket
-                                            |> tryToGracefullyCloseSocket
-                                                sendGate
-                                                cancellationToken
-                                                (enum CustomWebSocketStatus.SubscriberAlreadyExists, warningMsg.ToString ())
-                                    else
-                                        let variables = query.Variables |> Skippable.toValueOption
-                                        let getInputContext () = httpContext.RequestServices.GetRequiredService<IInputExecutionContext>()
-                                        let! planExecutionResult =
-                                            let root = options.RootFactory httpContext
-                                            options.SchemaExecutor.AsyncExecute (query.Query, getInputContext, root, ?variables = variables)
-                                        do! planExecutionResult |> applyPlanExecutionResult id socket
-                                with ex ->
-                                    logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
-                                    do! sendMsg (Error (id, [ GQLProblemDetails.Create UnexpectedObservableErrorMessage ]))
-                            | ClientComplete id ->
-                                "ClientComplete" |> logMsgWithIdReceived id
-                                subscriptions
-                                |> GraphQLSubscriptionsManagement.removeSubscription (id)
+                            do!
+                                socket
+                                |> tryToGracefullyCloseSocket sendGate cancellationToken (enum code, explanation)
+                        | GraphQLWebSocketMessagePatterns.EmptyReceivedMessage ->
+                            logger.LogTrace ("WebSocket received empty message! State = '{socketState}'", socket.State)
+                        | GraphQLWebSocketMessagePatterns.ReceivedClientMessage msg -> do! handleClientMessage msg
                     logger.LogTrace "Leaving the 'graphql-ws' connection loop..."
                     do!
                         socket
@@ -690,43 +704,49 @@ type GraphQLWebSocketMiddleware<'Root>
         : TaskResult<unit, string> = task {
         let timerTokenSource = new CancellationTokenSource ()
         timerTokenSource.CancelAfter connectionInitTimeout
-        let detonationRegistration =
-            timerTokenSource.Token.Register (fun _ ->
-                (socket
-                 |> tryToGracefullyCloseSocket
-                     sendGate
-                     cancellationToken
-                     (enum CustomWebSocketStatus.ConnectionTimeout, "Connection initialization timeout"))
-                    .Wait())
+
+        let closeSocketOnTimeout () =
+            socket
+            |> tryToGracefullyCloseSocket
+                sendGate
+                cancellationToken
+                (enum CustomWebSocketStatus.ConnectionTimeout, "Connection initialization timeout")
+            |> awaitBlocking
+
+        let detonationRegistration = timerTokenSource.Token.Register (fun _ -> closeSocketOnTimeout ())
+
+        let handleConnectionInitMessage receivedMessage : Task<bool> = task {
+            match receivedMessage with
+            | GraphQLWebSocketMessagePatterns.ConnectionInitReceived ->
+                logger.LogDebug ($"Valid {nameof ConnectionInit} received! Responding with ACK!")
+                detonationRegistration.Unregister () |> ignore
+                do!
+                    ConnectionAck
+                    |> sendMessageViaSocket sendGate serializerOptions socket
+                return true
+            | GraphQLWebSocketMessagePatterns.SubscribeBeforeConnectionInit ->
+                do!
+                    socket
+                    |> tryToGracefullyCloseSocket sendGate cancellationToken (enum CustomWebSocketStatus.Unauthorized, "Unauthorized")
+                return false
+            | GraphQLWebSocketMessagePatterns.InvalidConnectionInitMessage (code, explanation) ->
+                do!
+                    socket
+                    |> tryToGracefullyCloseSocket sendGate cancellationToken (enum code, explanation)
+                return false
+            | GraphQLWebSocketMessagePatterns.UnexpectedConnectionInitMessage ->
+                do!
+                    socket
+                    |> tryToGracefullyCloseSocketWithDefaultBehavior sendGate cancellationToken
+                return false
+        }
 
         let! connectionInitSucceeded =
             TaskResult.Run<bool>(
                 (fun _ -> task {
                     logger.LogDebug ($"Waiting for {nameof ConnectionInit}...")
                     let! receivedMessage = receiveMessageViaSocket CancellationToken.None serializerOptions socket
-                    match receivedMessage with
-                    | Ok (ValueSome (ConnectionInit _)) ->
-                        logger.LogDebug ($"Valid {nameof ConnectionInit} received! Responding with ACK!")
-                        detonationRegistration.Unregister () |> ignore
-                        do!
-                            ConnectionAck
-                            |> sendMessageViaSocket sendGate serializerOptions socket
-                        return true
-                    | Ok (ValueSome (Subscribe _)) ->
-                        do!
-                            socket
-                            |> tryToGracefullyCloseSocket sendGate cancellationToken (enum CustomWebSocketStatus.Unauthorized, "Unauthorized")
-                        return false
-                    | Result.Error (InvalidMessage (code, explanation)) ->
-                        do!
-                            socket
-                            |> tryToGracefullyCloseSocket sendGate cancellationToken (enum code, explanation)
-                        return false
-                    | _ ->
-                        do!
-                            socket
-                            |> tryToGracefullyCloseSocketWithDefaultBehavior sendGate cancellationToken
-                        return false
+                    return! handleConnectionInitMessage receivedMessage
                 }),
                 timerTokenSource.Token
             )
@@ -754,9 +774,9 @@ type GraphQLWebSocketMiddleware<'Root>
                 | Result.Error errMsg -> logger.LogWarning errMsg
                 | Ok _ ->
                     connectionLifetimeCancellationToken.Register (fun _ ->
-                        (socket
-                         |> tryToGracefullyCloseSocketWithDefaultBehavior sendGate connectionLifetimeCancellationToken)
-                            .Wait())
+                        socket
+                        |> tryToGracefullyCloseSocketWithDefaultBehavior sendGate connectionLifetimeCancellationToken
+                        |> awaitBlocking)
                     |> ignore
                     try
                         do!
