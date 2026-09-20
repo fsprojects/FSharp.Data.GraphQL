@@ -139,10 +139,11 @@ let ``A stream pending is emitted with the payload that exposes its containing d
         delivery.Apply (DeferredResult (box (NameValueLookup.ofList [ "items", upcast [||] ]), parentPath))
     let pending = pendingPaths payload
     Assert.Contains (streamPath, pending)
-    Assert.Contains (parentPath, pending)
+    // The deferred `container` field is announced at its containing object: the root
+    Assert.Contains ((List.empty : obj list), pending)
     let entry = incrementalOf payload |> single
     entry.Data
-    |> equals (Include (box (NameValueLookup.ofList [ "items", upcast [||] ])))
+    |> equals (Include (ValueSome (box (NameValueLookup.ofList [ "container", upcast NameValueLookup.ofList [ "items", upcast [||] ] ]))))
     entry.Errors |> equals Skip
 
 [<Fact>]
@@ -155,11 +156,12 @@ let ``A nested stream pending waits for the deferred payload that exposes it`` (
     |> equals ValueNone
     let parentPayload =
         delivery.Apply (DeferredResult (box (NameValueLookup.ofList [ "child", null ]), parentPath))
-    pendingPaths parentPayload |> equals [ parentPath ]
+    // Deferred fields are announced at their containing object; the stream at its own list field
+    pendingPaths parentPayload |> equals [ [] ]
     let childPayload =
         delivery.Apply (DeferredResult (box (NameValueLookup.ofList [ "items", upcast [||] ]), childPath))
     pendingPaths childPayload
-    |> equals [ childPath; streamPath ]
+    |> equals [ parentPath; streamPath ]
 
 [<Fact>]
 let ``A nested stream pending is visible through F# list payloads`` () =
@@ -172,7 +174,7 @@ let ``A nested stream pending is visible through F# list payloads`` () =
         delivery.Apply (
             DeferredResult (box (NameValueLookup.ofList [ "items", upcast [ box (NameValueLookup.ofList [ "children", upcast [] ]) ] ]), parentPath)
         )
-    pendingPaths payload |> equals [ parentPath; streamPath ]
+    pendingPaths payload |> equals [ []; streamPath ]
 
 [<Fact>]
 let ``A labeled defer pending is emitted with the deferred field payload`` () =
@@ -181,10 +183,10 @@ let ``A labeled defer pending is emitted with the deferred field payload`` () =
     delivery.Apply (DeferredPending (path, ValueSome "hero", false))
     |> equals ValueNone
     let payload = delivery.Apply (DeferredResult (box "value", path))
-    pendingPaths payload |> equals [ path ]
+    pendingPaths payload |> equals [ [ box "testData" ] ]
     pendingLabels payload |> equals [ Include "hero" ]
     let entry = incrementalOf payload |> single
-    entry.Data |> equals (Include (box "value"))
+    entry.Data |> equals (Include (ValueSome (box (NameValueLookup.ofList [ "a", upcast "value" ]))))
 
 [<Fact>]
 let ``A completed deferred path reused by a later update gets a fresh id and completion`` () =
@@ -228,6 +230,8 @@ let ``A stream failing before any item completes with errors instead of replacin
     let delivery = IncrementalDelivery ()
     delivery.Apply (DeferredPending ([ box "failing" ], ValueNone, true))
     |> equals ValueNone
+    // Announced to the client with the initial payload that exposes the empty list
+    delivery.TakePendingVisibleIn (NameValueLookup.ofList [ "failing", upcast [] ]) |> single |> ignore
     let error = fieldError "Boom acquiring the enumerator" [ box "failing" ]
     let pFail = delivery.Apply (DeferredErrors (null, [ error ], [ box "failing" ]))
     let pc = delivery.Apply (DeferredCompleted [ box "failing" ])
@@ -241,61 +245,11 @@ let ``An empty stream still produces a completed entry after being pre-announced
     let delivery = IncrementalDelivery ()
     delivery.Apply (DeferredPending (itemsPath, ValueNone, true))
     |> equals ValueNone
+    delivery.TakePendingVisibleIn (NameValueLookup.ofList [ "items", upcast [] ]) |> single |> ignore
     let payload = delivery.Apply (DeferredCompleted itemsPath)
     pendingIds payload |> empty
     incrementalOf payload |> empty
     (completedOf payload |> single).Errors |> equals Skip
-
-[<Fact>]
-let ``A pending stream buffered before worker initialization is emitted in the initial payload`` () =
-    let delivery = IncrementalDelivery ()
-    let bufferedMessages = ResizeArray<DeferredSubscriptionWorkerMessage>()
-    let data = NameValueLookup.ofList [ "items", upcast [||] ]
-
-    DeferredSubscriptionWorker.bufferMessageBeforeInitial
-        delivery
-        bufferedMessages
-        (DeferredEvent (ValueSome (DeferredPending (itemsPath, ValueNone, true))))
-
-    DeferredSubscriptionWorker.bufferMessageBeforeInitial delivery bufferedMessages DeferredSourceCompleted
-
-    let initial = SubscriptionExecutionResult.CreateInitial (data, [], delivery.TakePendingVisibleIn data)
-    pendingPaths (ValueSome initial) |> equals [ itemsPath ]
-    bufferedMessages
-    |> Seq.toList
-    |> equals [ DeferredSourceCompleted ]
-
-[<Fact>]
-let ``A completion buffered before worker initialization still leaves the initial payload first`` () =
-    let delivery = IncrementalDelivery ()
-    let bufferedMessages = ResizeArray<DeferredSubscriptionWorkerMessage>()
-    let data = NameValueLookup.ofList [ "items", upcast [||] ]
-
-    DeferredSubscriptionWorker.bufferMessageBeforeInitial delivery bufferedMessages DeferredSourceCompleted
-
-    let initial = SubscriptionExecutionResult.CreateInitial (data, [], delivery.TakePendingVisibleIn data)
-    initial.HasNext |> equals (Include true)
-    pendingPaths (ValueSome initial) |> empty
-    bufferedMessages
-    |> Seq.toList
-    |> equals [ DeferredSourceCompleted ]
-
-[<Fact>]
-let ``An error buffered before worker initialization still leaves the initial payload first`` () =
-    let delivery = IncrementalDelivery ()
-    let bufferedMessages = ResizeArray<DeferredSubscriptionWorkerMessage>()
-    let data = NameValueLookup.ofList [ "items", upcast [||] ]
-    let ex = InvalidOperationException "boom"
-
-    DeferredSubscriptionWorker.bufferMessageBeforeInitial delivery bufferedMessages (DeferredFaulted ex)
-
-    let initial = SubscriptionExecutionResult.CreateInitial (data, [], delivery.TakePendingVisibleIn data)
-    initial.HasNext |> equals (Include true)
-    pendingPaths (ValueSome initial) |> empty
-
-    match bufferedMessages |> Seq.toList with
-    | [ DeferredFaulted bufferedEx ] -> Assert.Same (ex, bufferedEx)
-    | other -> failwith $"Unexpected buffered messages: %A{other}"
 
 [<Fact>]
 let ``A defer field's own value is announced and delivered, then completes`` () =
@@ -305,7 +259,7 @@ let ``A defer field's own value is announced and delivered, then completes`` () 
     let pc = delivery.Apply (DeferredCompleted path)
     pendingIds pOk |> single |> ignore
     let entry = incrementalOf pOk |> single
-    entry.Data |> equals (Include (box "value"))
+    entry.Data |> equals (Include (ValueSome (box (NameValueLookup.ofList [ "a", upcast "value" ]))))
     entry.Errors |> equals Skip
     (completedOf pc |> single).Errors |> equals Skip
 
@@ -332,7 +286,7 @@ let ``A live field reuses the same id across repeated updates and is only ever c
     pendingIds p1 |> single |> ignore
     pendingIds p2 |> empty
     (incrementalOf p2 |> single).Data
-    |> equals (Include (box "v2"))
+    |> equals (Include (ValueSome (box (NameValueLookup.ofList [ "live", upcast "v2" ]))))
     (delivery.Finish ()).Completed
     |> Skippable.toValueOption
     |> wantValueSome
@@ -365,7 +319,7 @@ let ``The same deferred field announced twice with the same label is announced t
     let id = pendingIds payload |> single
     (incrementalOf payload |> single).Id |> equals id
 
-[<Fact(Skip = "Not implemented: deferred fragments are keyed by path only; distinct labels at the same path need distinct ids")>]
+[<Fact(Skip = "Not implemented: @defer on fragments; two fragments deferred at the same path need an identity in the engine's events to get distinct ids")>]
 let ``Distinct labels at the same path are distinct pendings`` () =
     let delivery = IncrementalDelivery ()
     let path = [ box "testData" ]
@@ -375,7 +329,7 @@ let ``Distinct labels at the same path are distinct pendings`` () =
     pendingLabels payload |> equals [ Include "a"; Include "b" ]
     pendingIds payload |> List.distinct |> List.length |> equals 2
 
-[<Fact(Skip = "Not implemented: Finish completes a pre-announced field the client never saw as pending")>]
+[<Fact>]
 let ``A pre-announced stream whose parent is null is neither announced nor completed`` () =
     let delivery = IncrementalDelivery ()
     let streamPath = [ box "parent"; box "items" ]
@@ -408,19 +362,22 @@ let ``Errors inside a deferred payload are delivered with its partial data and t
     let error = fieldError "Non-Null field value resolved as a null!" (path @ [ box "inner"; box "value" ])
     let payload = delivery.Apply (DeferredErrors (box partialData, [ error ], path))
     let completion = delivery.Apply (DeferredCompleted path)
-    pendingPaths payload |> equals [ path ]
+    pendingPaths payload |> equals [ [ box "testData" ] ]
     let entry = incrementalOf payload |> single
-    entry.Data |> equals (Include (box partialData))
+    entry.Data |> equals (Include (ValueSome (box (NameValueLookup.ofList [ "container", upcast partialData ]))))
     entry.Errors |> equals (Include [ error ])
     (completedOf completion |> single).Errors |> equals Skip
 
-[<Fact(Skip = "Not implemented: a null deferred payload is delivered as incremental data null instead of completing the field with errors")>]
-let ``A deferred field whose payload is null with errors completes with those errors and no incremental entry`` () =
+[<Fact>]
+let ``A nullable deferred field whose value is null with errors is delivered as that null field with its errors`` () =
+    // A deferred field is always nullable, so an error inside it stops at the field itself: the payload carries the
+    // field as null with the errors, and the field still completes without errors of its own
     let delivery = IncrementalDelivery ()
     let path = [ box "testData"; box "nullableError" ]
     let error = fieldError "Non-Null field value resolved as a null!" (path @ [ box "value" ])
     let payload = delivery.Apply (DeferredErrors (null, [ error ], path))
-    pendingPaths payload |> equals [ path ]
-    incrementalOf payload |> empty
-    (completedOf payload |> single).Errors |> equals (Include [ error ])
-    delivery.Apply (DeferredCompleted path) |> equals ValueNone
+    pendingPaths payload |> equals [ [ box "testData" ] ]
+    let entry = incrementalOf payload |> single
+    entry.Data |> equals (Include (ValueSome (box (NameValueLookup.ofList [ "nullableError", null ]))))
+    entry.Errors |> equals (Include [ error ])
+    (completedOf (delivery.Apply (DeferredCompleted path)) |> single).Errors |> equals Skip

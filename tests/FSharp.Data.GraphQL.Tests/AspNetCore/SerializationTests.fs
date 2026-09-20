@@ -1,7 +1,6 @@
 module FSharp.Data.GraphQL.Tests.AspNetCore.SerializationTests
 
 open System
-open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Text.Json
 open System.Text.Json.Serialization
@@ -10,7 +9,6 @@ open Xunit
 
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Shared
-open FSharp.Data.GraphQL.Server.AspNetCore.GraphQLSubscriptionsManagement
 open FSharp.Data.GraphQL.Server.AspNetCore.ObservableErrorHandling
 open FSharp.Data.GraphQL.Shared.WebSockets
 
@@ -156,7 +154,7 @@ let ``Serializes initial incremental payload without pending when no field is an
 
 [<Fact>]
 let ``Serializes a subsequent payload with an incremental entry's items, and no top-level data or errors`` () =
-    let incremental = [ { Id = "0"; Data = Skip; Items = Include [| box 1 |]; Errors = Skip } ]
+    let incremental = [ { Id = "0"; SubPath = Skip; Data = Skip; Items = Include [| box 1 |]; Errors = Skip } ]
     let json = serializePayload (SubscriptionExecutionResult.CreateSubsequent ([], incremental, [], true))
     use document = JsonDocument.Parse json
     let payload = document.RootElement.GetProperty "payload"
@@ -176,7 +174,7 @@ let ``Serializes a subsequent payload with an incremental entry's items, and no 
 [<Fact>]
 let ``Serializes a subsequent payload's newly announced pending alongside its incremental entry`` () =
     let pending = [ { Id = "1"; Path = [ box "testData"; box "a" ]; Label = Skip } ]
-    let incremental = [ { Id = "1"; Data = Include (box "value"); Items = Skip; Errors = Skip } ]
+    let incremental = [ { Id = "1"; SubPath = Skip; Data = Include (ValueSome (box "value")); Items = Skip; Errors = Skip } ]
     let json =
         serializePayload (SubscriptionExecutionResult.CreateSubsequent (pending, incremental, [], true))
     use document = JsonDocument.Parse json
@@ -189,7 +187,7 @@ let ``Serializes a subsequent payload's newly announced pending alongside its in
 [<Fact>]
 let ``Serializes a pending label when present`` () =
     let pending = [ { Id = "1"; Path = [ box "testData"; box "a" ]; Label = Include "hero" } ]
-    let incremental = [ { Id = "1"; Data = Include (box "value"); Items = Skip; Errors = Skip } ]
+    let incremental = [ { Id = "1"; SubPath = Skip; Data = Include (ValueSome (box "value")); Items = Skip; Errors = Skip } ]
     let json =
         serializePayload (SubscriptionExecutionResult.CreateSubsequent (pending, incremental, [], true))
     use document = JsonDocument.Parse json
@@ -236,12 +234,21 @@ let ``Serializes the final subsequent payload with hasNext false and no other en
 [<Fact>]
 let ``Serializes complete payload without pending, incremental, completed or hasNext`` () =
     let json =
-        serializePayload (SubscriptionExecutionResult.Create (NameValueLookup.ofList [ "name", upcast "R2-D2" ], []))
+        serializePayload (SubscriptionExecutionResult.Create (ValueSome (NameValueLookup.ofList [ "name", upcast "R2-D2" ]), []))
     use document = JsonDocument.Parse json
     let payload = document.RootElement.GetProperty "payload"
     Assert.Equal ("R2-D2", payload.GetProperty("data").GetProperty("name").GetString())
     Assert.False (hasProperty "pending" payload, $"Expected no pending in {json}")
     Assert.False (hasProperty "hasNext" payload, $"Expected no hasNext in {json}")
+
+[<Fact>]
+let ``Serializes a complete payload whose data is ValueNone as data null`` () =
+    let json =
+        serializePayload (SubscriptionExecutionResult.Create (ValueNone, [ GQLProblemDetails.CreateWithKind ("Boom", Execution, [ box "numbers" ]) ]))
+    use document = JsonDocument.Parse json
+    let payload = document.RootElement.GetProperty "payload"
+    Assert.Equal (JsonValueKind.Null, payload.GetProperty("data").ValueKind)
+    Assert.Equal ("Boom", (payload.GetProperty "errors").Item(0).GetProperty("message").GetString())
 
 [<Fact>]
 let ``Serializes errors payload without top-level data`` () =
@@ -266,10 +273,17 @@ let ``Serializes a pending path with list indices as JSON numbers`` () =
     Assert.Equal (0, path[1].GetInt32())
     Assert.Equal ("children", path[2].GetString())
 
-[<Fact(Skip = "Not implemented: subPath on IncrementalResult")>]
+[<Fact>]
 let ``Serializes an incremental entry's subPath when present`` () =
-    // Once IncrementalResult carries SubPath, construct the entry with SubPath = Include [ box "a" ] here
-    let incremental = [ { Id = "0"; Data = Include (box (NameValueLookup.ofList [ "b", upcast "x" ])); Items = Skip; Errors = Skip } ]
+    let incremental = [
+        {
+            Id = "0"
+            SubPath = Include [ box "a" ]
+            Data = Include (ValueSome (box (NameValueLookup.ofList [ "b", upcast "x" ])))
+            Items = Skip
+            Errors = Skip
+        }
+    ]
     let json = serializePayload (SubscriptionExecutionResult.CreateSubsequent ([], incremental, [], true))
     use document = JsonDocument.Parse json
     let payload = document.RootElement.GetProperty "payload"
@@ -357,43 +371,3 @@ let ``Request error sanitization preserves GraphQL-facing errors`` () =
     let expected = GQLProblemDetails.OfError (GQLMessageException "Visible to client")
     let actual = sanitizeRequestError expected
     Assert.Equal (expected, actual)
-
-type private TrackingSubscription (onDispose : unit -> unit) =
-    interface IDisposable with
-        member _.Dispose () = onDispose ()
-
-[<Fact>]
-let ``Removing all subscriptions attempts every disposal before raising aggregate failure`` () =
-    let disposedIds = ConcurrentQueue ()
-    let unsubscribedIds = ConcurrentQueue ()
-    let subscriptions =
-        Dictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction>() :> SubscriptionsDict
-
-    let createSubscription id shouldThrow =
-        let subscription =
-            new TrackingSubscription (fun () ->
-                disposedIds.Enqueue id
-
-                if shouldThrow then
-                    raise (InvalidOperationException $"Dispose failed for {id}"))
-
-        let onUnsubscribe removedId =
-            unsubscribedIds.Enqueue removedId
-
-            if shouldThrow then
-                raise (InvalidOperationException $"Unsubscribe failed for {removedId}")
-
-        id, (subscription :> SubscriptionUnsubscriber), onUnsubscribe
-
-    subscriptions
-    |> addSubscription (createSubscription "first" true)
-    subscriptions
-    |> addSubscription (createSubscription "second" false)
-
-    let error = Assert.Throws<AggregateException>(fun () -> subscriptions |> removeAllSubscriptions)
-
-    Assert.False (subscriptions.ContainsKey "first")
-    Assert.False (subscriptions.ContainsKey "second")
-    Assert.Equal<string>(set [ "first"; "second" ], set disposedIds)
-    Assert.Equal<string>(set [ "first"; "second" ], set unsubscribedIds)
-    Assert.Single error.InnerExceptions

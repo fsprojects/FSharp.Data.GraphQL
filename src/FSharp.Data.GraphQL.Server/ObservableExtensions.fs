@@ -257,15 +257,6 @@ module internal Observable =
             Func<IObserver<'Result>, CancellationToken, Task>(fun observer cancellationToken -> enumerate observer cancellationToken)
         )
 
-    /// <summary>
-    /// Wraps every element into <see cref="ValueSome"/> and emits <see cref="ValueNone"/> when the source completes.
-    /// </summary>
-    /// <remarks>
-    /// A consumer can handle the completion like a regular element, for example to send a final message
-    /// before the completion itself is processed.
-    /// </remarks>
-    let withCompletionMarker (source : IObservable<'T>) : IObservable<'T voption> =
-        Observable.Concat (Observable.Select (source, fun item -> ValueSome item), Observable.Return ValueNone)
 
 /// <summary>
 /// Functions for consuming <see cref="IAsyncEnumerable{T}"/> from <see cref="Async"/> computations.

@@ -19,8 +19,13 @@
     <Compile Include="Helpers.fs" />
     <Compile Include="RequestExecutionContext.fs" />
     <Compile Include="GraphQLOptions.fs" />
-    <Compile Include="GraphQLSubscriptionsManagement.fs" />
     <Compile Include="IncrementalDelivery.fs" />
+    <Compile Include="WebSocketErrors.fs" />
+    <Compile Include="WebSocketMessaging.fs" />
+    <Compile Include="WebSocketTransport.fs" />
+    <Compile Include="SubscriptionPayloads.fs" />
+    <Compile Include="SubscriptionWorker.fs" />
+    <Compile Include="WebSocketConnection.fs" />
     <Compile Include="GraphQLWebsocketMiddleware.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="HttpContext.fs" />

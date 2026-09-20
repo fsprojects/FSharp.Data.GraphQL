@@ -1,7 +1,6 @@
 namespace FSharp.Data.GraphQL.Shared.WebSockets
 
 open System
-open System.Collections.Generic
 open System.Text.Json
 open System.Text.Json.Serialization
 open FSharp.Data.GraphQL
@@ -16,15 +15,6 @@ type InvalidWebsocketMessageException (explanation : string) =
 
 /// Identifies a GraphQL WebSocket subscription.
 type SubscriptionId = string
-
-/// Represents a disposable handle for an active subscription.
-type SubscriptionUnsubscriber = IDisposable
-
-/// Represents a callback invoked when a subscription is removed.
-type OnUnsubscribeAction = SubscriptionId -> unit
-
-/// Stores active subscriptions keyed by their identifier.
-type SubscriptionsDict = IDictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction>
 
 /// Represents a raw WebSocket message before it is mapped to protocol-specific client messages.
 type RawMessage = {
@@ -54,14 +44,20 @@ type PendingResult = {
 /// <see cref="PendingResult"/>.
 /// </summary>
 /// <remarks>
-/// <see cref="Data"/> carries a <c>@defer</c> field's own value; <see cref="Items"/> carries one or more of a
-/// <c>@stream</c> field's items, in list order.
+/// <see cref="Data"/> carries the fields a <c>@defer</c> delivered, as an object map to merge into the object at
+/// the announced path; <see cref="Items"/> carries one or more of a <c>@stream</c> field's items, in list order.
 /// </remarks>
 type IncrementalResult = {
     /// Gets the id of the deferred or streamed field this payload belongs to.
     Id : string
-    /// Gets the deferred field data, when the payload carries deferred data.
-    Data : objnull Skippable
+    /// Gets the path below the announced path where <see cref="Data"/> merges, when it is not the announced path itself.
+    SubPath : FieldPath Skippable
+    /// <summary>Gets the deferred data, when the payload carries deferred data.</summary>
+    /// <remarks>
+    /// <see cref="Include"/> of <see cref="ValueSome"/> is the object map of the delivered fields;
+    /// <see cref="Include"/> of <see cref="ValueNone"/> is a deferred object that itself resolved to <see langword="null"/>.
+    /// </remarks>
+    Data : Skippable<obj voption>
     /// Gets the streamed items, when the payload carries streamed data.
     Items : objnull[] Skippable
     /// Gets the execution errors associated with the payload.
@@ -94,10 +90,11 @@ type SubscriptionExecutionResult = {
     /// Gets the result data.
     /// </summary>
     /// <remarks>
-    /// This is an object for a complete or initial payload. It is always <see cref="Skip" /> for a subsequent
-    /// payload, whose deltas are carried by <see cref="Incremental" /> and <see cref="Completed" /> instead.
+    /// This is an object, or <see cref="ValueNone"/> for a result whose non-null root field failed, for a complete or
+    /// initial payload. It is always <see cref="Skip" /> for a subsequent payload, whose deltas are carried by
+    /// <see cref="Incremental" /> and <see cref="Completed" /> instead.
     /// </remarks>
-    Data : objnull Skippable
+    Data : Skippable<obj voption>
     /// <summary>Gets the errors raised while producing the payload.</summary>
     /// <remarks>This is always <see cref="Skip" /> for a subsequent payload.</remarks>
     Errors : GQLProblemDetails list Skippable
@@ -111,9 +108,9 @@ type SubscriptionExecutionResult = {
     HasNext : bool Skippable
 } with
 
-    /// Creates a payload of a complete execution result.
-    static member Create (data : Output | null, errors : GQLProblemDetails list) = {
-        Data = Include (box data)
+    /// Creates a payload of a complete execution result, whose data is <see cref="ValueNone"/> when a non-null root field failed.
+    static member Create (data : Output voption, errors : GQLProblemDetails list) = {
+        Data = Include (data |> ValueOption.map box)
         Errors = Include errors
         Pending = Skip
         Incremental = Skip
@@ -132,8 +129,8 @@ type SubscriptionExecutionResult = {
     }
 
     /// Creates the initial payload of an incremental delivery, which is always followed by subsequent payloads.
-    static member CreateInitial (data : Output | null, errors : GQLProblemDetails list, pending : PendingResult list) = {
-        Data = Include (box data)
+    static member CreateInitial (data : Output, errors : GQLProblemDetails list, pending : PendingResult list) = {
+        Data = Include (ValueSome (box data))
         Errors = Include errors
         Pending = (if pending.IsEmpty then Skip else Include pending)
         Incremental = Skip

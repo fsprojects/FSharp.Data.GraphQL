@@ -690,22 +690,3 @@ let ``ofAsyncEnumerableResolved should release the slot and not hang when the ob
     do! waitForTask (TimeSpan.FromSeconds (float (ms 5))) "Expected the enumerator to be disposed despite the observer throwing" disposed.Task
     sub.Received |> seqEquals [ 1 ]
 }
-
-[<Fact>]
-let ``withCompletionMarker should emit the items and then the marker when the source completes`` () =
-    use sub =
-        Observable.ofSeq [ 1; 2 ]
-        |> Observable.withCompletionMarker
-        |> Observer.create
-    sub.WaitCompleted (timeout = ms 10)
-    sub.Received
-    |> seqEquals [ ValueSome 1; ValueSome 2; ValueNone ]
-
-[<Fact>]
-let ``withCompletionMarker should emit only the marker for an empty source`` () =
-    use sub =
-        Observable.ofSeq Seq.empty<int>
-        |> Observable.withCompletionMarker
-        |> Observer.create
-    sub.WaitCompleted (timeout = ms 10)
-    sub.Received |> seqEquals [ ValueNone ]

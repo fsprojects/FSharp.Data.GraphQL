@@ -32,13 +32,29 @@ module private IncrementalDeliveryPaths =
         | (:? int as index) :: fieldPathRev -> ValueSome (List.rev fieldPathRev, index)
         | _ -> ValueNone
 
-/// Mutable per-field bookkeeping of IncrementalDelivery, keyed by a field's own path (with any item index or
-/// batch removed).
-type private FieldState (id : string) =
+    /// Matches the path of a deferred field: the path of its containing object, and the field's own name.
+    [<return : Struct>]
+    let (|DeferredFieldPath|_|) (path : obj list) =
+        match List.rev path with
+        | (:? string as fieldName) :: parentPathRev -> ValueSome (List.rev parentPathRev, fieldName)
+        | _ -> ValueNone
+
+/// <summary>
+/// Mutable per-field bookkeeping of IncrementalDelivery, keyed by a field's own path (with any item index or batch removed).
+/// </summary>
+/// <param name="id">The short id the field is identified by on the wire.</param>
+/// <param name="wirePath">
+/// The path the field is announced at: a streamed field's own path, or the path of the object containing a deferred field.
+/// </param>
+/// <param name="isStream">Whether the field is streamed rather than deferred.</param>
+type private FieldState (id : string, wirePath : obj list, isStream : bool) =
     member _.Id = id
+    member _.WirePath = wirePath
+    member _.IsStream = isStream
     member val Label : string voption = ValueNone with get, set
-    member val IsStream = false with get, set
     member val Closed = false with get, set
+    /// Whether the field's pending entry was sent to the client; only such a field may be completed.
+    member val Released = false with get, set
     /// The index of the next streamed item this field expects, in order; irrelevant once IsStream is false.
     member val NextIndex = 0 with get, set
     /// Items received out of order, waiting for the item at NextIndex to fill the gap before them. `member val`,
@@ -47,77 +63,77 @@ type private FieldState (id : string) =
     member val Buffer : SortedDictionary<int, obj * GQLProblemDetails list> = SortedDictionary ()
 
 /// <summary>
-/// Translates the engine's <see cref="GQLDeferredResponseContent"/> events into the <c>graphql-transport-ws</c>
-/// incremental delivery wire format (<c>pending</c>/<c>incremental</c>/<c>completed</c>/<c>hasNext</c>, the format
-/// used by graphql-js 17 and Apollo Client's <c>GraphQL17Alpha9Handler</c>).
+/// Translates the engine's <see cref="GQLDeferredResponseContent"/> events into the <c>graphql-transport-ws</c> incremental delivery wire format
+/// (<c>pending</c>/<c>incremental</c>/<c>completed</c>/<c>hasNext</c>, the format used by graphql-js 17 and Apollo Client's <c>
+/// GraphQL17Alpha9Handler</c>).
 /// </summary>
 /// <remarks>
-/// <para>
-/// Every deferred or streamed field is announced once and identified afterwards by a short id instead of its path.
-/// A deferred field is announced in the same payload as its own value; a streamed field is pre-announced as soon as
-/// its containing data becomes visible to the client, so later item payloads and completions can refer to the id
-/// immediately.
-/// </para>
-/// <para>
-/// A streamed field's items are delivered to the client in list order: an item produced out of order (the engine
-/// resolves up to a field's <c>maxConcurrency</c> items at the same time) is buffered until the item before it
-/// arrives, then every contiguous run starting at the next expected index is flushed as one entry - a batch the
-/// engine grouped into a single event is simply several items of the same run.
-/// </para>
-/// <para>
-/// A stream failure - <see cref="DeferredErrors"/> at the field's own path, with no item index - is folded directly
-/// into that field's completion once at least one of its items has already been seen (so it is known to be a
-/// stream, not a <c>@defer</c> field whose own resolution failed the same way): no <c>incremental</c> entry is sent
-/// for it, and whatever was still buffered, waiting for a gap to fill, is dropped, since the engine pulls no
-/// further items after a failure. Because streamed fields are pre-announced before their first item, the same
-/// completion shape is preserved even when the source fails before producing any item at all, or completes empty.
-/// </para>
+///
+/// <para>Every deferred or streamed field is announced once and identified afterwards by a short id instead of its path. A deferred field is
+/// announced at the path of the object containing it and delivered as an object map of that one field, which is what a client merges into the object
+/// at the announced path; the announcement goes out in the same payload as the field's own value, or earlier when the field is labeled. A streamed
+/// field is announced at its own path, as soon as its containing data becomes visible to the client, so later item payloads and completions can refer
+/// to the id immediately. </para>
+///
+/// <para>A streamed field's items are delivered to the client in list order: an item produced out of order (the engine resolves up to a field's <c>
+/// maxConcurrency</c> items at the same time) is buffered until the item before it arrives, then every contiguous run starting at the next expected
+/// index is flushed as one entry - a batch the engine grouped into a single event is simply several items of the same run. </para>
+///
+/// <para>A stream failure - <see cref="DeferredErrors"/> at the field's own path, with no item index - is folded directly into that field's
+/// completion once the field is known to be a stream (pre-announced, or already carrying items): no <c>incremental</c> entry is sent for it, and
+/// whatever was still buffered, waiting for a gap to fill, is dropped, since the engine pulls no further items after a failure. A field whose
+/// announcement was never released to the client, because the payload that should have exposed it resolved to <see langword="null"/> there, is
+/// neither completed nor closed by <see cref="Finish"/>: the client never learned of it. </para>
+///
+/// <para>Not thread-safe by design: it is driven by exactly one subscription worker, one event at a time. </para>
 /// </remarks>
 type IncrementalDelivery () =
 
     let fields = Dictionary<obj list, FieldState>(HashIdentity.Structural)
-    let pending = ResizeArray<PendingResult>()
+    // Announcements not yet sent, each with the path of the field it belongs to
+    let pending = ResizeArray<struct (obj list * PendingResult)>()
     let mutable nextId = 0
 
-    let stateFor (fieldPath : obj list) =
+    let wirePathOf (fieldPath : obj list) (isStream : bool) =
+        if isStream then
+            fieldPath
+        else
+            match fieldPath with
+            | DeferredFieldPath (parentPath, _) -> parentPath
+            | _ -> fieldPath
+
+    let stateFor (fieldPath : obj list) (isStream : bool) =
         match fields.TryGetValue fieldPath with
         | true, state when not state.Closed -> state, false
         | _ ->
-            let state = FieldState (string nextId)
+            // A closed path delivered again (a live field's nested deferred fields on a later update) is a new
+            // delivery: it gets a fresh id and a fresh announcement
+            let state = FieldState (string nextId, wirePathOf fieldPath isStream, isStream)
             nextId <- nextId + 1
             fields[fieldPath] <- state
             state, true
 
-    let pendingResultFor (fieldPath : obj list) (state : FieldState) = {
+    let pendingResultFor (state : FieldState) = {
         Id = state.Id
-        Path = fieldPath
+        Path = state.WirePath
         Label = state.Label |> Skippable.ofValueOption
     }
 
-    let announcePending (fieldPath : obj list) (label : string voption) =
+    let announcePending (fieldPath : obj list) (label : string voption) (isStream : bool) =
         // DeferredCompleted must be able to recover the field id even when a pre-announced stream completes without
         // ever producing an item, so every pending announcement creates the per-field state eagerly.
-        let state, isNew = stateFor fieldPath
+        let state, isNew = stateFor fieldPath isStream
 
         match label with
         | ValueSome _ -> state.Label <- label
         | ValueNone -> ()
 
         if isNew then
-            pending.Add (pendingResultFor fieldPath state)
+            pending.Add (struct (fieldPath, pendingResultFor state))
 
         state, isNew
 
-    let announceStream (fieldPath : obj list) =
-        let state, isNew = announcePending fieldPath ValueNone
-        state.IsStream <- true
-
-        state, isNew
-
-    let takePending () =
-        let ready = List.ofSeq pending
-        pending.Clear ()
-        ready
+    let announceStream (fieldPath : obj list) = announcePending fieldPath ValueNone true
 
     let rec pathExistsInData (relativePath : obj list) (data : obj) =
         match relativePath, data with
@@ -135,30 +151,32 @@ type IncrementalDelivery () =
             |> Option.exists (pathExistsInData tail)
         | _ -> false
 
-    let takePendingWhen predicate =
+    /// Takes the announcements the predicate selects out of the queue, marking their fields released to the client.
+    let takePendingWhen (predicate : obj list -> PendingResult -> bool) =
         let ready = ResizeArray ()
-        let remaining = ResizeArray<PendingResult>()
+        let remaining = ResizeArray ()
 
-        for entry in pending do
-            if predicate entry then
+        for struct (fieldPath, entry) in pending do
+            if predicate fieldPath entry then
+                fields[fieldPath].Released <- true
                 ready.Add entry
             else
-                remaining.Add entry
+                remaining.Add (struct (fieldPath, entry))
 
         pending.Clear ()
         pending.AddRange remaining
         List.ofSeq ready
 
     let takePendingVisibleIn (payloadPath : obj list) (payloadData : obj) =
-        takePendingWhen (fun entry ->
+        takePendingWhen (fun _ entry ->
             pathStartsWith payloadPath entry.Path
             && entry.Path
                |> List.skip (List.length payloadPath)
                |> fun relativePath -> pathExistsInData relativePath payloadData)
 
     let takePendingForItems (fieldPath : obj list) (flushedItems : (int * obj) list) =
-        takePendingWhen (fun entry ->
-            entry.Path = fieldPath
+        takePendingWhen (fun announcedFieldPath entry ->
+            announcedFieldPath = fieldPath
             || flushedItems
                |> List.exists (fun (index, item) ->
                    let itemPath = [ yield! fieldPath; yield box index ]
@@ -167,7 +185,12 @@ type IncrementalDelivery () =
                       |> List.skip (List.length itemPath)
                       |> fun relativePath -> pathExistsInData relativePath item))
 
-    let takeFieldPending (fieldPath : obj list) = takePendingWhen (fun entry -> entry.Path = fieldPath)
+    let takeFieldPending (fieldPath : obj list) = takePendingWhen (fun announcedFieldPath _ -> announcedFieldPath = fieldPath)
+
+    /// Drops the announcement of a field the client will never learn of.
+    let dropFieldPending (fieldPath : obj list) =
+        pending.RemoveAll (fun struct (announcedFieldPath, _) -> announcedFieldPath = fieldPath)
+        |> ignore
 
     /// Flushes the contiguous run of buffered items starting at the field's next expected index, if any.
     let flush (state : FieldState) =
@@ -186,6 +209,7 @@ type IncrementalDelivery () =
             ValueSome (
                 {
                     Id = state.Id
+                    SubPath = Skip
                     Data = Skip
                     Items = Include (items.ToArray ())
                     Errors =
@@ -199,7 +223,13 @@ type IncrementalDelivery () =
         else
             ValueNone
 
-    let pendingFor (fieldPath : obj list) (state : FieldState) (isNew : bool) = if isNew then [ pendingResultFor fieldPath state ] else []
+    /// The announcement of a field delivered for the first time, sent along with its own payload.
+    let pendingFor (state : FieldState) (isNew : bool) =
+        if isNew then
+            state.Released <- true
+            [ pendingResultFor state ]
+        else
+            []
 
     /// Execution.collectItems wraps a single successfully-produced item's own value in a one-element array
     /// (deferResults itself only ever handles a value at a path, not specifically an item); an item whose
@@ -209,10 +239,7 @@ type IncrementalDelivery () =
         | :? (obj[]) as items when items.Length = 1 -> items[0]
         | data -> data
 
-    let itemEvent (fieldPath : obj list) (index : int) (data : obj) (errors : GQLProblemDetails list) =
-        let state = announceStream fieldPath |> fst
-        state.Buffer[index] <- (unwrapItem data, errors)
-
+    let itemsPayload (fieldPath : obj list) (state : FieldState) =
         match flush state with
         | ValueSome (incremental, flushedItems) ->
             let pending = takePendingForItems fieldPath flushedItems
@@ -222,6 +249,49 @@ type IncrementalDelivery () =
             | [] -> ValueNone
             | pending -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [], [], true))
 
+    let itemEvent (fieldPath : obj list) (index : int) (data : obj) (errors : GQLProblemDetails list) =
+        let state = announceStream fieldPath |> fst
+        state.Buffer[index] <- (unwrapItem data, errors)
+        itemsPayload fieldPath state
+
+    /// The wire address of a deferred field's payload: the path of its containing object, and the field's value as
+    /// an object map of that one field, which is what a client merges into the object at the announced path.
+    let deferredPayload (fieldPath : obj list) (data : obj) =
+        match fieldPath with
+        | DeferredFieldPath (parentPath, fieldName) -> parentPath, box (NameValueLookup.ofList [ fieldName, data ])
+        | _ -> fieldPath, data
+
+    /// A deferred field's own value, or its value with the errors raised inside it.
+    let deferredEvent (fieldPath : obj list) (data : obj) (errors : GQLProblemDetails list) =
+        let state, isNew = stateFor fieldPath false
+        let wirePath, wireData = deferredPayload fieldPath data
+        let incremental = {
+            Id = state.Id
+            SubPath = Skip
+            Data = Include (ValueSome wireData)
+            Items = Skip
+            Errors = (if errors.IsEmpty then Skip else Include errors)
+        }
+        let fieldPending =
+            match takeFieldPending fieldPath with
+            | [] -> pendingFor state isNew
+            | pending -> pending
+        let pending = [ yield! fieldPending; yield! takePendingVisibleIn wirePath wireData ]
+        ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
+
+    /// Closes the field, completing it for the client when the client learned of it.
+    let complete (fieldPath : obj list) (state : FieldState) (errors : GQLProblemDetails list Skippable) =
+        state.Closed <- true
+        state.Buffer.Clear ()
+
+        if state.Released then
+            ValueSome (SubscriptionExecutionResult.CreateSubsequent ([], [], [ { Id = state.Id; Errors = errors } ], true))
+        else
+            // Never exposed to the client (the payload that should have exposed it resolved to null there)
+            dropFieldPending fieldPath
+            ValueNone
+
+    /// The announcements visible in the data, to be sent with the payload carrying it.
     member _.TakePendingVisibleIn (data : obj) = takePendingVisibleIn [] data
 
     /// Applies one engine event, returning the payload it produces, if any (an out-of-order item that does not
@@ -230,23 +300,14 @@ type IncrementalDelivery () =
     member _.Apply (event : GQLDeferredResponseContent) : SubscriptionExecutionResult voption =
         match event with
         | DeferredPending (fieldPath, label, isStream) ->
-            let state, _ = announcePending fieldPath label
-            if isStream then
-                state.IsStream <- true
+            announcePending fieldPath label isStream |> ignore
             ValueNone
         | DeferredResult (data, BatchPath (fieldPath, indices)) ->
             let items = data :?> obj[]
             let state = announceStream fieldPath |> fst
             (indices, List.ofArray items)
             ||> List.iter2 (fun index item -> state.Buffer[index :?> int] <- (item, []))
-            match flush state with
-            | ValueSome (incremental, flushedItems) ->
-                let pending = takePendingForItems fieldPath flushedItems
-                ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
-            | ValueNone ->
-                match takeFieldPending fieldPath with
-                | [] -> ValueNone
-                | pending -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [], [], true))
+            itemsPayload fieldPath state
         | DeferredResult (data, ItemPath (fieldPath, index)) -> itemEvent fieldPath index data []
         | DeferredErrors (data, errors, ItemPath (fieldPath, index)) -> itemEvent fieldPath index data errors
         | DeferredErrors (data, errors, BatchPath (fieldPath, indices)) ->
@@ -266,59 +327,34 @@ type IncrementalDelivery () =
                         |> ValueOption.map (pathStartsWith itemPath)
                         |> ValueOption.defaultValue false)
                 state.Buffer[index :?> int] <- (item, itemErrors))
-            match flush state with
-            | ValueSome (incremental, flushedItems) ->
-                let pending = takePendingForItems fieldPath flushedItems
-                ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
-            | ValueNone ->
-                match takeFieldPending fieldPath with
-                | [] -> ValueNone
-                | pending -> ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [], [], true))
+            itemsPayload fieldPath state
         | DeferredResult (data, fieldPath) ->
-            // A plain (non-indexed) path: a @defer field's own value.
-            let state, isNew = stateFor fieldPath
-            let incremental = { Id = state.Id; Data = Include data; Items = Skip; Errors = Skip }
-            let fieldPending =
-                match takeFieldPending fieldPath with
-                | [] -> pendingFor fieldPath state isNew
-                | pending -> pending
-            let pending = [ yield! fieldPending; yield! takePendingVisibleIn fieldPath data ]
-            ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
+            // A plain (non-indexed) path: a @defer field's own value
+            deferredEvent fieldPath data []
         | DeferredErrors (data, errors, fieldPath) ->
             match fields.TryGetValue fieldPath with
             | true, state when state.IsStream && not state.Closed ->
-                // Known to already be a stream (either pre-announced or already carrying items): the failure of the
-                // source itself, folded directly into its completion. Anything still buffered, waiting for a gap that
-                // will now never be filled (the engine pulls no further items after a failure), is dropped.
-                state.Closed <- true
-                state.Buffer.Clear ()
-                ValueSome (SubscriptionExecutionResult.CreateSubsequent ([], [], [ { Id = state.Id; Errors = Include errors } ], true))
+                // Known to be a stream (either pre-announced or already carrying items): the failure of the source
+                // itself, folded directly into its completion. Anything still buffered, waiting for a gap that will
+                // now never be filled (the engine pulls no further items after a failure), is dropped.
+                complete fieldPath state (Include errors)
             | _ ->
-                // A @defer field's own failure.
-                let state, isNew = stateFor fieldPath
-                let incremental = { Id = state.Id; Data = Include data; Items = Skip; Errors = Include errors }
-                let fieldPending =
-                    match takeFieldPending fieldPath with
-                    | [] -> pendingFor fieldPath state isNew
-                    | pending -> pending
-                let pending = [ yield! fieldPending; yield! takePendingVisibleIn fieldPath data ]
-                ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
+                // A @defer field's own value, with the errors raised inside it
+                deferredEvent fieldPath data errors
         | DeferredCompleted fieldPath ->
             match fields.TryGetValue fieldPath with
-            | true, state when not state.Closed ->
-                state.Closed <- true
-                ValueSome (SubscriptionExecutionResult.CreateSubsequent ([], [], [ { Id = state.Id; Errors = Skip } ], true))
+            | true, state when not state.Closed -> complete fieldPath state Skip
             | _ ->
-                // Already closed by a preceding stream failure.
+                // Already closed by a preceding stream failure
                 ValueNone
 
-    /// The final payload of the delivery: completes every field that has not completed on its own (normally none -
-    /// a @live field is the only field this codebase produces that never completes by itself) and reports that no
-    /// further payloads follow.
+    /// The final payload of the delivery: completes every field the client learned of that has not completed on
+    /// its own (normally none - a @live field is the only field this codebase produces that never completes by
+    /// itself) and reports that no further payloads follow.
     member _.Finish () : SubscriptionExecutionResult =
         let stillOpen =
             fields.Values
-            |> Seq.filter (fun state -> not state.Closed)
+            |> Seq.filter (fun state -> state.Released && not state.Closed)
             |> Seq.map (fun state -> { Id = state.Id; Errors = Skip })
             |> Seq.toList
         SubscriptionExecutionResult.CreateSubsequent ([], [], stillOpen, false)

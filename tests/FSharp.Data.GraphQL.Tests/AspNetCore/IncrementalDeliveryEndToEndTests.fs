@@ -95,14 +95,13 @@ let private assertWellFormed (payloads : SubscriptionExecutionResult list) =
         |> Map.ofSeq
 
 /// <summary>
-/// How a field-level <c>@defer</c> is addressed on the wire today: the pending entry names the deferred field itself
-/// and the incremental entry carries the field's raw value. Spec v0.2 addresses it by the containing object's path
-/// with an object map instead; when the translator moves to that shape, only this helper changes.
+/// How a field-level <c>@defer</c> is addressed on the wire, as spec v0.2 requires: the pending entry names the
+/// containing object and the incremental entry carries an object map of the one delivered field.
 /// </summary>
 let private expectDeferredField (parentPath : obj list) (fieldName : string) (value : obj) (pending : PendingResult) (entry : IncrementalResult) =
-    pending.Path |> equals (parentPath @ [ box fieldName ])
+    pending.Path |> equals parentPath
     entry.Id |> equals pending.Id
-    entry.Data |> equals (Include value)
+    entry.Data |> equals (Include (ValueSome (box (NameValueLookup.ofList [ fieldName, value ]))))
     entry.Items |> equals Skip
 
 [<Fact>]
@@ -117,7 +116,7 @@ let ``Labeled deferred field is announced in the initial payload, delivered, com
     match payloads with
     | [ initial; delivered; completed; final ] ->
         initial.Data
-        |> equals (Include (box (NameValueLookup.ofList [ "testData", upcast NameValueLookup.ofList [ "a", null ] ])))
+        |> equals (Include (ValueSome (box (NameValueLookup.ofList [ "testData", upcast NameValueLookup.ofList [ "a", null ] ]))))
         let pending = pendingOf initial |> single
         pending.Label |> equals (Include "hero")
         expectDeferredField [ box "testData" ] "a" (box "Apple") pending (incrementalOf delivered |> single)
@@ -172,7 +171,8 @@ let ``A stream nested in a deferred field is announced with the deferred payload
     }"""
     let payloads = executor.AsyncExecute(query, getMockInputContext) |> sync |> deliver
     assertWellFormed payloads |> ignore
-    let outerPath = [ box "testData"; box "innerList" ]
+    // The deferred field is announced at its containing object, the stream at its own list field
+    let outerPath = [ box "testData" ]
     let streamPath = [ box "testData"; box "innerList"; box 0; box "innerList" ]
     match payloads with
     | [ initial; outer; outerCompleted; itemB; itemC; streamCompleted; final ] ->
@@ -211,7 +211,7 @@ let ``A stream that fails after an item completes with the error and the deliver
     assertWellFormed payloads |> ignore
     match payloads with
     | [ initial; item; failed; final ] ->
-        initial.Data |> equals (Include (box (NameValueLookup.ofList [ "failing", upcast [] ])))
+        initial.Data |> equals (Include (ValueSome (box (NameValueLookup.ofList [ "failing", upcast [] ]))))
         let pending = pendingOf initial |> single
         pending.Path |> equals [ box "failing" ]
         (incrementalOf item |> single).Items |> equals (Include [| box 1 |])
@@ -266,7 +266,7 @@ let ``A live field is announced with its first update and only closed by the fin
     match payloads with
     | [ initial; update; final ] ->
         initial.Data
-        |> equals (Include (box (NameValueLookup.ofList [ "liveData", upcast NameValueLookup.ofList [ "live", upcast "some value" ] ])))
+        |> equals (Include (ValueSome (box (NameValueLookup.ofList [ "liveData", upcast NameValueLookup.ofList [ "live", upcast "some value" ] ]))))
         initial.Pending |> equals Skip
         let pending = pendingOf update |> single
         expectDeferredField [ box "liveData" ] "live" (box "another value") pending (incrementalOf update |> single)
@@ -275,7 +275,7 @@ let ``A live field is announced with its first update and only closed by the fin
         final.HasNext |> equals (Include false)
     | payloads -> fail $"Expected three payloads but got %A{payloads}"
 
-[<Fact(Skip = "Not implemented: spec v0.2 addresses deferred payloads by the containing object's path")>]
+[<Fact>]
 let ``Field-level defer is delivered as an object map at the parent's path`` () =
     let query = parse """{
         testData {
@@ -287,4 +287,4 @@ let ``Field-level defer is delivered as an object map at the parent's path`` () 
     let pending = payloads |> List.collect pendingOf |> single
     pending.Path |> equals [ box "testData" ]
     let entry = payloads |> List.collect incrementalOf |> single
-    entry.Data |> equals (Include (box (NameValueLookup.ofList [ "a", upcast "Apple" ])))
+    entry.Data |> equals (Include (ValueSome (box (NameValueLookup.ofList [ "a", upcast "Apple" ]))))
