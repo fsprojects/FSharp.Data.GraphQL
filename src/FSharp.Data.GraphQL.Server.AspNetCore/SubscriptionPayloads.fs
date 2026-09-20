@@ -75,7 +75,8 @@ type internal DeferredPayloads
         /// <inheritdoc />
         member _.TryAbsorbBeforeInitial event =
             match event with
-            | DeferredPending _ ->
+            | DeferredPending _
+            | DeferredFragmentPending _ ->
                 // Announced before the initial payload, so it can be part of its pending entries
                 delivery.Apply event |> ignore
                 true

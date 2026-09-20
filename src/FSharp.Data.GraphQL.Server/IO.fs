@@ -229,6 +229,18 @@ and GQLDeferredResponseContent =
     | DeferredErrors of Data : obj * Errors : GQLProblemDetails list * Path : FieldPath
     /// Marks a deferred or streamed field as fully delivered.
     | DeferredCompleted of Path : FieldPath
+    /// Announces a labeled deferred fragment of the object at the path, identified within that object by the id.
+    | DeferredFragmentPending of Path : FieldPath * Label : string voption * FragmentId : int
+    /// <summary>
+    /// Delivers the fields of a deferred fragment as an object map to merge into the object at the path.
+    /// </summary>
+    /// <remarks>
+    /// Data is <see cref="ValueNone"/> when an error propagated up to the fragment itself: the object containing it
+    /// was already delivered, so the fragment completes with the errors and delivers no data.
+    /// </remarks>
+    | DeferredFragmentResult of Data : Output voption * Errors : GQLProblemDetails list * Path : FieldPath * FragmentId : int
+    /// Marks a deferred fragment as fully delivered.
+    | DeferredFragmentCompleted of Path : FieldPath * FragmentId : int
 
 /// Represents events emitted by a live GraphQL subscription.
 and GQLSubscriptionResponseContent =

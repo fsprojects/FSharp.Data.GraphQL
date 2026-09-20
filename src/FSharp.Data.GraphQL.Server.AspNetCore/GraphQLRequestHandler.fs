@@ -81,7 +81,21 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
                         if logger.IsEnabled LogLevel.Trace then
                             logger.LogTrace ("GraphQL deferred errors:\n{errors}\nGraphQL deferred data:\n{data}", errors, serializeIndented data)
                     | DeferredCompleted path ->
-                        logger.LogDebug ("Completed GraphQL deferred field at path: {path}", path |> Seq.map string |> Seq.toArray |> Path.Join))
+                        logger.LogDebug ("Completed GraphQL deferred field at path: {path}", path |> Seq.map string |> Seq.toArray |> Path.Join)
+                    | DeferredFragmentPending (path, label, fragmentId) ->
+                        logger.LogDebug (
+                            "Announced GraphQL deferred fragment #{fragmentId} (label: {label}) at path: {path}",
+                            fragmentId,
+                            label |> ValueOption.toObj,
+                            path |> Seq.map string |> Seq.toArray |> Path.Join
+                        )
+                    | DeferredFragmentResult (data, errors, path, fragmentId) ->
+                        logger.LogDebug ("Produced GraphQL deferred fragment #{fragmentId} result for path: {path}", fragmentId, path |> Seq.map string |> Seq.toArray |> Path.Join)
+
+                        if logger.IsEnabled LogLevel.Trace then
+                            logger.LogTrace ("GraphQL deferred fragment errors:\n{errors}\nGraphQL deferred fragment data:\n{data}", errors, serializeIndented (data |> ValueOption.toObj))
+                    | DeferredFragmentCompleted (path, fragmentId) ->
+                        logger.LogDebug ("Completed GraphQL deferred fragment #{fragmentId} at path: {path}", fragmentId, path |> Seq.map string |> Seq.toArray |> Path.Join))
 
             GQLResponse.Direct (documentId, data, errs)
 

@@ -328,6 +328,35 @@ let private deferResultsCompleted path (res : ResolverResult<obj>) : IObservable
     let completed = Observable.singleton (DeferredCompleted (normalizeErrorPath path))
     withNestedEvents ownResult nested (ValueSome completed)
 
+/// <summary>
+/// The delivery of a fragment deferred with <c>@defer</c>: its fields, resolved together as one object of the object
+/// at <paramref name="fragmentPath"/>, announced up front when labeled, then its own nested deferred and streamed
+/// fields, exactly as for a deferred field.
+/// </summary>
+let private deferredFragmentEvents
+    (label : string voption)
+    (fragmentId : int)
+    (fragmentPath : FieldPath)
+    (fragment : AsyncVal<ResolverResult<KeyValuePair<string, obj>>>)
+    : IObservable<GQLDeferredResponseContent>
+    =
+    let events =
+        fragment
+        |> Observable.ofAsyncVal
+        |> Observable.bind (fun result ->
+            let ownResult, nested =
+                match result with
+                | Ok (data, nested, errs) ->
+                    Observable.singleton (DeferredFragmentResult (ValueSome (data.Value :?> Output), errs, fragmentPath, fragmentId)), nested
+                // An error propagated up to the fragment itself: the object it belongs to was already delivered, so
+                // the fragment completes with the errors and delivers no data
+                | Error errs -> Observable.singleton (DeferredFragmentResult (ValueNone, errs, fragmentPath, fragmentId)), ValueNone
+            let completed = Observable.singleton (DeferredFragmentCompleted (fragmentPath, fragmentId))
+            withNestedEvents ownResult nested (ValueSome completed))
+    match label with
+    | ValueSome _ -> AnnouncedEvents.announced (DeferredFragmentPending (fragmentPath, label, fragmentId)) events
+    | ValueNone -> events
+
 /// Collect together an array of results using the appropriate execution strategy.
 let collectFields
     (strategy : ExecutionStrategy)
@@ -816,14 +845,36 @@ and executeObjectFields
         | Ok fieldCtx -> executeResolvers inputContext fieldCtx fieldPath value (resolveField resolver fieldCtx value)
         | Error errs -> asyncVal { return Error (errs |> List.map GQLProblemDetails.OfError) }
 
-    let! res =
+    // A deferred fragment stands among the fields of the object; it contributes nothing to the object's own value
+    // and is delivered afterwards, its fields resolved together against the same object
+    let ownFields, deferredFragments =
         fields
+        |> List.partition (fun field ->
+            match field.Kind with
+            | ResolveDeferredFragment _ -> false
+            | _ -> true)
+
+    let executeDeferredFragment (deferred : IObservable<GQLDeferredResponseContent> voption) (fragment : ExecutionInfo) =
+        match fragment.Kind with
+        | ResolveDeferredFragment (label, fragmentId, fragmentFields) ->
+            let events =
+                executeObjectFields fragmentFields objName objDef inputContext ctx path value
+                |> deferredFragmentEvents label fragmentId (normalizeErrorPath path)
+            match deferred with
+            | ValueSome deferred -> ValueSome (AnnouncedEvents.merge deferred events)
+            | ValueNone -> ValueSome events
+        | _ -> deferred
+
+    let! res =
+        ownFields
         |> Seq.map executeField
         |> Seq.toArray
         |> collectFields Parallel
     match res with
     | Error errs -> return Error errs
-    | Ok (kvps, def, errs) -> return Ok (KeyValuePair (objName, box <| NameValueLookup (kvps)), def, errs)
+    | Ok (kvps, nested, errs) ->
+        let deferred = deferredFragments |> List.fold executeDeferredFragment nested
+        return Ok (KeyValuePair (objName, box <| NameValueLookup (kvps)), deferred, errs)
 }
 
 let internal compileSubscriptionField (subfield : SubscriptionFieldDef) =
@@ -892,13 +943,42 @@ let private executeQueryOrMutation
             | Ok r -> return Ok r
         }
 
+    /// A fragment deferred at the operation's root: its fields are root fields, resolved together against the root
+    /// value once the root's own fields have been delivered
+    let executeRootDeferredFragment (deferred : IObservable<GQLDeferredResponseContent> voption) (info : ExecutionInfo) =
+        match info.Kind with
+        | ResolveDeferredFragment (label, fragmentId, fragmentFields) ->
+            let rootCtx = {
+                ExecutionInfo = info
+                Context = ctx
+                ReturnType = objDef
+                ParentType = objDef
+                Schema = ctx.Schema
+                Args = Map.empty
+                Variables = ctx.Variables
+                Path = []
+            }
+            let events =
+                executeObjectFields fragmentFields objDef.Name objDef ctx.GetInputContext rootCtx [] rootValue
+                |> deferredFragmentEvents label fragmentId []
+            match deferred with
+            | ValueSome deferred -> ValueSome (AnnouncedEvents.merge deferred events)
+            | ValueNone -> ValueSome events
+        | _ -> deferred
+
     asyncVal {
         let documentId = ctx.ExecutionPlan.DocumentId
+        let rootFields, deferredFragments =
+            resultSet
+            |> Array.partition (fun (_, info) ->
+                match info.Kind with
+                | ResolveDeferredFragment _ -> false
+                | _ -> true)
         // Inline argument coercion is request validation, the same as variable coercion in Executor.eval's
         // coerceVariables: it rejects the request before any root resolver runs, so its errors must never be
         // reported as an execution result with null data
         let coerced = SortedDictionary<int, struct (Map<string, obj> * IGQLError list)>()
-        resultSet
+        rootFields
         |> Array.iteri (fun i (_, info) ->
             let argDefs = ctx.FieldExecuteMap.GetArgs (ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
             match getArgumentValues argDefs info.Ast.Arguments ctx.GetInputContext ctx.Variables with
@@ -913,12 +993,17 @@ let private executeQueryOrMutation
         else
             let operations =
                 coerced
-                |> Seq.map (fun (KeyValue (i, struct (args, _))) -> executeRootOperation resultSet[i] args)
+                |> Seq.map (fun (KeyValue (i, struct (args, _))) -> executeRootOperation rootFields[i] args)
                 |> Seq.toArray
             match! operations |> collectFields ctx.ExecutionPlan.Strategy with
-            | Ok (data, ValueSome deferred, errs) ->
-                return GQLExecutionResult.Deferred (documentId, NameValueLookup (data), errs, deferred, ctx.Metadata)
-            | Ok (data, ValueNone, errs) -> return GQLExecutionResult.Direct (documentId, NameValueLookup (data), errs, ctx.Metadata)
+            | Ok (data, nested, errs) ->
+                let deferred =
+                    (nested, deferredFragments)
+                    ||> Array.fold (fun deferred (_, info) -> executeRootDeferredFragment deferred info)
+                match deferred with
+                | ValueSome deferred ->
+                    return GQLExecutionResult.Deferred (documentId, NameValueLookup (data), errs, deferred, ctx.Metadata)
+                | ValueNone -> return GQLExecutionResult.Direct (documentId, NameValueLookup (data), errs, ctx.Metadata)
             // Only a non-null root field failing during execution reaches this branch: an execution result whose
             // data is null, as the spec requires, unlike the request error returned above for a coercion failure
             | Error errs -> return GQLExecutionResult.Direct (documentId, null, errs, ctx.Metadata)

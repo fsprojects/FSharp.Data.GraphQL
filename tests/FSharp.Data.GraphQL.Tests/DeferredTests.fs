@@ -202,6 +202,8 @@ let DataType =
             Define.Field("bufferedList", ListOf AsyncDataType, (fun _ d -> d.bufferedList))
             Define.Field("nullObject", Nullable AsyncDataType, (fun _ (d: TestSubject) -> d.nullObject))
             Define.Field("container", Nullable ContainerType, (fun _ (d: TestSubject) -> Some d.container))
+            // A non-null field whose failure propagates to the object containing it
+            Define.Field("nonNullError", StringType, (fun _ (_ : TestSubject) -> failwith "Non-null field error!"))
         ])
 
 let data = {
@@ -1839,7 +1841,7 @@ let ``Stream directive label is announced in the stream's pending marker`` () =
         |> Seq.head
         |> equals (DeferredPending ([ "testData"; "ifaceList" ], ValueSome "friends", true, 0))
 
-[<Fact(Skip = "Not implemented: @defer on inline fragments")>]
+[<Fact>]
 let ``Defer directive on an inline fragment defers the fragment's fields as one payload at the parent's path`` () =
     let expectedDirect =
         NameValueLookup.ofList [
@@ -1865,12 +1867,12 @@ let ``Defer directive on an inline fragment defers the fragment's fields as one 
         sub.Received
         |> Seq.toList
         |> equals [
-            DeferredPending ([ "testData" ], ValueSome "rest", false, 0)
-            DeferredResult (NameValueLookup.ofList [ "a", upcast "Apple"; "b", upcast "Banana" ], [ "testData" ])
-            DeferredCompleted [ "testData" ]
+            DeferredFragmentPending ([ "testData" ], ValueSome "rest", 0)
+            DeferredFragmentResult (ValueSome (upcast NameValueLookup.ofList [ "a", upcast "Apple"; "b", upcast "Banana" ]), [], [ "testData" ], 0)
+            DeferredFragmentCompleted ([ "testData" ], 0)
         ]
 
-[<Fact(Skip = "Not implemented: @defer on fragment spreads")>]
+[<Fact>]
 let ``Defer directive on a fragment spread defers the fragment's fields as one payload`` () =
     let expectedDirect =
         NameValueLookup.ofList [
@@ -1897,11 +1899,11 @@ let ``Defer directive on a fragment spread defers the fragment's fields as one p
         sub.Received
         |> Seq.toList
         |> equals [
-            DeferredResult (NameValueLookup.ofList [ "a", upcast "Apple"; "b", upcast "Banana" ], [ "testData" ])
-            DeferredCompleted [ "testData" ]
+            DeferredFragmentResult (ValueSome (upcast NameValueLookup.ofList [ "a", upcast "Apple"; "b", upcast "Banana" ]), [], [ "testData" ], 0)
+            DeferredFragmentCompleted ([ "testData" ], 0)
         ]
 
-[<Fact(Skip = "Not implemented: @defer on fragment spreads")>]
+[<Fact>]
 let ``The same fragment deferred twice at the same path is delivered once`` () =
     let query = parse """query {
         testData {
@@ -1920,8 +1922,161 @@ let ``The same fragment deferred twice at the same path is delivered once`` () =
         sub.Received
         |> Seq.toList
         |> equals [
-            DeferredResult (NameValueLookup.ofList [ "a", upcast "Apple" ], [ "testData" ])
-            DeferredCompleted [ "testData" ]
+            DeferredFragmentResult (ValueSome (upcast NameValueLookup.ofList [ "a", upcast "Apple" ]), [], [ "testData" ], 0)
+            DeferredFragmentCompleted ([ "testData" ], 0)
+        ]
+
+[<Fact>]
+let ``Two labeled fragments deferred at the same path are delivered as separate payloads`` () =
+    let query = parse """{
+        testData {
+            id
+            ... @defer(label: "first") {
+                a
+            }
+            ... @defer(label: "second") {
+                b
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun _ errors deferred ->
+        empty errors
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            // Both fragments are announced before either delivers
+            DeferredFragmentPending ([ "testData" ], ValueSome "first", 0)
+            DeferredFragmentPending ([ "testData" ], ValueSome "second", 1)
+            DeferredFragmentResult (ValueSome (upcast NameValueLookup.ofList [ "a", upcast "Apple" ]), [], [ "testData" ], 0)
+            DeferredFragmentCompleted ([ "testData" ], 0)
+            DeferredFragmentResult (ValueSome (upcast NameValueLookup.ofList [ "b", upcast "Banana" ]), [], [ "testData" ], 1)
+            DeferredFragmentCompleted ([ "testData" ], 1)
+        ]
+
+[<Fact>]
+let ``A field selected both directly and in a deferred fragment is executed with the object`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "a", upcast "Apple"
+            ]
+        ]
+    let query = parse """{
+        testData {
+            a
+            ... @defer {
+                a
+                b
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            // The fragment delivers only the field the object did not
+            DeferredFragmentResult (ValueSome (upcast NameValueLookup.ofList [ "b", upcast "Banana" ]), [], [ "testData" ], 0)
+            DeferredFragmentCompleted ([ "testData" ], 0)
+        ]
+
+[<Fact>]
+let ``A fragment deferred at the operation root delivers root fields`` () =
+    let query = parse """{
+        ... @defer {
+            nullableTestData {
+                id
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast NameValueLookup.ofList [])
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            DeferredFragmentResult (
+                ValueSome (upcast NameValueLookup.ofList [ "nullableTestData", upcast NameValueLookup.ofList [ "id", upcast "1" ] ]),
+                [],
+                [],
+                0
+            )
+            DeferredFragmentCompleted ([], 0)
+        ]
+
+[<Fact>]
+let ``A deferred fragment on an abstract type delivers the fields of the matching type`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "iface", upcast NameValueLookup.ofList [
+                    "id", upcast "1000"
+                ]
+            ]
+        ]
+    let query = parse """{
+        testData {
+            iface {
+                id
+                ... on C @defer(label: "c") {
+                    value
+                }
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            DeferredFragmentPending ([ "testData"; "iface" ], ValueSome "c", 0)
+            DeferredFragmentResult (ValueSome (upcast NameValueLookup.ofList [ "value", upcast "C" ]), [], [ "testData"; "iface" ], 0)
+            DeferredFragmentCompleted ([ "testData"; "iface" ], 0)
+        ]
+
+[<Fact>]
+let ``An error propagating up to a deferred fragment completes it with the errors and no data`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "id", upcast "1"
+            ]
+        ]
+    let expectedError = GQLProblemDetails.CreateWithKind ("Non-null field error!", Execution, [ box "testData"; "nonNullError" ])
+    let query = parse """{
+        testData {
+            id
+            ... @defer {
+                nonNullError
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            // The object was already delivered with its own fields, so the fragment has nothing to null: it fails as a whole
+            DeferredFragmentResult (ValueNone, [ expectedError ], [ "testData" ], 0)
+            DeferredFragmentCompleted ([ "testData" ], 0)
         ]
 
 [<Fact>]

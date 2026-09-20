@@ -708,6 +708,13 @@ and ExecutionInfo = {
 
     /// Get a nested info recognized by path provided as parameter. Path may consist of fields names or aliases.
     member this.GetPath (keys : string list) : ExecutionInfo voption =
+        // The fields of a deferred fragment belong to the selection of the object containing it
+        let rec flattenDeferredFragments (fields : ExecutionInfo list) =
+            fields
+            |> Seq.collect (fun f ->
+                match f.Kind with
+                | ResolveDeferredFragment (_, _, fragmentFields) -> flattenDeferredFragments fragmentFields
+                | _ -> Seq.singleton f)
         let rec path info segments =
             match segments with
             | [] ->
@@ -721,15 +728,17 @@ and ExecutionInfo = {
                 | ResolveStreamed (inner, _) -> path inner segments
                 | ResolveValue -> ValueNone
                 | ResolveCollection inner -> path inner segments
-                | SelectFields fields ->
+                | SelectFields fields
+                | ResolveDeferredFragment (_, _, fields) ->
                     fields
-                    |> List.vtryFind (fun f -> f.Identifier = head)
+                    |> flattenDeferredFragments
+                    |> Seq.vtryFind (fun f -> f.Identifier = head)
                     |> ValueOption.bind (fun f -> path f tail)
                 | ResolveAbstraction typeMap ->
                     typeMap
                     |> Map.toSeq
                     |> Seq.map snd
-                    |> Seq.collect id
+                    |> Seq.collect flattenDeferredFragments
                     |> Seq.vtryFind (fun f -> f.Identifier = head)
                     |> ValueOption.bind (fun f -> path f tail)
         path this keys
@@ -758,6 +767,15 @@ and ExecutionInfo = {
                 sb.Append("ResolveLive: ").AppendLine (nameAs info)
                 |> ignore
                 str (indent + 1) sb inner
+            | ResolveDeferredFragment (label, fragmentId, fields) ->
+                pad indent sb
+                let labelText =
+                    match label with
+                    | ValueSome label -> $" (label: {label})"
+                    | ValueNone -> ""
+                sb.Append("ResolveDeferredFragment: ").AppendLine ($"#{fragmentId}{labelText}")
+                |> ignore
+                fields |> List.iter (str (indent + 1) sb)
             | ResolveStreamed (inner, mode) ->
                 pad indent sb
                 sb.Append("ResolveStreamed: ").AppendLine (nameAs info)
@@ -810,6 +828,9 @@ and ExecutionInfoKind =
     | ResolveStreamed of ExecutionInfo * BufferedStreamOptions
     /// Reduce the current field as a live query.
     | ResolveLive of ExecutionInfo
+    /// Reduce a fragment deferred with @defer: its fields are delivered later, as one payload
+    /// of the object containing them, identified within that object's selection by the id.
+    | ResolveDeferredFragment of label : string voption * fragmentId : int * fields : ExecutionInfo list
 
 /// Buffered stream options. Used to specify how the buffer will behavior in a stream.
 and BufferedStreamOptions = {
