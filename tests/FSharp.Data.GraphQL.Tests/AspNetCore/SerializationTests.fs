@@ -253,6 +253,32 @@ let ``Serializes errors payload without top-level data`` () =
     Assert.Equal ("Boom", (payload.GetProperty "errors").Item(0).GetProperty("message").GetString())
 
 [<Fact>]
+let ``Serializes a pending path with list indices as JSON numbers`` () =
+    let pending = [ { Id = "0"; Path = [ box "items"; box 0; box "children" ]; Label = Skip } ]
+    let json = serializePayload (SubscriptionExecutionResult.CreateSubsequent (pending, [], [], true))
+    use document = JsonDocument.Parse json
+    let payload = document.RootElement.GetProperty "payload"
+    let pendingEntry = payload.GetProperty("pending")[0]
+    let path = pendingEntry.GetProperty("path").EnumerateArray() |> Seq.toList
+    Assert.Equal (3, path.Length)
+    Assert.Equal ("items", path[0].GetString())
+    Assert.Equal (JsonValueKind.Number, path[1].ValueKind)
+    Assert.Equal (0, path[1].GetInt32())
+    Assert.Equal ("children", path[2].GetString())
+
+[<Fact(Skip = "Not implemented: subPath on IncrementalResult")>]
+let ``Serializes an incremental entry's subPath when present`` () =
+    // Once IncrementalResult carries SubPath, construct the entry with SubPath = Include [ box "a" ] here
+    let incremental = [ { Id = "0"; Data = Include (box (NameValueLookup.ofList [ "b", upcast "x" ])); Items = Skip; Errors = Skip } ]
+    let json = serializePayload (SubscriptionExecutionResult.CreateSubsequent ([], incremental, [], true))
+    use document = JsonDocument.Parse json
+    let payload = document.RootElement.GetProperty "payload"
+    let entry = payload.GetProperty("incremental")[0]
+    Assert.True (hasProperty "subPath" entry, $"Expected subPath on the incremental entry in {json}")
+    let subPath = entry.GetProperty("subPath")[0]
+    Assert.Equal ("a", subPath.GetString())
+
+[<Fact>]
 let ``Serializes an error message with its problem details as the payload`` () =
     // Regression test: RawServerMessageConverter used to write the ErrorMessages payload without a preceding
     // WritePropertyName ("payload"), which Utf8JsonWriter rejects, so every "error" message failed to serialize

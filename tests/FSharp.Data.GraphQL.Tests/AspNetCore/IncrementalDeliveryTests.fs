@@ -338,3 +338,89 @@ let ``A live field reuses the same id across repeated updates and is only ever c
     |> wantValueSome
     |> single
     |> ignore
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Incremental delivery spec v0.2 coverage of the translator. Tests marked Skip capture behaviour the spec requires but
+// the translator does not implement yet; each names the gap in its Skip reason.
+// ---------------------------------------------------------------------------------------------------------------------
+
+[<Fact>]
+let ``A stream pending carries its label into the pending entry`` () =
+    let delivery = IncrementalDelivery ()
+    delivery.Apply (DeferredPending (itemsPath, ValueSome "friends", true))
+    |> equals ValueNone
+    let payload = delivery.Apply (DeferredResult (box 1, itemPath 0))
+    pendingPaths payload |> equals [ itemsPath ]
+    pendingLabels payload |> equals [ Include "friends" ]
+
+[<Fact>]
+let ``The same deferred field announced twice with the same label is announced to the client once`` () =
+    let delivery = IncrementalDelivery ()
+    let path = [ box "testData"; box "a" ]
+    delivery.Apply (DeferredPending (path, ValueSome "hero", false))
+    |> equals ValueNone
+    delivery.Apply (DeferredPending (path, ValueSome "hero", false))
+    |> equals ValueNone
+    let payload = delivery.Apply (DeferredResult (box "value", path))
+    let id = pendingIds payload |> single
+    (incrementalOf payload |> single).Id |> equals id
+
+[<Fact(Skip = "Not implemented: deferred fragments are keyed by path only; distinct labels at the same path need distinct ids")>]
+let ``Distinct labels at the same path are distinct pendings`` () =
+    let delivery = IncrementalDelivery ()
+    let path = [ box "testData" ]
+    delivery.Apply (DeferredPending (path, ValueSome "a", false)) |> ignore
+    delivery.Apply (DeferredPending (path, ValueSome "b", false)) |> ignore
+    let payload = delivery.Apply (DeferredResult (box (NameValueLookup.ofList [ "a", upcast "Apple" ]), path))
+    pendingLabels payload |> equals [ Include "a"; Include "b" ]
+    pendingIds payload |> List.distinct |> List.length |> equals 2
+
+[<Fact(Skip = "Not implemented: Finish completes a pre-announced field the client never saw as pending")>]
+let ``A pre-announced stream whose parent is null is neither announced nor completed`` () =
+    let delivery = IncrementalDelivery ()
+    let streamPath = [ box "parent"; box "items" ]
+    delivery.Apply (DeferredPending (streamPath, ValueNone, true))
+    |> equals ValueNone
+    // The parent resolved to null, so the stream is never exposed to the client
+    delivery.TakePendingVisibleIn (NameValueLookup.ofList [ "parent", null ]) |> empty
+    let final = delivery.Finish ()
+    final.Completed |> equals Skip
+    final.HasNext |> equals (Include false)
+
+[<Fact>]
+let ``A stream nested in a streamed item is announced with a path containing the item index`` () =
+    let delivery = IncrementalDelivery ()
+    let nestedStreamPath = [ box "items"; box 0; box "children" ]
+    delivery.Apply (DeferredPending (nestedStreamPath, ValueNone, true))
+    |> equals ValueNone
+    let item = NameValueLookup.ofList [ "children", upcast [||] ]
+    let payload = delivery.Apply (DeferredResult (box [| box item |], itemPath 0))
+    let pending = pendingPaths payload
+    pending |> List.length |> equals 2
+    pending |> contains itemsPath |> contains nestedStreamPath |> ignore
+    (incrementalOf payload |> single).Items |> equals (Include [| box item |])
+
+[<Fact>]
+let ``Errors inside a deferred payload are delivered with its partial data and the field still completes without errors`` () =
+    let delivery = IncrementalDelivery ()
+    let path = [ box "testData"; box "container" ]
+    let partialData = NameValueLookup.ofList [ "name", upcast "Container"; "inner", null ]
+    let error = fieldError "Non-Null field value resolved as a null!" (path @ [ box "inner"; box "value" ])
+    let payload = delivery.Apply (DeferredErrors (box partialData, [ error ], path))
+    let completion = delivery.Apply (DeferredCompleted path)
+    pendingPaths payload |> equals [ path ]
+    let entry = incrementalOf payload |> single
+    entry.Data |> equals (Include (box partialData))
+    entry.Errors |> equals (Include [ error ])
+    (completedOf completion |> single).Errors |> equals Skip
+
+[<Fact(Skip = "Not implemented: a null deferred payload is delivered as incremental data null instead of completing the field with errors")>]
+let ``A deferred field whose payload is null with errors completes with those errors and no incremental entry`` () =
+    let delivery = IncrementalDelivery ()
+    let path = [ box "testData"; box "nullableError" ]
+    let error = fieldError "Non-Null field value resolved as a null!" (path @ [ box "value" ])
+    let payload = delivery.Apply (DeferredErrors (null, [ error ], path))
+    pendingPaths payload |> equals [ path ]
+    incrementalOf payload |> empty
+    (completedOf payload |> single).Errors |> equals (Include [ error ])
+    delivery.Apply (DeferredCompleted path) |> equals ValueNone

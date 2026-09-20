@@ -1492,3 +1492,91 @@ fragment ownerFragment on Dog {
             >> Validation.Ast.validateDocument schema.Introspected
         )
     shouldFail |> equals expectedFailureResult
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Incremental delivery spec v0.2 validation rules. None of them exists yet: each test names the missing rule in its
+// Skip reason and is turned on when the rule lands. The messages are the proposed wording.
+// ---------------------------------------------------------------------------------------------------------------------
+
+let private validateWholeDocument (query : string) =
+    Parser.parse query
+    |> Validation.Ast.validateDocument schema.Introspected
+
+let private expectValidationError (expected : GQLProblemDetails) (result : ValidationResult<GQLProblemDetails>) =
+    match result with
+    | ValidationError errors -> errors |> contains expected |> ignore
+    | Success -> fail $"Expected the validation error '%s{expected.Message}' but the document was accepted"
+
+[<Fact(Skip = "Not implemented: StreamDirectiveOnListField validation rule")>]
+let ``Validation should grant that stream is only applied to list fields`` () =
+    let query =
+        """{
+  human {
+    name @stream
+  }
+}"""
+    validateWholeDocument query
+    |> expectValidationError (
+        GQLProblemDetails.CreateValidationFor
+            [ box "human"; box "name" ]
+            "Directive 'stream' on field 'name' of type 'Human' must be applied to a list field."
+    )
+
+[<Fact(Skip = "Not implemented: DeferStreamDirectiveOnValidOperations validation rule")>]
+let ``Validation should grant that defer and stream are not used in subscription operations`` () =
+    let query =
+        """subscription {
+  ping @defer
+}"""
+    validateWholeDocument query
+    |> expectValidationError (
+        GQLProblemDetails.CreateValidationFor
+            [ box "ping" ]
+            "Directive 'defer' is not allowed in a subscription operation. Disable it with `if: false` instead."
+    )
+
+[<Fact(Skip = "Not implemented: DeferStreamDirectiveOnRootField validation rule")>]
+let ``Validation should grant that defer and stream are not used on mutation root fields`` () =
+    let query =
+        """mutation {
+  convert(value: 1) @defer
+}"""
+    validateWholeDocument query
+    |> expectValidationError (
+        GQLProblemDetails.CreateValidationFor
+            [ box "convert" ]
+            "Directive 'defer' cannot be applied to a root field of the mutation type 'Mutation'."
+    )
+
+[<Fact(Skip = "Not implemented: DeferStreamDirectiveLabel validation rule")>]
+let ``Validation should grant that defer and stream labels are unique in the document`` () =
+    let query =
+        """{
+  human {
+    name @defer(label: "x")
+  }
+  pet {
+    name @defer(label: "x")
+  }
+}"""
+    validateWholeDocument query
+    |> expectValidationError (
+        GQLProblemDetails.CreateValidationFor
+            [ box "pet"; box "name" ]
+            "Label 'x' of directive 'defer' is used more than once. Defer and stream labels must be unique in the document."
+    )
+
+[<Fact(Skip = "Not implemented: DeferStreamDirectiveLabel validation rule")>]
+let ``Validation should grant that defer and stream labels are string literals`` () =
+    let query =
+        """query ($l: String) {
+  human {
+    name @defer(label: $l)
+  }
+}"""
+    validateWholeDocument query
+    |> expectValidationError (
+        GQLProblemDetails.CreateValidationFor
+            [ box "human"; box "name" ]
+            "Argument 'label' of directive 'defer' must be a string literal, not a variable."
+    )

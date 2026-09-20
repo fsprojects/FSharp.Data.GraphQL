@@ -18,6 +18,12 @@ let createIntegrationHttpClient () : HttpClient = integrationFactory.Value.Creat
 
 let createStarWarsHttpClient () : HttpClient = starWarsFactory.Value.CreateClient ()
 
+/// A WebSocket client for the Star Wars host, negotiating the graphql-transport-ws sub-protocol
+let createStarWarsWebSocketClient () =
+    let client = starWarsFactory.Value.Server.CreateWebSocketClient ()
+    client.SubProtocols.Add "graphql-transport-ws"
+    client
+
 let private getIntegrationServerUrl () =
     use client = createIntegrationHttpClient ()
     client.BaseAddress.ToString().TrimEnd '/'

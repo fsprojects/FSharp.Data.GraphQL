@@ -1517,3 +1517,57 @@ let ``Introspection executes an introspection query`` () =
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
+
+[<Fact(Skip = "Not implemented: if, label and initialCount arguments of @defer and @stream")>]
+let ``Defer and stream directives expose the spec arguments`` () =
+    let root = Define.Object("Query", [ Define.Field("onlyField", StringType, "The only field", [], fun _ _ -> "Only value") ])
+    let schema = Schema(root)
+    let query = """{
+      __schema {
+        directives {
+          name
+          args {
+            name
+            defaultValue
+            type {
+              kind
+              name
+              ofType {
+                kind
+                name
+              }
+            }
+          }
+        }
+      }
+    }"""
+    let scalar name = NameValueLookup.ofList [ "kind", upcast "SCALAR"; "name", upcast name; "ofType", null ]
+    let nonNull name =
+        NameValueLookup.ofList [
+            "kind", upcast "NON_NULL"
+            "name", null
+            "ofType", upcast NameValueLookup.ofList [ "kind", upcast "SCALAR"; "name", upcast name ]
+        ]
+    let arg name (defaultValue : objnull) typeRef =
+        NameValueLookup.ofList [ "name", upcast name; "defaultValue", defaultValue; "type", upcast typeRef ]
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext)
+    ensureDirect result <| fun data errors ->
+        empty errors
+        let directives =
+            ((data["__schema"] :?> System.Collections.Generic.IDictionary<string, obj>)["directives"] :?> System.Collections.IEnumerable)
+            |> Seq.cast<System.Collections.Generic.IDictionary<string, obj>>
+            |> Seq.map (fun directive -> string directive["name"], directive["args"])
+            |> Map.ofSeq
+        NameValueLookup.ofList [ "args", directives["defer"] ]
+        |> equals (NameValueLookup.ofList [ "args", upcast [ arg "if" (box "true") (nonNull "Boolean"); arg "label" null (scalar "String") ] ])
+        NameValueLookup.ofList [ "args", directives["stream"] ]
+        |> equals (
+            NameValueLookup.ofList [
+                "args",
+                upcast [
+                    arg "if" (box "true") (nonNull "Boolean")
+                    arg "label" null (scalar "String")
+                    arg "initialCount" (box "0") (scalar "Int")
+                ]
+            ]
+        )

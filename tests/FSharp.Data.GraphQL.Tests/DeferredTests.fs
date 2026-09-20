@@ -1,6 +1,8 @@
 module FSharp.Data.GraphQL.Tests.DeferredTests
 
 open System
+open System.Collections.Immutable
+open System.Text.Json
 open Xunit
 open System.Threading
 open FSharp.Control
@@ -40,6 +42,10 @@ type TestSubject = {
     nullableError : NonNullAsyncTestSubject
     nullableListError : NonNullAsyncTestSubject list
     bufferedList : AsyncTestSubject list
+    /// A nullable object that resolves to null, so nothing deferred below it can ever be delivered
+    nullObject : AsyncTestSubject option
+    /// An object whose nested non-null field fails, to observe error bubbling inside a deferred payload
+    container : ContainerSubject
 }
 
 and AsyncTestSubject = {
@@ -48,6 +54,11 @@ and AsyncTestSubject = {
 
 and NonNullAsyncTestSubject = {
     value : Async<string>
+}
+
+and ContainerSubject = {
+    name : string
+    inner : NonNullAsyncTestSubject
 }
 
 and InnerTestSubject = {
@@ -159,6 +170,15 @@ let NonNullAsyncDataType =
         name = "NonNullAsyncData",
         fields = [ Define.AsyncField("value", StringType, (fun _ d -> d.value )) ])
 
+let ContainerType =
+    Define.Object<ContainerSubject>(
+        name = "Container",
+        fields = [
+            Define.Field("name", StringType, (fun _ (c : ContainerSubject) -> c.name))
+            // Nullable, so an error in its non-null `value` nulls `inner` and stops there, not at the container
+            Define.Field("inner", Nullable NonNullAsyncDataType, (fun _ (c : ContainerSubject) -> Some c.inner))
+        ])
+
 let DataType =
     DefineRec.Object<TestSubject>(
         name = "Data",
@@ -180,6 +200,8 @@ let DataType =
             Define.Field("resolverListError", Nullable (ListOf NonNullAsyncDataType), (fun _ d -> Some d.resolverListError))
             Define.Field("nullableListError", Nullable (ListOf NonNullAsyncDataType), (fun _ d -> Some d.nullableListError))
             Define.Field("bufferedList", ListOf AsyncDataType, (fun _ d -> d.bufferedList))
+            Define.Field("nullObject", Nullable AsyncDataType, (fun _ (d: TestSubject) -> d.nullObject))
+            Define.Field("container", Nullable ContainerType, (fun _ (d: TestSubject) -> Some d.container))
         ])
 
 let data = {
@@ -228,6 +250,8 @@ let data = {
             { value = delay 1000 (Some "Buffered 2") }
             { value = async { return (Some "Buffered 3") } }
        ]
+       nullObject = None
+       container = { name = "Container"; inner = { value = async { return null } } }
    }
 
 let Query =
@@ -237,7 +261,13 @@ let Query =
         [
             Define.Field("listData", ListOf UnionType, (fun _ _ -> data.list))
             Define.Field("testData", DataType, (fun _ _ -> data))
+            Define.Field("nullableTestData", Nullable DataType, (fun _ _ -> Some data))
         ])
+
+let Mutation =
+    Define.Object<TestSubject>(
+        name = "Mutation",
+        fields = [ Define.Field("touch", Nullable DataType, (fun _ _ -> Some data)) ])
 
 let schemaConfig =
     { SchemaConfig.DefaultWithBufferedStream(streamOptions = { Interval = ValueNone; PreferredBatchSize = ValueNone }) with Types = [ CType; DType ] }
@@ -251,7 +281,7 @@ let sub =
 
 schemaConfig.LiveFieldSubscriptionProvider.Register sub
 
-let schema = Schema(Query, config = schemaConfig)
+let schema = Schema(Query, Mutation, config = schemaConfig)
 
 let executor = Executor(schema)
 
@@ -1545,3 +1575,364 @@ let ``Each streamed result should be sent as soon as it is computed - async seq`
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
         |> ignore
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Incremental delivery spec v0.2 coverage. Tests marked Skip capture behaviour the spec requires but the engine does not
+// implement yet; each names the missing feature in its Skip reason and is turned on when that feature lands.
+// ---------------------------------------------------------------------------------------------------------------------
+
+[<Fact>]
+let ``Deferred field inside a streamed item is delivered after its item with its own completion`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "innerList", upcast []
+            ]
+        ]
+    let query = parse """{
+        testData {
+            innerList @stream {
+                a
+                innerList @defer {
+                    a
+                }
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            DeferredPending ([ "testData"; "innerList" ], ValueNone, true)
+            // The item carries the deferred child as null; the child's own payload and completion follow it
+            DeferredResult ([| NameValueLookup.ofList [ "a", upcast "Inner A"; "innerList", null ] |], [ "testData"; "innerList"; 0 ])
+            DeferredResult ([|
+                    NameValueLookup.ofList [ "a", upcast "Inner B" ]
+                    NameValueLookup.ofList [ "a", upcast "Inner C" ]
+                |], [ "testData"; "innerList"; 0; "innerList" ])
+            DeferredCompleted [ "testData"; "innerList"; 0; "innerList" ]
+            DeferredCompleted [ "testData"; "innerList" ]
+        ]
+
+[<Fact>]
+let ``Errors inside a deferred payload bubble to the nearest nullable boundary within that payload`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "container", null
+            ]
+        ]
+    let expectedError =
+        GQLProblemDetails.CreateWithKind (
+            "Non-Null field value resolved as a null!",
+            Execution,
+            [ box "testData"; "container"; "inner"; "value" ]
+        )
+    let query = parse """{
+        testData {
+            container @defer {
+                name
+                inner {
+                    value
+                }
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            // `inner` is the nearest nullable ancestor of the failing `value`, so the payload keeps `name` and nulls `inner`
+            DeferredErrors (
+                NameValueLookup.ofList [ "name", upcast "Container"; "inner", null ],
+                [ expectedError ],
+                [ "testData"; "container" ]
+            )
+            DeferredCompleted [ "testData"; "container" ]
+        ]
+
+[<Fact>]
+let ``Deferred field under a parent that resolves to null is never delivered`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "nullObject", null
+            ]
+        ]
+    let query = parse """{
+        testData {
+            nullObject {
+                value @defer
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+
+[<Fact>]
+let ``Root-level deferred object field`` () =
+    let expectedDirect = NameValueLookup.ofList [ "nullableTestData", null ]
+    let query = parse """{
+        nullableTestData @defer {
+            id
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            DeferredResult (NameValueLookup.ofList [ "id", upcast "1" ], [ "nullableTestData" ])
+            DeferredCompleted [ "nullableTestData" ]
+        ]
+
+[<Fact>]
+let ``Deferred field inside a mutation payload`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "touch", upcast NameValueLookup.ofList [
+                "id", upcast "1"
+                "a", null
+            ]
+        ]
+    let query = parse """mutation {
+        touch {
+            id
+            a @defer
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            DeferredResult ("Apple", [ "touch"; "a" ])
+            DeferredCompleted [ "touch"; "a" ]
+        ]
+
+[<Fact(Skip = "Not implemented: if argument of @defer")>]
+let ``Defer directive with if false executes the field inline as if the directive were absent`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "a", upcast "Apple"
+                "b", upcast "Banana"
+            ]
+        ]
+    let query = parse """{
+        testData {
+            a @defer(if: false)
+            b
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+
+[<Fact(Skip = "Not implemented: if argument of @defer")>]
+let ``Defer directive with if given through a true variable still defers the field`` () =
+    let query = parse """query ($d: Boolean!) {
+        testData {
+            a @defer(if: $d)
+        }
+    }"""
+    let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("d", JsonDocument.Parse("true").RootElement)
+    let result = executor.AsyncExecute(query, getMockInputContext, variables = variables) |> sync
+    ensureDeferred result <| fun _ errors deferred ->
+        empty errors
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        (sub.Received |> withoutCompleted)
+        |> single
+        |> equals (DeferredResult ("Apple", [ "testData"; "a" ]))
+
+[<Fact(Skip = "Not implemented: if argument of @stream")>]
+let ``Stream directive with if false returns the whole list inline`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "ifaceList", upcast [
+                    NameValueLookup.ofList [ "id", upcast "2000" ]
+                    NameValueLookup.ofList [ "id", upcast "3000" ]
+                ]
+            ]
+        ]
+    let query = parse """{
+        testData {
+            ifaceList @stream(if: false) {
+                id
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+
+[<Fact(Skip = "Not implemented: initialCount argument of @stream")>]
+let ``Stream directive initialCount delivers the first items in the initial payload and streams the rest`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "ifaceList", upcast [ NameValueLookup.ofList [ "id", upcast "2000"; "value", upcast "D" ] ]
+            ]
+        ]
+    let query = parse """{
+        testData {
+            ifaceList @stream(initialCount: 1) {
+                id
+                value
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            DeferredPending ([ "testData"; "ifaceList" ], ValueNone, true)
+            // Item 0 went out in the initial payload, so streaming starts at index 1
+            DeferredResult ([| NameValueLookup.ofList [ "id", upcast "3000"; "value", upcast "C2" ] |], [ "testData"; "ifaceList"; 1 ])
+            DeferredCompleted [ "testData"; "ifaceList" ]
+        ]
+
+[<Fact(Skip = "Not implemented: label argument of @stream")>]
+let ``Stream directive label is announced in the stream's pending marker`` () =
+    let query = parse """{
+        testData {
+            ifaceList @stream(label: "friends") {
+                id
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun _ errors deferred ->
+        empty errors
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.head
+        |> equals (DeferredPending ([ "testData"; "ifaceList" ], ValueSome "friends", true))
+
+[<Fact(Skip = "Not implemented: @defer on inline fragments")>]
+let ``Defer directive on an inline fragment defers the fragment's fields as one payload at the parent's path`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "id", upcast "1"
+            ]
+        ]
+    let query = parse """{
+        testData {
+            id
+            ... @defer(label: "rest") {
+                a
+                b
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            DeferredPending ([ "testData" ], ValueSome "rest", false)
+            DeferredResult (NameValueLookup.ofList [ "a", upcast "Apple"; "b", upcast "Banana" ], [ "testData" ])
+            DeferredCompleted [ "testData" ]
+        ]
+
+[<Fact(Skip = "Not implemented: @defer on fragment spreads")>]
+let ``Defer directive on a fragment spread defers the fragment's fields as one payload`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "id", upcast "1"
+            ]
+        ]
+    let query = parse """query {
+        testData {
+            id
+            ...Rest @defer
+        }
+    }
+    fragment Rest on Data {
+        a
+        b
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            DeferredResult (NameValueLookup.ofList [ "a", upcast "Apple"; "b", upcast "Banana" ], [ "testData" ])
+            DeferredCompleted [ "testData" ]
+        ]
+
+[<Fact(Skip = "Not implemented: @defer on fragment spreads")>]
+let ``The same fragment deferred twice at the same path is delivered once`` () =
+    let query = parse """query {
+        testData {
+            ...Rest @defer
+            ...Rest @defer
+        }
+    }
+    fragment Rest on Data {
+        a
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDeferred result <| fun _ errors deferred ->
+        empty errors
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            DeferredResult (NameValueLookup.ofList [ "a", upcast "Apple" ], [ "testData" ])
+            DeferredCompleted [ "testData" ]
+        ]
+
+[<Fact(Skip = "Not implemented: DeferStreamDirectiveLabel validation rule")>]
+let ``A deferred label given through a variable is rejected instead of being dropped`` () =
+    // The spec forbids variables for `label`; today the executor asserts in Debug and silently drops the label in Release
+    let query = parse """query ($l: String) {
+        testData {
+            a @defer(label: $l)
+        }
+    }"""
+    let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("l", JsonDocument.Parse("\"hero\"").RootElement)
+    let result = executor.AsyncExecute(query, getMockInputContext, variables = variables) |> sync
+    ensureRequestError result <| fun errors ->
+        errors |> hasError "label"

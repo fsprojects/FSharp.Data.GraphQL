@@ -101,6 +101,7 @@
     <Compile Include="AspNetCore/SerializationTests.fs" />
     <Compile Include="AspNetCore/RequestHandlerExtensibilityTests.fs" />
     <Compile Include="AspNetCore/IncrementalDeliveryTests.fs" />
+    <Compile Include="AspNetCore/IncrementalDeliveryEndToEndTests.fs" />
     <Compile Include="TaskSeqFieldTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
