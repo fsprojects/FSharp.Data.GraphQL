@@ -81,8 +81,8 @@ type IncrementalDelivery () =
 
     let stateFor (fieldPath : obj list) =
         match fields.TryGetValue fieldPath with
-        | true, state -> state, false
-        | false, _ ->
+        | true, state when not state.Closed -> state, false
+        | _ ->
             let state = FieldState (string nextId)
             nextId <- nextId + 1
             fields[fieldPath] <- state

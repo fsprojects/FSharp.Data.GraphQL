@@ -187,6 +187,43 @@ let ``A labeled defer pending is emitted with the deferred field payload`` () =
     entry.Data |> equals (Include (box "value"))
 
 [<Fact>]
+let ``A completed deferred path reused by a later update gets a fresh id and completion`` () =
+    let delivery = IncrementalDelivery ()
+    let path = [ box "parent"; box "child" ]
+    let firstPayload = delivery.Apply (DeferredResult (box "first", path))
+    let firstId = pendingIds firstPayload |> single
+    (completedOf (delivery.Apply (DeferredCompleted path))
+     |> single)
+        .Id
+    |> equals firstId
+    let secondPayload = delivery.Apply (DeferredResult (box "second", path))
+    let secondId = pendingIds secondPayload |> single
+    Assert.NotEqual<string>(firstId, secondId)
+    (completedOf (delivery.Apply (DeferredCompleted path))
+     |> single)
+        .Id
+    |> equals secondId
+
+[<Fact>]
+let ``A completed stream path reused by a later update gets a fresh id and completion`` () =
+    let delivery = IncrementalDelivery ()
+    let streamPath = [ box "parent"; box "items" ]
+    let itemPath index = streamPath @ [ box index ]
+    let firstPayload = delivery.Apply (DeferredResult (box "first", itemPath 0))
+    let firstId = pendingIds firstPayload |> single
+    (completedOf (delivery.Apply (DeferredCompleted streamPath))
+     |> single)
+        .Id
+    |> equals firstId
+    let secondPayload = delivery.Apply (DeferredResult (box "second", itemPath 0))
+    let secondId = pendingIds secondPayload |> single
+    Assert.NotEqual<string>(firstId, secondId)
+    (completedOf (delivery.Apply (DeferredCompleted streamPath))
+     |> single)
+        .Id
+    |> equals secondId
+
+[<Fact>]
 let ``A stream failing before any item completes with errors instead of replacing the list with null`` () =
     let delivery = IncrementalDelivery ()
     delivery.Apply (DeferredPending ([ box "failing" ], ValueNone, true))
