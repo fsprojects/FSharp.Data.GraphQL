@@ -146,7 +146,7 @@ module internal GraphQLWebSocketMessagePatterns =
 
     let (|InvalidReceivedMessage|EmptyReceivedMessage|ReceivedClientMessage|) receivedMessage =
         match receivedMessage with
-        | Result.Error (InvalidMessage (code, explanation)) -> InvalidReceivedMessage (code, explanation)
+        | Error (InvalidMessage (code, explanation)) -> InvalidReceivedMessage (code, explanation)
         | Ok ValueNone -> EmptyReceivedMessage
         | Ok (ValueSome message) -> ReceivedClientMessage message
 
@@ -154,7 +154,7 @@ module internal GraphQLWebSocketMessagePatterns =
         match receivedMessage with
         | Ok (ValueSome (ConnectionInit _)) -> ConnectionInitReceived
         | Ok (ValueSome (Subscribe _)) -> SubscribeBeforeConnectionInit
-        | Result.Error (InvalidMessage (code, explanation)) -> InvalidConnectionInitMessage (code, explanation)
+        | Error (InvalidMessage (code, explanation)) -> InvalidConnectionInitMessage (code, explanation)
         | _ -> UnexpectedConnectionInitMessage
 
 module internal DeferredSubscriptionWorker =
@@ -191,7 +191,7 @@ type GraphQLWebSocketMiddleware<'Root>
                 Payload = ValueSome <| ExecutionResult payload
               }
             | Complete id -> { Id = ValueSome id; Type = "complete"; Payload = ValueNone }
-            | Error (id, errMessages) -> {
+            | ServerError (id, errMessages) -> {
                 Id = ValueSome id
                 Type = "error"
                 Payload = ValueSome <| ErrorMessages errMessages
@@ -200,8 +200,7 @@ type GraphQLWebSocketMiddleware<'Root>
     }
 
     static let invalidJsonInClientMessageError =
-        Result.Error
-        <| InvalidMessage (4400, "Invalid json in client message")
+        Error (InvalidMessage (CustomWebSocketStatus.InvalidMessage, "Invalid json in client message"))
 
     let deserializeClientMessage (serializerOptions : JsonSerializerOptions) (msg : IReadOnlyPooledList<byte>) = taskResult {
         try
@@ -209,9 +208,7 @@ type GraphQLWebSocketMiddleware<'Root>
         with
         | :? InvalidWebsocketMessageException as ex ->
             logger.LogError (ex, "Invalid websocket message:\n{payload}", msg)
-            return!
-                Result.Error
-                <| InvalidMessage (4400, ex.Message.ToString ())
+            return! Error (InvalidMessage (CustomWebSocketStatus.InvalidMessage, ex.Message.ToString ()))
         | :? JsonException as ex when logger.IsEnabled (LogLevel.Trace) ->
             logger.LogError (ex, "Cannot deserialize WebSocket message:\n{payload}", msg)
             return! invalidJsonInClientMessageError
@@ -296,14 +293,22 @@ type GraphQLWebSocketMiddleware<'Root>
         (howToSendDataOnNext : SubscriptionId -> 'ResponseContent -> Task)
         (subscriptions : SubscriptionsDict, streamSource : IObservable<'ResponseContent>, sendMsg : ServerMessage -> Task)
         =
-        let sendTerminalError (ex : exn) = sendMsg (Error (id, problemDetailsOfObservableError ex))
+        let sendTerminalError (ex : exn) = sendMsg (ServerError (id, problemDetailsOfObservableError ex))
+        let sendAndUnsubscribe (sendAsync : unit -> Task) =
+            try
+                sendAsync().Wait()
+            finally
+                subscriptions
+                |> GraphQLSubscriptionsManagement.removeSubscription (id)
+
 
         let observer =
             new Reactive.AnonymousObserver<'ResponseContent> (
                 onNext =
                     (fun theOutput ->
                         try
-                            (howToSendDataOnNext id theOutput).Wait()
+                            howToSendDataOnNext id theOutput
+                            |> _.Wait()
                         with _ ->
                             subscriptions
                             |> GraphQLSubscriptionsManagement.removeSubscription id
@@ -311,18 +316,10 @@ type GraphQLWebSocketMiddleware<'Root>
                 onError =
                     (fun ex ->
                         logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
-                        try
-                            (sendTerminalError ex).Wait()
-                        finally
-                            subscriptions
-                            |> GraphQLSubscriptionsManagement.removeSubscription (id)),
+                        sendAndUnsubscribe (fun () -> sendTerminalError ex)
+                    ),
                 onCompleted =
-                    (fun () ->
-                        try
-                            (sendMsg (Complete id)).Wait()
-                        finally
-                            subscriptions
-                            |> GraphQLSubscriptionsManagement.removeSubscription id)
+                    (fun () -> sendAndUnsubscribe (fun () -> sendMsg (Complete id)))
             )
 
         // Registered before subscribing, so a stream that completes synchronously (from inside Subscribe) still
@@ -370,8 +367,6 @@ type GraphQLWebSocketMiddleware<'Root>
 
     let tryToGracefullyCloseSocketWithDefaultBehavior sendGate cancellationToken =
         tryToGracefullyCloseSocket sendGate cancellationToken (WebSocketCloseStatus.NormalClosure, "Normal Closure")
-
-    let awaitBlocking (operation : Task) = operation |> Async.AwaitTask |> Async.RunSynchronously
 
     let handleMessages (sendGate : SemaphoreSlim) (cancellationToken : CancellationToken) (httpContext : HttpContext) (socket : WebSocket) : Task =
         let subscriptions = Dictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction>()
@@ -432,7 +427,7 @@ type GraphQLWebSocketMiddleware<'Root>
 
             let channelWriteGate = obj ()
             let startupBarrier = TaskCompletionSource (TaskCreationOptions.RunContinuationsAsynchronously)
-            let sendTerminalError (ex : exn) = sendMsg (Error (id, problemDetailsOfObservableError ex))
+            let sendTerminalError (ex : exn) = sendMsg (ServerError (id, problemDetailsOfObservableError ex))
             let sendServerMessageAndRemoveSubscription serverMessage : Task<bool> = task {
                 try
                     do! sendMsg serverMessage
@@ -458,7 +453,7 @@ type GraphQLWebSocketMiddleware<'Root>
                         return true
                     | DeferredFaulted ex ->
                         logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
-                        return! sendServerMessageAndRemoveSubscription (Error (id, problemDetailsOfObservableError ex))
+                        return! sendServerMessageAndRemoveSubscription (ServerError (id, problemDetailsOfObservableError ex))
                     | DeferredSourceCompleted -> return! sendServerMessageAndRemoveSubscription (Complete id)
                 }
 
@@ -572,7 +567,7 @@ type GraphQLWebSocketMiddleware<'Root>
             Task.CompletedTask
 
         let applyPlanExecutionResult (id : SubscriptionId) (socket) (executionResult : GQLExecutionResult) : Task = task {
-            match executionResult with
+            match executionResult.Content with
             | Stream observableOutput ->
                 (subscriptions, observableOutput, sendMsg)
                 |> addClientSubscription id sendSubscriptionResponseOutput
@@ -594,7 +589,7 @@ type GraphQLWebSocketMiddleware<'Root>
                 // The request was rejected before execution, so it is not a result: the protocol requires it to be
                 // sent as the terminal Error message instead of a Next followed by Complete, or a client would
                 // read it as a successful result with null data
-                do! sendMsg (Error (id, sanitizedProblemDetails))
+                do! sendMsg (ServerError (id, sanitizedProblemDetails))
         }
 
         let logMsgReceivedWithOptionalPayload optionalPayload (msgAsStr : string) =
@@ -625,7 +620,7 @@ type GraphQLWebSocketMiddleware<'Root>
                     do! planExecutionResult |> applyPlanExecutionResult id socket
             with ex ->
                 logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
-                do! sendMsg (Error (id, [ GQLProblemDetails.Create UnexpectedObservableErrorMessage ]))
+                do! sendMsg (ServerError (id, [ GQLProblemDetails.Create UnexpectedObservableErrorMessage ]))
         }
 
         let handleClientMessage (msg : ClientMessage) : Task = task {
@@ -711,7 +706,7 @@ type GraphQLWebSocketMiddleware<'Root>
                 sendGate
                 cancellationToken
                 (enum CustomWebSocketStatus.ConnectionTimeout, "Connection initialization timeout")
-            |> awaitBlocking
+            |> _.Wait()
 
         let detonationRegistration = timerTokenSource.Token.Register (fun _ -> closeSocketOnTimeout ())
 
@@ -754,9 +749,9 @@ type GraphQLWebSocketMiddleware<'Root>
             if connectionInitSucceeded then
                 return Ok ()
             else
-                return Result.Error ($"{nameof ConnectionInit} failed (not because of timeout)")
+                return Error ($"{nameof ConnectionInit} failed (not because of timeout)")
         else
-            return Result.Error <| "{nameof ConnectionInit} timeout"
+            return Error $"{nameof ConnectionInit} timeout"
     }
 
     member _.InvokeAsync (ctx : HttpContext) : Task =
@@ -771,12 +766,13 @@ type GraphQLWebSocketMiddleware<'Root>
                     socket
                     |> waitForConnectionInitAndRespondToClient sendGate connectionLifetimeCancellationToken
                 match connectionInitResult with
-                | Result.Error errMsg -> logger.LogWarning errMsg
+                | Error errMsg -> logger.LogWarning errMsg
                 | Ok _ ->
                     connectionLifetimeCancellationToken.Register (fun _ ->
                         socket
                         |> tryToGracefullyCloseSocketWithDefaultBehavior sendGate connectionLifetimeCancellationToken
-                        |> awaitBlocking)
+                        |> _.Wait()
+                    )
                     |> ignore
                     try
                         do!

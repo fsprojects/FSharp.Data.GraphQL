@@ -32,6 +32,7 @@
     <Compile Include="Helpers.fs" />
     <Compile Include="ErrorHelpers.fs" />
     <Compile Include="Literals.fs" />
+    <Compile Include="GQLExecutionResult.fs" />
     <Compile Include="Relay\NodeTests.fs" />
     <Compile Include="Relay\CursorTests.fs" />
     <Compile Include="Relay\ConnectionTests.fs" />

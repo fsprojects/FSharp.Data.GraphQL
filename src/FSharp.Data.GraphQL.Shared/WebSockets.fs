@@ -150,14 +150,15 @@ type SubscriptionExecutionResult = {
     /// </remarks>
     static member CreateSubsequent
         (pending : PendingResult list, incremental : IncrementalResult list, completed : CompletedResult list, hasNext : bool)
-        = {
-        Data = Skip
-        Errors = Skip
-        Pending = (if pending.IsEmpty then Skip else Include pending)
-        Incremental = (if incremental.IsEmpty then Skip else Include incremental)
-        Completed = (if completed.IsEmpty then Skip else Include completed)
-        HasNext = Include hasNext
-    }
+        =
+        {
+            Data = Skip
+            Errors = Skip
+            Pending = (if pending.IsEmpty then Skip else Include pending)
+            Incremental = (if incremental.IsEmpty then Skip else Include incremental)
+            Completed = (if completed.IsEmpty then Skip else Include completed)
+            HasNext = Include hasNext
+        }
 
 /// Represents the raw payload of a server WebSocket message.
 type ServerRawPayload =
@@ -208,7 +209,7 @@ type ServerMessage =
     /// Sends a GraphQL execution payload.
     | Next of id : string * payload : SubscriptionExecutionResult
     /// Sends protocol errors for an operation.
-    | Error of id : string * err : GQLProblemDetails list
+    | ServerError of id : string * err : GQLProblemDetails list
     /// Marks an operation as complete.
     | Complete of id : string
 

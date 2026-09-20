@@ -2,13 +2,13 @@
 
 module FSharp.Data.GraphQL.Tests.TaskSeqFieldTests
 
+open Xunit
 open System
 open System.Collections.Generic
 open System.Threading
 open System.Threading.Tasks
 open FSharp.Control
 open Azure
-open Xunit
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Parser
@@ -634,7 +634,7 @@ let ``Disposing the stream subscription stops the enumeration of the TaskSeq fie
     let executor =
         executorFor [ Define.TaskSeqField ("numbers", ListOf IntType, fun _ _ -> endlessNumbers pulled disposed) ]
     let! result = executor.AsyncExecute (parse "{ numbers @stream }", getMockInputContext, ())
-    match result.Content with
+    match result with
     | Deferred (_, errors, deferred) ->
         empty errors
         let subscription =
