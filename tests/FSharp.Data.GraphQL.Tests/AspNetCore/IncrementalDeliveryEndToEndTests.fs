@@ -39,12 +39,13 @@ let private translate (data : Output) (errors : GQLProblemDetails list) (events 
     payloads.Add (delivery.Finish ())
     List.ofSeq payloads
 
-/// Collects every deferred event of the result, then translates them into the payload sequence
+/// Collects every deferred event of the result, then translates them into the payload sequence. The wait is generous:
+/// a slow item of the test data sleeps for seconds, and a loaded CI runner stretches that several times over.
 let private deliver (result : GQLExecutionResult) =
     let payloads = ResizeArray<SubscriptionExecutionResult> ()
     ensureDeferred result <| fun data errors deferred ->
         use sub = Observer.create deferred
-        sub.WaitCompleted ()
+        sub.WaitCompleted (timeout = 120)
         payloads.AddRange (translate data errors (sub.Received |> Seq.toList))
     List.ofSeq payloads
 
@@ -205,8 +206,13 @@ let ``A stream nested in a deferred field is announced with the deferred payload
     // The deferred field is announced at its containing object, the stream at its own list field
     let outerPath = [ box "testData" ]
     let streamPath = [ box "testData"; box "innerList"; box 0; box "innerList" ]
+    // The engine delivers the two streamed items either one by one or, when both resolve into the same buffered
+    // event, as one batch, so the item payloads between the outer completion and the stream completion are one or two
     match payloads with
-    | [ initial; outer; outerCompleted; itemB; itemC; streamCompleted; final ] ->
+    | initial :: outer :: outerCompleted :: (_ :: _ :: _ :: _ as rest) ->
+        let items = rest |> List.take (rest.Length - 2)
+        let streamCompleted = rest[rest.Length - 2]
+        let final = List.last rest
         initial.Pending |> equals Skip
         pendingPathsOf outer |> equals [ outerPath; streamPath ]
         let outerPending = pendingOf outer |> List.find (fun pending -> pending.Path = outerPath)
@@ -218,15 +224,18 @@ let ``A stream nested in a deferred field is announced with the deferred payload
             outerPending
             (incrementalOf outer |> single)
         (completedOf outerCompleted |> single).Id |> equals outerPending.Id
-        let entryB = incrementalOf itemB |> single
-        entryB.Id |> equals streamPending.Id
-        entryB.Items |> equals (Include [| box (NameValueLookup.ofList [ "a", upcast "Inner B" ]) |])
-        let entryC = incrementalOf itemC |> single
-        entryC.Id |> equals streamPending.Id
-        entryC.Items |> equals (Include [| box (NameValueLookup.ofList [ "a", upcast "Inner C" ]) |])
+        let entries = items |> List.map (incrementalOf >> single)
+        for entry in entries do
+            entry.Id |> equals streamPending.Id
+        entries
+        |> List.collect (fun entry -> entry.Items |> Skippable.toValueOption |> ValueOption.defaultValue [||] |> List.ofArray)
+        |> equals [
+            box (NameValueLookup.ofList [ "a", upcast "Inner B" ])
+            box (NameValueLookup.ofList [ "a", upcast "Inner C" ])
+        ]
         (completedOf streamCompleted |> single).Id |> equals streamPending.Id
         final.HasNext |> equals (Include false)
-    | payloads -> fail $"Expected seven payloads but got %A{payloads}"
+    | payloads -> fail $"Expected at least six payloads but got %A{payloads}"
 
 [<Fact>]
 let ``A stream that fails after an item completes with the error and the delivery still ends with hasNext false`` () =
