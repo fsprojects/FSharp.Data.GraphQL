@@ -151,6 +151,18 @@ For F# work, prefer FsLangMCP over `rg`/plain text search whenever the task depe
   ```
 
 * Every public API must have XML documentation.
+* The primary constructor of an F# class is the parenthesized parameter list that follows the type name, and it is documented as a member of its own: the type's `<summary>` stays above `type`, and the constructor's `<param>` lines go on their own lines between the type name and the opening parenthesis, indented like the parameter list. Never put the constructor's `<param>` lines into the type's comment:
+
+  ```fsharp
+  /// <summary>
+  /// Translates the events of one subscription into payloads.
+  /// </summary>
+  type internal SubscriptionPayloads
+      /// <param name="logger">The logger of the connection.</param>
+      /// <param name="options">The options of the middleware.</param>
+      (logger : ILogger, options : Options) =
+  ```
+
 * On an explicit interface implementation (`interface X with member _.M (...) = ...`), write `/// <inheritdoc />` alone instead of restating the interface member's documentation, unless this implementation has behavior worth calling out beyond what the interface already documents – write a normal `<summary>`/`<remarks>` there instead.
 * Refer to types and members through `<see cref="Type.Member"/>`, never through `<c>` or plain text. `<c>` is for literal values only (JSON, GraphQL, setting names). Refer to language keywords through `<see langword="null"/>`.
 * Split multi-paragraph documentation into `<para>` elements inside `<summary>` – bare line breaks are collapsed by documentation renderers.
