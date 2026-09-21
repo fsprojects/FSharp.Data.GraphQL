@@ -127,7 +127,7 @@ let private hasProperty (name : string) (element : JsonElement) =
     element.TryGetProperty (name, &ignored)
 
 [<Fact>]
-let ``Serializes initial incremental payload with pending and hasNext, but no top-level errors`` () =
+let ``Serializes initial incremental payload with pending and hasNext, and no errors when there are none`` () =
     let pending = [ { Id = "0"; Path = [ box "numbers" ]; Label = Skip } ]
     let json =
         serializePayload (SubscriptionExecutionResult.CreateInitial (NameValueLookup.ofList [ "numbers", upcast [] ], [], pending))
@@ -142,7 +142,8 @@ let ``Serializes initial incremental payload with pending and hasNext, but no to
         |> Seq.head
         |> fun element -> element.GetString ()
     )
-    Assert.True (hasProperty "errors" payload, $"Expected errors (even empty) in the initial payload in {json}")
+    // The GraphQL response format requires errors to be absent when there are none
+    Assert.False (hasProperty "errors" payload, $"Expected no errors property in the initial payload in {json}")
 
 [<Fact>]
 let ``Serializes initial incremental payload without pending when no field is announced yet`` () =

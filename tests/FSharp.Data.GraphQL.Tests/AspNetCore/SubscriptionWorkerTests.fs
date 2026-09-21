@@ -10,6 +10,7 @@ open System.Threading.Channels
 open System.Threading.Tasks
 open Microsoft.Extensions.Logging.Abstractions
 open Xunit
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Server.AspNetCore
@@ -64,9 +65,9 @@ let private kindOf message =
 
 let private nextPayloads messages =
     messages
-    |> List.choose (function
-        | Send (Next (_, payload)) -> Some payload
-        | _ -> None)
+    |> List.vchoose (function
+        | Send (Next (_, payload)) -> ValueSome payload
+        | _ -> ValueNone)
 
 let private deferredPayloads () : ISubscriptionPayloads<GQLDeferredResponseContent> =
     DeferredPayloads (NullLogger.Instance, NameValueLookup.ofList [ "items", upcast [||] ], [])
@@ -77,7 +78,7 @@ let private itemsPath = [ box "items" ]
 
 [<Fact>]
 let ``A pending announced before the initial payload is emitted in the initial payload`` () : Task = task {
-    let source = [ DeferredPending (itemsPath, ValueNone, true); DeferredCompleted itemsPath ].ToObservable ()
+    let source = [ DeferredPending (itemsPath, ValueNone, true, 0); DeferredCompleted itemsPath ].ToObservable ()
     let harness = Harness (source, deferredPayloads ())
     do! runToEnd harness
     let messages = harness.SentMessages ()

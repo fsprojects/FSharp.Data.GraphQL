@@ -609,7 +609,9 @@ module SchemaDefinitions =
                     | _ -> IGQLError.createResultErrorList "Only a variable with a string value can be used as a file name.")
     }
 
-    /// GraphQL @include directive.
+    /// <summary>
+    /// GraphQL <c>@include</c> directive.
+    /// </summary>
     let IncludeDirective : DirectiveDef =
         { Name = "include"
           Description =
@@ -624,7 +626,9 @@ module SchemaDefinitions =
                    DefaultValue = ValueNone
                    ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box) } |] }
 
-    /// GraphQL @skip directive.
+    /// <summary>
+    /// GraphQL <c>@skip</c> directive.
+    /// </summary>
     let SkipDirective : DirectiveDef =
         { Name = "skip"
           Description = ValueSome "Directs the executor to skip this field or fragment when the `if` argument is true."
@@ -638,7 +642,9 @@ module SchemaDefinitions =
                    DefaultValue = ValueNone
                    ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box) } |] }
 
-    /// The `if` argument of the @defer and @stream directives: the directive applies only when it is true.
+    /// <summary>
+    /// The <c>if</c> argument of the <c>@defer</c> and <c>@stream</c> directives: the directive applies only when it is true.
+    /// </summary>
     let private incrementalIfArgument =
         { InputFieldDefinition.Name = "if"
           Description = ValueSome "Deferred or streamed only when true."
@@ -647,7 +653,9 @@ module SchemaDefinitions =
           DefaultValue = ValueSome true
           ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box) }
 
-    /// The `label` argument of the @defer and @stream directives, carried by the pending entry that announces the payload.
+    /// <summary>
+    /// The <c>label</c> argument of the <c>@defer</c> and <c>@stream</c> directives, carried by the pending entry that announces the payload.
+    /// </summary>
     let private incrementalLabelArgument =
         { InputFieldDefinition.Name = "label"
           Description = ValueSome "An optional label identifying the deferred or streamed payload."
@@ -656,10 +664,12 @@ module SchemaDefinitions =
           DefaultValue = ValueNone
           ExecuteInput = variableOrElse (InlineConstant >> coerceStringInput >> Result.map box) }
 
-    /// <summary>GraphQL @defer directive.</summary>
+    /// <summary>
+    /// GraphQL <c>@defer</c> directive.
+    /// </summary>
     /// <remarks>
-    /// The specification allows it on fragment spreads and inline fragments; applying it to a single field is an
-    /// extension of this library.
+    /// The <see href="https://github.com/graphql/graphql-spec/blob/main/rfcs/DeferStream.md">incremental delivery specification</see>
+    /// allows it on fragment spreads and inline fragments; applying it to a single field is an extension of this library.
     /// </remarks>
     let DeferDirective : DirectiveDef =
         { Name = "defer"
@@ -667,7 +677,11 @@ module SchemaDefinitions =
           Locations = DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
           Args = [| incrementalIfArgument; incrementalLabelArgument |] }
 
-    /// GraphQL @stream directive.
+    /// <summary>
+    /// GraphQL <c>@stream</c> directive, as the
+    /// <see href="https://github.com/graphql/graphql-spec/blob/main/rfcs/DeferStream.md">incremental delivery specification</see>
+    /// defines it: on list fields only.
+    /// </summary>
     let StreamDirective : DirectiveDef =
         { Name = "stream"
           Description = ValueSome "Streams the resolution of this field or fragment"
@@ -682,7 +696,9 @@ module SchemaDefinitions =
                    DefaultValue = ValueSome (Some 0)
                    ExecuteInput = variableOrElse (InlineConstant >> coerceIntInput >> Result.map box) } |] }
 
-    /// GraphQL @live directive.
+    /// <summary>
+    /// GraphQL <c>@live</c> directive.
+    /// </summary>
     let LiveDirective : DirectiveDef =
         { Name = "live"
           Description = ValueSome "Subscribes for live updates of this field or fragment"

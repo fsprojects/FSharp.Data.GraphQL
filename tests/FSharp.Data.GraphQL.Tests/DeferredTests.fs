@@ -917,7 +917,7 @@ let ``Deferred field with a label emits a pending marker before its payload`` ()
         sub.Received
         |> Seq.toList
         |> equals [
-            DeferredPending ([ "testData"; "a" ], ValueSome "hero", false)
+            DeferredPending ([ "testData"; "a" ], ValueSome "hero", false, 0)
             DeferredResult ("Apple", [ "testData"; "a" ])
             DeferredCompleted [ "testData"; "a" ]
         ]
@@ -1016,7 +1016,7 @@ let ``Nested stream pending is emitted before the deferred payload that exposes 
         data |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted(3)
-        let expectedPending = DeferredPending ([ box "testData"; box "innerList"; box 0; box "innerList" ], ValueNone, true)
+        let expectedPending = DeferredPending ([ box "testData"; box "innerList"; box 0; box "innerList" ], ValueNone, true, 0)
         match sub.Received |> Seq.toList with
         | actualPending :: actualDeferred :: _ ->
             Assert.Equal (expectedPending, actualPending)
@@ -1608,7 +1608,7 @@ let ``Deferred field inside a streamed item is delivered after its item with its
         sub.Received
         |> Seq.toList
         |> equals [
-            DeferredPending ([ "testData"; "innerList" ], ValueNone, true)
+            DeferredPending ([ "testData"; "innerList" ], ValueNone, true, 0)
             // The item carries the deferred child as null; the child's own payload and completion follow it
             DeferredResult ([| NameValueLookup.ofList [ "a", upcast "Inner A"; "innerList", null ] |], [ "testData"; "innerList"; 0 ])
             DeferredResult ([|
@@ -1815,8 +1815,8 @@ let ``Stream directive initialCount delivers the first items in the initial payl
         sub.Received
         |> Seq.toList
         |> equals [
-            DeferredPending ([ "testData"; "ifaceList" ], ValueNone, true)
-            // Item 0 went out in the initial payload, so streaming starts at index 1
+            // Item 0 went out in the initial payload, so streaming starts at index 1, as the announcement says
+            DeferredPending ([ "testData"; "ifaceList" ], ValueNone, true, 1)
             DeferredResult ([| NameValueLookup.ofList [ "id", upcast "3000"; "value", upcast "C2" ] |], [ "testData"; "ifaceList"; 1 ])
             DeferredCompleted [ "testData"; "ifaceList" ]
         ]
@@ -1837,7 +1837,7 @@ let ``Stream directive label is announced in the stream's pending marker`` () =
         sub.WaitCompleted()
         sub.Received
         |> Seq.head
-        |> equals (DeferredPending ([ "testData"; "ifaceList" ], ValueSome "friends", true))
+        |> equals (DeferredPending ([ "testData"; "ifaceList" ], ValueSome "friends", true, 0))
 
 [<Fact(Skip = "Not implemented: @defer on inline fragments")>]
 let ``Defer directive on an inline fragment defers the fragment's fields as one payload at the parent's path`` () =
@@ -1865,7 +1865,7 @@ let ``Defer directive on an inline fragment defers the fragment's fields as one 
         sub.Received
         |> Seq.toList
         |> equals [
-            DeferredPending ([ "testData" ], ValueSome "rest", false)
+            DeferredPending ([ "testData" ], ValueSome "rest", false, 0)
             DeferredResult (NameValueLookup.ofList [ "a", upcast "Apple"; "b", upcast "Banana" ], [ "testData" ])
             DeferredCompleted [ "testData" ]
         ]
@@ -1957,7 +1957,7 @@ let ``Top-level announcements of several deferred and streamed fields precede ev
         |> Seq.toList
         |> List.take 3
         |> equals [
-            DeferredPending ([ "testData"; "a" ], ValueSome "first", false)
-            DeferredPending ([ "testData"; "ifaceList" ], ValueNone, true)
-            DeferredPending ([ "testData"; "b" ], ValueSome "third", false)
+            DeferredPending ([ "testData"; "a" ], ValueSome "first", false, 0)
+            DeferredPending ([ "testData"; "ifaceList" ], ValueNone, true, 0)
+            DeferredPending ([ "testData"; "b" ], ValueSome "third", false, 0)
         ]

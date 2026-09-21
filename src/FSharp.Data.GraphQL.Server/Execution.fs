@@ -213,7 +213,10 @@ let private resolved name v : AsyncVal<ResolverResult<KeyValuePair<string, obj>>
     |> ResolverResult.data
     |> AsyncVal.wrap
 
-/// The `label` argument of the @defer or @stream directive on the field, which validation requires to be a literal.
+/// <summary>
+/// The <c>label</c> argument of the <c>@defer</c> or <c>@stream</c> directive on the field, which validation requires
+/// to be a literal.
+/// </summary>
 let private directiveLabel (directiveName : string) (field : Field) = voption {
     let! directive = field.Directives |> List.vtryFind (fun directive -> directive.Name = directiveName)
     let! argument = directive.Arguments |> List.vtryFind (fun argument -> argument.Name = "label")
@@ -228,8 +231,10 @@ let private directiveLabel (directiveName : string) (field : Field) = voption {
             )
 }
 
-/// Whether the @defer or @stream directive on the field applies: its `if` argument, true by default, evaluated
-/// against the variables of the request.
+/// <summary>
+/// Whether the <c>@defer</c> or <c>@stream</c> directive on the field applies: its <c>if</c> argument, true by
+/// default, evaluated against the variables of the request.
+/// </summary>
 let private isDirectiveEnabled (directiveName : string) (field : Field) (variables : ImmutableDictionary<string, obj>) =
     voption {
         let! directive = field.Directives |> List.vtryFind (fun directive -> directive.Name = directiveName)
@@ -244,7 +249,10 @@ let private isDirectiveEnabled (directiveName : string) (field : Field) (variabl
     }
     |> ValueOption.defaultValue true
 
-/// The `initialCount` argument of the @stream directive on the field: how many items go into the initial payload.
+/// <summary>
+/// The <c>initialCount</c> argument of the <c>@stream</c> directive on the field: how many items go into the initial
+/// payload.
+/// </summary>
 let private streamInitialCount (field : Field) (variables : ImmutableDictionary<string, obj>) =
     voption {
         let! directive = field.Directives |> List.vtryFind (fun directive -> directive.Name = "stream")
@@ -472,7 +480,7 @@ and deferred (inputContext : InputExecutionContextProvider) (ctx : ResolveFieldC
     // A labeled field is announced up front, so its pending entry can be sent with the payload that exposes it
     let deferred =
         match directiveLabel "defer" info.Ast with
-        | ValueSome label -> AnnouncedEvents.announced (DeferredPending (normalizeErrorPath path, ValueSome label, false)) events
+        | ValueSome label -> AnnouncedEvents.announced (DeferredPending (normalizeErrorPath path, ValueSome label, false, 0)) events
         | ValueNone -> events
     ResolverResult.defered (KeyValuePair (info.Identifier, null)) deferred
     |> AsyncVal.wrap
@@ -555,9 +563,12 @@ and private streamed
         events
         |> Observable.concat (Observable.singleton (DeferredCompleted (normalizeErrorPath path)))
 
-    /// A streamed field is announced up front, so its pending entry can be sent with the payload that exposes its list
+    let initialCount = streamInitialCount info.Ast ctx.Variables
+
+    /// A streamed field is announced up front, so its pending entry can be sent with the payload that exposes its list;
+    /// the announcement carries how many items that payload already holds, so the streamed ones start at that index
     let announceStream (events : IObservable<GQLDeferredResponseContent>) =
-        AnnouncedEvents.announced (DeferredPending (normalizeErrorPath path, directiveLabel "stream" info.Ast, true)) events
+        AnnouncedEvents.announced (DeferredPending (normalizeErrorPath path, directiveLabel "stream" info.Ast, true, initialCount)) events
 
     let streamEvents (items : IObservable<StreamEvent>) =
         items |> buffer |> withStreamCompleted |> announceStream
@@ -585,8 +596,6 @@ and private streamed
                 | ValueNone, rest -> rest
             return Ok (KeyValuePair (name, items |> Array.map _.Value |> box), deferred, errs)
     }
-
-    let initialCount = streamInitialCount info.Ast ctx.Variables
 
     match value with
     | :? IAsyncEnumerableFieldValue as fieldValue when initialCount = 0 ->

@@ -82,8 +82,9 @@ type CompletedResult = {
 /// <remarks>
 /// <see cref="Pending"/>, <see cref="Incremental"/>, <see cref="Completed"/> and <see cref="HasNext"/> are present
 /// only in payloads of incremental delivery, produced by the <c>@defer</c> and <c>@stream</c> directives, using the
-/// <c>pending</c>/<c>incremental</c>/<c>completed</c>/<c>hasNext</c> format used by graphql-js 17 and Apollo
-/// Client's <c>GraphQL17Alpha9Handler</c>.
+/// <c>pending</c>/<c>incremental</c>/<c>completed</c>/<c>hasNext</c> format of the
+/// <see href="https://github.com/graphql/graphql-spec/pull/1110">incremental delivery specification</see>, used by
+/// graphql-js 17 and Apollo Client's <c>GraphQL17Alpha9Handler</c>.
 /// </remarks>
 type SubscriptionExecutionResult = {
     /// <summary>
@@ -108,10 +109,13 @@ type SubscriptionExecutionResult = {
     HasNext : bool Skippable
 } with
 
-    /// Creates a payload of a complete execution result, whose data is <see cref="ValueNone"/> when a non-null root field failed.
+    /// <summary>
+    /// Creates a payload of a complete execution result, whose data is <see cref="ValueNone"/> when a non-null root
+    /// field failed; <c>errors</c> is present only when there are any, as the GraphQL response format requires.
+    /// </summary>
     static member Create (data : Output voption, errors : GQLProblemDetails list) = {
         Data = Include (data |> ValueOption.map box)
-        Errors = Include errors
+        Errors = (if errors.IsEmpty then Skip else Include errors)
         Pending = Skip
         Incremental = Skip
         Completed = Skip
@@ -128,10 +132,13 @@ type SubscriptionExecutionResult = {
         HasNext = Skip
     }
 
-    /// Creates the initial payload of an incremental delivery, which is always followed by subsequent payloads.
+    /// <summary>
+    /// Creates the initial payload of an incremental delivery, which is always followed by subsequent payloads;
+    /// <c>errors</c> is present only when there are any, as the GraphQL response format requires.
+    /// </summary>
     static member CreateInitial (data : Output, errors : GQLProblemDetails list, pending : PendingResult list) = {
         Data = Include (ValueSome (box data))
-        Errors = Include errors
+        Errors = (if errors.IsEmpty then Skip else Include errors)
         Pending = (if pending.IsEmpty then Skip else Include pending)
         Incremental = Skip
         Completed = Skip
@@ -209,6 +216,13 @@ type ServerMessage =
     | ServerError of id : string * err : GQLProblemDetails list
     /// Marks an operation as complete.
     | Complete of id : string
+
+/// The <c>graphql-transport-ws</c> protocol as the client negotiates it.
+module GraphQLTransportWS =
+
+    /// The WebSocket sub-protocol name of <c>graphql-transport-ws</c>.
+    [<Literal>]
+    let SubProtocol = "graphql-transport-ws"
 
 /// Defines application-specific GraphQL WebSocket close codes.
 module CustomWebSocketStatus =

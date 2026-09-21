@@ -64,8 +64,9 @@ type private FieldState (id : string, wirePath : obj list, isStream : bool) =
 
 /// <summary>
 /// Translates the engine's <see cref="GQLDeferredResponseContent"/> events into the <c>graphql-transport-ws</c> incremental delivery wire format
-/// (<c>pending</c>/<c>incremental</c>/<c>completed</c>/<c>hasNext</c>, the format used by graphql-js 17 and Apollo Client's <c>
-/// GraphQL17Alpha9Handler</c>).
+/// (<c>pending</c>/<c>incremental</c>/<c>completed</c>/<c>hasNext</c>, the format of the
+/// <see href="https://github.com/graphql/graphql-spec/pull/1110">incremental delivery specification</see> used by graphql-js 17 and Apollo Client's
+/// <c>GraphQL17Alpha9Handler</c>).
 /// </summary>
 /// <remarks>
 ///
@@ -119,7 +120,7 @@ type IncrementalDelivery () =
         Label = state.Label |> Skippable.ofValueOption
     }
 
-    let announcePending (fieldPath : obj list) (label : string voption) (isStream : bool) =
+    let announcePending (fieldPath : obj list) (label : string voption) (isStream : bool) (initialCount : int) =
         // DeferredCompleted must be able to recover the field id even when a pre-announced stream completes without
         // ever producing an item, so every pending announcement creates the per-field state eagerly.
         let state, isNew = stateFor fieldPath isStream
@@ -129,11 +130,13 @@ type IncrementalDelivery () =
         | ValueNone -> ()
 
         if isNew then
+            // The items delivered with the initial payload are never streamed: the stream starts after them
+            state.NextIndex <- initialCount
             pending.Add (struct (fieldPath, pendingResultFor state))
 
         state, isNew
 
-    let announceStream (fieldPath : obj list) = announcePending fieldPath ValueNone true
+    let announceStream (fieldPath : obj list) = announcePending fieldPath ValueNone true 0
 
     let rec pathExistsInData (relativePath : obj list) (data : obj) =
         match relativePath, data with
@@ -299,8 +302,8 @@ type IncrementalDelivery () =
     /// produce none).
     member _.Apply (event : GQLDeferredResponseContent) : SubscriptionExecutionResult voption =
         match event with
-        | DeferredPending (fieldPath, label, isStream) ->
-            announcePending fieldPath label isStream |> ignore
+        | DeferredPending (fieldPath, label, isStream, initialCount) ->
+            announcePending fieldPath label isStream initialCount |> ignore
             ValueNone
         | DeferredResult (data, BatchPath (fieldPath, indices)) ->
             let items = data :?> obj[]
@@ -349,7 +352,7 @@ type IncrementalDelivery () =
                 ValueNone
 
     /// The final payload of the delivery: completes every field the client learned of that has not completed on
-    /// its own (normally none - a @live field is the only field this codebase produces that never completes by
+    /// its own (normally none - a <c>@live</c> field is the only field this codebase produces that never completes by
     /// itself) and reports that no further payloads follow.
     member _.Finish () : SubscriptionExecutionResult =
         let stillOpen =

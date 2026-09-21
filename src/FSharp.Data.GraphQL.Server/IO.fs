@@ -214,8 +214,15 @@ and GQLResponseContent =
 /// a <c>@live</c> field, which has no end of its own.
 /// </remarks>
 and GQLDeferredResponseContent =
+    /// <summary>
     /// Announces a deferred or streamed field before later payloads need to refer to it.
-    | DeferredPending of Path : FieldPath * Label : string voption * IsStream : bool
+    /// </summary>
+    /// <remarks>
+    /// <see cref="InitialCount"/> is the number of items of a streamed field that were delivered with the initial
+    /// payload (the <c>initialCount</c> argument of <c>@stream</c>), so that its streamed items start at that index;
+    /// it is <c>0</c> for a deferred field.
+    /// </remarks>
+    | DeferredPending of Path : FieldPath * Label : string voption * IsStream : bool * InitialCount : int
     /// Delivers the data of a deferred field or one or more streamed items at the given path.
     | DeferredResult of Data : obj * Path : FieldPath
     /// Delivers partial data together with execution errors at the given path.

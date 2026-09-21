@@ -12,7 +12,9 @@ open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging.Abstractions
 open Microsoft.Extensions.Options
 open Xunit
+
 open FSharp.Data.GraphQL.Server.AspNetCore
+open FSharp.Data.GraphQL.Shared.WebSockets
 
 // Drives GraphQLWebSocketConnection over a fake socket: the protocol handshake, close codes, queries, request
 // errors, subscriptions, client-side completion and incremental delivery, without a hosted server.
@@ -41,7 +43,7 @@ type private FakeWebSocket () =
     override _.CloseStatus = serverCloseStatus |> ValueOption.toNullable
     override _.CloseStatusDescription = null
     override _.State = state
-    override _.SubProtocol = "graphql-transport-ws"
+    override _.SubProtocol = GraphQLTransportWS.SubProtocol
 
     override _.Abort () =
         state <- WebSocketState.Aborted

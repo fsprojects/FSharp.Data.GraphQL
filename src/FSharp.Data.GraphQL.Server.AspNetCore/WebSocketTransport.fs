@@ -39,6 +39,10 @@ module internal WebSocketStates =
 /// A receive is never cancelled: the managed socket aborts on a cancelled receive and the client would never see a close code. A pending receive ends
 /// when the client sends its next message or its close frame, when the sender loop completes a close handshake, or when the socket is aborted.
 /// </remarks>
+/// <param name="socket">The socket to read from.</param>
+/// <param name="serializerOptions">The options client messages are deserialized with.</param>
+/// <param name="readBufferSize">The size of the buffer rented for every receive.</param>
+/// <param name="logger">The logger of the connection.</param>
 type internal WebSocketMessageReader (socket : WebSocket, serializerOptions : JsonSerializerOptions, readBufferSize : int, logger : ILogger) =
 
     static let invalidJsonInClientMessageError =
@@ -104,6 +108,10 @@ type internal WebSocketMessageReader (socket : WebSocket, serializerOptions : Js
 /// handshake does not complete within the timeout; whatever is queued after it is dropped. A failed send also marks the connection closed, since the
 /// socket is gone.
 /// </remarks>
+/// <param name="socket">The socket to write to.</param>
+/// <param name="serializerOptions">The options server messages are serialized with.</param>
+/// <param name="gracefulCloseTimeout">How long a close handshake may take before the socket is aborted.</param>
+/// <param name="logger">The logger of the connection.</param>
 type internal WebSocketMessageSender
     (socket : WebSocket, serializerOptions : JsonSerializerOptions, gracefulCloseTimeout : TimeSpan, logger : ILogger) =
 

@@ -64,7 +64,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
             if logger.IsEnabled LogLevel.Debug then
                 deferred
                 |> Observable.add (function
-                    | DeferredPending (path, label, isStream) ->
+                    | DeferredPending (path, label, isStream, _) ->
                         let fieldKind = if isStream then "streamed" else "deferred"
                         logger.LogDebug ("Announced GraphQL deferred field at path: {path}", path |> Seq.map string |> Seq.toArray |> Path.Join)
                         match label with

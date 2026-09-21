@@ -133,7 +133,7 @@ let ``A stream pending is emitted with the payload that exposes its containing d
     let delivery = IncrementalDelivery ()
     let parentPath = [ box "container" ]
     let streamPath = parentPath @ itemsPath
-    delivery.Apply (DeferredPending (streamPath, ValueNone, true))
+    delivery.Apply (DeferredPending (streamPath, ValueNone, true, 0))
     |> equals ValueNone
     let payload =
         delivery.Apply (DeferredResult (box (NameValueLookup.ofList [ "items", upcast [||] ]), parentPath))
@@ -152,7 +152,7 @@ let ``A nested stream pending waits for the deferred payload that exposes it`` (
     let parentPath = [ box "parent" ]
     let childPath = parentPath @ [ box "child" ]
     let streamPath = childPath @ [ box "items" ]
-    delivery.Apply (DeferredPending (streamPath, ValueNone, true))
+    delivery.Apply (DeferredPending (streamPath, ValueNone, true, 0))
     |> equals ValueNone
     let parentPayload =
         delivery.Apply (DeferredResult (box (NameValueLookup.ofList [ "child", null ]), parentPath))
@@ -168,7 +168,7 @@ let ``A nested stream pending is visible through F# list payloads`` () =
     let delivery = IncrementalDelivery ()
     let parentPath = [ box "parent" ]
     let streamPath = parentPath @ [ box "items"; box 0; box "children" ]
-    delivery.Apply (DeferredPending (streamPath, ValueNone, true))
+    delivery.Apply (DeferredPending (streamPath, ValueNone, true, 0))
     |> equals ValueNone
     let payload =
         delivery.Apply (
@@ -180,7 +180,7 @@ let ``A nested stream pending is visible through F# list payloads`` () =
 let ``A labeled defer pending is emitted with the deferred field payload`` () =
     let delivery = IncrementalDelivery ()
     let path = [ box "testData"; box "a" ]
-    delivery.Apply (DeferredPending (path, ValueSome "hero", false))
+    delivery.Apply (DeferredPending (path, ValueSome "hero", false, 0))
     |> equals ValueNone
     let payload = delivery.Apply (DeferredResult (box "value", path))
     pendingPaths payload |> equals [ [ box "testData" ] ]
@@ -228,7 +228,7 @@ let ``A completed stream path reused by a later update gets a fresh id and compl
 [<Fact>]
 let ``A stream failing before any item completes with errors instead of replacing the list with null`` () =
     let delivery = IncrementalDelivery ()
-    delivery.Apply (DeferredPending ([ box "failing" ], ValueNone, true))
+    delivery.Apply (DeferredPending ([ box "failing" ], ValueNone, true, 0))
     |> equals ValueNone
     // Announced to the client with the initial payload that exposes the empty list
     delivery.TakePendingVisibleIn (NameValueLookup.ofList [ "failing", upcast [] ]) |> single |> ignore
@@ -243,7 +243,7 @@ let ``A stream failing before any item completes with errors instead of replacin
 [<Fact>]
 let ``An empty stream still produces a completed entry after being pre-announced`` () =
     let delivery = IncrementalDelivery ()
-    delivery.Apply (DeferredPending (itemsPath, ValueNone, true))
+    delivery.Apply (DeferredPending (itemsPath, ValueNone, true, 0))
     |> equals ValueNone
     delivery.TakePendingVisibleIn (NameValueLookup.ofList [ "items", upcast [] ]) |> single |> ignore
     let payload = delivery.Apply (DeferredCompleted itemsPath)
@@ -299,9 +299,23 @@ let ``A live field reuses the same id across repeated updates and is only ever c
 // ---------------------------------------------------------------------------------------------------------------------
 
 [<Fact>]
+let ``A stream whose first items went into the initial payload delivers the streamed items from the next index`` () =
+    let delivery = IncrementalDelivery ()
+    // Two items were delivered with the initial payload (`@stream(initialCount: 2)`): the stream starts at index 2
+    delivery.Apply (DeferredPending (itemsPath, ValueNone, true, 2))
+    |> equals ValueNone
+    delivery.TakePendingVisibleIn (NameValueLookup.ofList [ "items", upcast [ box 0; box 1 ] ]) |> single |> ignore
+    let p3 = delivery.Apply (DeferredResult (box 3, itemPath 3))
+    incrementalOf p3 |> empty // out of order: waits for item 2, not for the items the client already has
+    let p2 = delivery.Apply (DeferredResult (box 2, itemPath 2))
+    (incrementalOf p2 |> single).Items
+    |> equals (Include [| box 2; box 3 |])
+    (completedOf (delivery.Apply (DeferredCompleted itemsPath)) |> single).Errors |> equals Skip
+
+[<Fact>]
 let ``A stream pending carries its label into the pending entry`` () =
     let delivery = IncrementalDelivery ()
-    delivery.Apply (DeferredPending (itemsPath, ValueSome "friends", true))
+    delivery.Apply (DeferredPending (itemsPath, ValueSome "friends", true, 0))
     |> equals ValueNone
     let payload = delivery.Apply (DeferredResult (box 1, itemPath 0))
     pendingPaths payload |> equals [ itemsPath ]
@@ -311,9 +325,9 @@ let ``A stream pending carries its label into the pending entry`` () =
 let ``The same deferred field announced twice with the same label is announced to the client once`` () =
     let delivery = IncrementalDelivery ()
     let path = [ box "testData"; box "a" ]
-    delivery.Apply (DeferredPending (path, ValueSome "hero", false))
+    delivery.Apply (DeferredPending (path, ValueSome "hero", false, 0))
     |> equals ValueNone
-    delivery.Apply (DeferredPending (path, ValueSome "hero", false))
+    delivery.Apply (DeferredPending (path, ValueSome "hero", false, 0))
     |> equals ValueNone
     let payload = delivery.Apply (DeferredResult (box "value", path))
     let id = pendingIds payload |> single
@@ -323,8 +337,8 @@ let ``The same deferred field announced twice with the same label is announced t
 let ``Distinct labels at the same path are distinct pendings`` () =
     let delivery = IncrementalDelivery ()
     let path = [ box "testData" ]
-    delivery.Apply (DeferredPending (path, ValueSome "a", false)) |> ignore
-    delivery.Apply (DeferredPending (path, ValueSome "b", false)) |> ignore
+    delivery.Apply (DeferredPending (path, ValueSome "a", false, 0)) |> ignore
+    delivery.Apply (DeferredPending (path, ValueSome "b", false, 0)) |> ignore
     let payload = delivery.Apply (DeferredResult (box (NameValueLookup.ofList [ "a", upcast "Apple" ]), path))
     pendingLabels payload |> equals [ Include "a"; Include "b" ]
     pendingIds payload |> List.distinct |> List.length |> equals 2
@@ -333,7 +347,7 @@ let ``Distinct labels at the same path are distinct pendings`` () =
 let ``A pre-announced stream whose parent is null is neither announced nor completed`` () =
     let delivery = IncrementalDelivery ()
     let streamPath = [ box "parent"; box "items" ]
-    delivery.Apply (DeferredPending (streamPath, ValueNone, true))
+    delivery.Apply (DeferredPending (streamPath, ValueNone, true, 0))
     |> equals ValueNone
     // The parent resolved to null, so the stream is never exposed to the client
     delivery.TakePendingVisibleIn (NameValueLookup.ofList [ "parent", null ]) |> empty
@@ -345,7 +359,7 @@ let ``A pre-announced stream whose parent is null is neither announced nor compl
 let ``A stream nested in a streamed item is announced with a path containing the item index`` () =
     let delivery = IncrementalDelivery ()
     let nestedStreamPath = [ box "items"; box 0; box "children" ]
-    delivery.Apply (DeferredPending (nestedStreamPath, ValueNone, true))
+    delivery.Apply (DeferredPending (nestedStreamPath, ValueNone, true, 0))
     |> equals ValueNone
     let item = NameValueLookup.ofList [ "children", upcast [||] ]
     let payload = delivery.Apply (DeferredResult (box [| box item |], itemPath 0))

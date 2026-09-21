@@ -10,7 +10,6 @@ open System.Text.Json.Serialization
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Shared
 
-
 [<Literal>]
 let UnexpectedObservableErrorMessage = "Unexpected error during subscription"
 
@@ -24,7 +23,7 @@ let private deduplicationKey (problem : GQLProblemDetails) =
             >> Seq.toList
         )
 
-    problem.Message, problem.Path, problem.Locations, extensions
+    struct (problem.Message, problem.Path, problem.Locations, extensions)
 
 /// The problem details to report for a failure of a subscription's source, flattening aggregates and
 /// deduplicating repeated errors.

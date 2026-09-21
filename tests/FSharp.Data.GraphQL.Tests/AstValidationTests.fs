@@ -1493,10 +1493,7 @@ fragment ownerFragment on Dog {
         )
     shouldFail |> equals expectedFailureResult
 
-// ---------------------------------------------------------------------------------------------------------------------
-// Incremental delivery spec v0.2 validation rules. None of them exists yet: each test names the missing rule in its
-// Skip reason and is turned on when the rule lands. The messages are the proposed wording.
-// ---------------------------------------------------------------------------------------------------------------------
+// Incremental delivery spec v0.2 validation rules
 
 let private validateWholeDocument (query : string) =
     Parser.parse query
@@ -1563,7 +1560,50 @@ let ``Validation should grant that defer and stream labels are unique in the doc
     |> expectValidationError (
         GQLProblemDetails.CreateValidationFor
             [ box "pet"; box "name" ]
-            "Label 'x' of directive 'defer' is used more than once. Defer and stream labels must be unique in the document."
+            "Label 'x' of directive 'defer' is used more than once. Defer and stream labels must be unique in an operation."
+    )
+
+[<Fact>]
+let ``Validation should allow the same defer label in different operations`` () =
+    let query =
+        """query first {
+  human {
+    name @defer(label: "x")
+  }
+}
+
+query second {
+  pet {
+    name @defer(label: "x")
+  }
+}"""
+    getContext query
+    |> Validation.Ast.validateDeferStreamDirectiveLabels
+    |> equals Success
+
+[<Fact>]
+let ``Validation should count the labels of the fragments an operation spreads`` () =
+    let query =
+        """query {
+  human {
+    name @defer(label: "x")
+  }
+  ...Pet
+}
+
+fragment Pet on Root {
+  pet {
+    name @defer(label: "x")
+  }
+}"""
+    getContext query
+    |> Validation.Ast.validateDeferStreamDirectiveLabels
+    |> equals (
+        ValidationError [
+            GQLProblemDetails.CreateValidationFor
+                [ box "pet"; box "name" ]
+                "Label 'x' of directive 'defer' is used more than once. Defer and stream labels must be unique in an operation."
+        ]
     )
 
 [<Fact>]

@@ -3,6 +3,7 @@ module FSharp.Data.GraphQL.Tests.AspNetCore.IncrementalDeliveryEndToEndTests
 open System.Collections.Generic
 open System.Text.Json.Serialization
 open Xunit
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Server.AspNetCore
@@ -153,6 +154,36 @@ let ``Streamed items resolved out of order are delivered to the client in list o
                 box (NameValueLookup.ofList [ "value", upcast "Fast" ])
             |]
         )
+        (completedOf completed |> single).Id |> equals pending.Id
+        final.HasNext |> equals (Include false)
+    | payloads -> fail $"Expected four payloads but got %A{payloads}"
+
+[<Fact>]
+let ``A stream with initial items announces itself with the initial payload and streams the remaining items`` () =
+    let query = parse """{
+        testData {
+            ifaceList @stream(initialCount: 1) {
+                id
+            }
+        }
+    }"""
+    let payloads = executor.AsyncExecute(query, getMockInputContext) |> sync |> deliver
+    assertWellFormed payloads |> ignore
+    match payloads with
+    | [ initial; items; completed; final ] ->
+        initial.Data
+        |> equals (
+            Include (
+                ValueSome (
+                    box (NameValueLookup.ofList [ "testData", upcast NameValueLookup.ofList [ "ifaceList", upcast [ NameValueLookup.ofList [ "id", upcast "2000" ] ] ] ])
+                )
+            )
+        )
+        let pending = pendingOf initial |> single
+        pending.Path |> equals [ box "testData"; box "ifaceList" ]
+        let entry = incrementalOf items |> single
+        entry.Id |> equals pending.Id
+        entry.Items |> equals (Include [| box (NameValueLookup.ofList [ "id", upcast "3000" ]) |])
         (completedOf completed |> single).Id |> equals pending.Id
         final.HasNext |> equals (Include false)
     | payloads -> fail $"Expected four payloads but got %A{payloads}"

@@ -39,6 +39,13 @@ type internal SubscriptionHandle = {
 /// queue is never completed before every worker has ended, so a queued message is never lost.
 /// </para>
 /// </remarks>
+/// <param name="id">The id the client gave the subscription.</param>
+/// <param name="generation">Distinguishes this subscription from an earlier or later one the client gave the same id.</param>
+/// <param name="source">The events of the subscription, as the executor produces them.</param>
+/// <param name="payloads">Translates the events into the payloads of the subscription's <c>next</c> messages.</param>
+/// <param name="outbound">The connection's sender queue, where every message of the subscription is written.</param>
+/// <param name="inbox">The connection's control loop queue, where the end of the subscription is reported.</param>
+/// <param name="logger">The logger of the connection.</param>
 type internal SubscriptionWorker<'T>
     (
         id : SubscriptionId,
