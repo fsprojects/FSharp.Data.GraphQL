@@ -42,12 +42,13 @@ module private IncrementalDeliveryPaths =
 /// <summary>
 /// Mutable per-field bookkeeping of IncrementalDelivery, keyed by a field's own path (with any item index or batch removed).
 /// </summary>
-/// <param name="id">The short id the field is identified by on the wire.</param>
-/// <param name="wirePath">
-/// The path the field is announced at: a streamed field's own path, or the path of the object containing a deferred field.
-/// </param>
-/// <param name="isStream">Whether the field is streamed rather than deferred.</param>
-type private FieldState (id : string, wirePath : obj list, isStream : bool) =
+type private FieldState
+    /// <param name="id">The short id the field is identified by on the wire.</param>
+    /// <param name="wirePath">
+    /// The path the field is announced at: a streamed field's own path, or the path of the object containing a deferred field.
+    /// </param>
+    /// <param name="isStream">Whether the field is streamed rather than deferred.</param>
+    (id : string, wirePath : obj list, isStream : bool) =
     member _.Id = id
     member _.WirePath = wirePath
     member _.IsStream = isStream

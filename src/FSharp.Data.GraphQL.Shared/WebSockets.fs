@@ -9,8 +9,9 @@ open FSharp.Data.GraphQL.Shared
 /// <summary>
 /// Represents an invalid WebSocket protocol message.
 /// </summary>
-/// <param name="explanation">The validation failure explanation.</param>
-type InvalidWebsocketMessageException (explanation : string) =
+type InvalidWebsocketMessageException
+    /// <param name="explanation">The validation failure explanation.</param>
+    (explanation : string) =
     inherit System.Exception (explanation)
 
 /// Identifies a GraphQL WebSocket subscription.

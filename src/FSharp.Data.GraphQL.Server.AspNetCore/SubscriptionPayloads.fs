@@ -62,10 +62,11 @@ module private ErrorFormatting =
 /// The payloads of a deferred result: the initial payload with the announcements visible in its data, then every deferred or streamed delivery in the
 /// incremental wire format, and finally the payload that reports <c>hasNext: false</c>.
 /// </summary>
-/// <param name="logger">The logger of the connection.</param>
-/// <param name="data">The data of the initial payload.</param>
-/// <param name="errors">The errors of the initial payload.</param>
-type internal DeferredPayloads (logger : ILogger, data : Output, errors : GQLProblemDetails list) =
+type internal DeferredPayloads
+    /// <param name="logger">The logger of the connection.</param>
+    /// <param name="data">The data of the initial payload.</param>
+    /// <param name="errors">The errors of the initial payload.</param>
+    (logger : ILogger, data : Output, errors : GQLProblemDetails list) =
 
     let delivery = IncrementalDelivery ()
 
@@ -98,8 +99,9 @@ type internal DeferredPayloads (logger : ILogger, data : Output, errors : GQLPro
 /// <summary>
 /// The payloads of a subscription stream: every event is a complete result of its own.
 /// </summary>
-/// <param name="logger">The logger of the connection.</param>
-type internal StreamPayloads (logger : ILogger) =
+type internal StreamPayloads
+    /// <param name="logger">The logger of the connection.</param>
+    (logger : ILogger) =
 
     interface ISubscriptionPayloads<GQLSubscriptionResponseContent> with
 

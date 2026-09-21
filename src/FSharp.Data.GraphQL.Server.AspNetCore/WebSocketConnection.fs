@@ -31,13 +31,13 @@ open FSharp.Data.GraphQL.Server.AspNetCore.ClientMessagePatterns
 /// </list>
 /// Every producer only ever writes into a channel, so no lock is needed anywhere, and no thread ever blocks on a send.
 /// </remarks>
-/// <param name="httpContext">The HTTP context of the request the socket was accepted from.</param>
-/// <param name="socket">The accepted socket.</param>
-/// <param name="options">The GraphQL options of the application.</param>
-/// <param name="serviceProvider">The services of the application, for the custom ping handler.</param>
-/// <param name="logger">The logger of the middleware.</param>
-/// <param name="connectionToken">Cancelled when the request is aborted or the application stops.</param>
 type internal GraphQLWebSocketConnection<'Root>
+    /// <param name="httpContext">The HTTP context of the request the socket was accepted from.</param>
+    /// <param name="socket">The accepted socket.</param>
+    /// <param name="options">The GraphQL options of the application.</param>
+    /// <param name="serviceProvider">The services of the application, for the custom ping handler.</param>
+    /// <param name="logger">The logger of the middleware.</param>
+    /// <param name="connectionToken">Cancelled when the request is aborted or the application stops.</param>
     (
         httpContext : HttpContext,
         socket : WebSocket,
