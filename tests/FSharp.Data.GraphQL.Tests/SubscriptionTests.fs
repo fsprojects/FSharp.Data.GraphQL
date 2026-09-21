@@ -238,3 +238,30 @@ let ``Can subscribe to tagged async field and do not get results with unexpected
         updateValue 1 "Updated value 1"
         ensureThat (fun () -> Seq.isEmpty sub.Received) 50 "Should not get results with given tag"
     | _ -> failwith "Expected Stream GQLResponse"
+
+[<Fact>]
+let ``Defer directive disabled with if false inside a subscription payload executes inline`` () =
+    let expected = SubscriptionResult (NameValueLookup.ofList [
+            "watchData", upcast NameValueLookup.ofList [
+                "id", upcast 1
+                "data", upcast "Updated value 1"
+            ]
+        ]
+    )
+    let query = parse """subscription Test {
+        watchData(id: 1) {
+            id
+            data @defer(if: false)
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    match result with
+    | Stream data ->
+        use sub = Observer.create data
+        updateValue 1 "Updated value 1"
+        sub.WaitForItem()
+        sub.Received
+        |> Seq.cast<GQLSubscriptionResponseContent>
+        |> contains expected
+        |> ignore
+    | _ -> failwith "Expected Stream GQLResponse"

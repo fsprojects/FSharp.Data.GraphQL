@@ -1584,6 +1584,173 @@ module Ast =
             def.SelectionSet
             |> ValidationResult.collect (checkVariableUsageAllowedOnSelection varNamesAndTypeRefs []))
 
+    let private isIncrementalDirective (directive : Directive) = directive.Name = "defer" || directive.Name = "stream"
+
+    /// <summary>
+    /// An <c>@defer</c> or <c>@stream</c> disabled with a literal <c>if: false</c> is allowed anywhere, since it never applies.
+    /// </summary>
+    let private isDisabledIncrementalDirective (directive : Directive) =
+        directive.Arguments
+        |> List.exists (fun argument -> argument.Name = "if" && argument.Value = BooleanValue false)
+
+    /// <summary>
+    /// The <c>@defer</c> and <c>@stream</c> directives used in the selection set, each with the (reversed) path of the
+    /// selection carrying it; fragment spreads are followed only when asked to, so a fragment definition validated on
+    /// its own is not counted twice.
+    /// </summary>
+    let rec private incrementalDirectiveUsages
+        (fragmentDefinitions : FragmentDefinition list)
+        (followSpreads : bool)
+        (visitedFragments : string list)
+        (path : FieldPath)
+        (selectionSet : Selection list)
+        : (FieldPath * Directive) list =
+        let usagesOf (directives : Directive list) (path : FieldPath) =
+            directives
+            |> List.filter isIncrementalDirective
+            |> List.map (fun directive -> path, directive)
+        selectionSet
+        |> List.collect (function
+            | Field field ->
+                let fieldPath = box field.AliasOrName :: path
+                usagesOf field.Directives fieldPath
+                @ incrementalDirectiveUsages fragmentDefinitions followSpreads visitedFragments fieldPath field.SelectionSet
+            | InlineFragment fragment ->
+                usagesOf fragment.Directives path
+                @ incrementalDirectiveUsages fragmentDefinitions followSpreads visitedFragments path fragment.SelectionSet
+            | FragmentSpread spread ->
+                let own = usagesOf spread.Directives path
+                if followSpreads && not (visitedFragments |> List.contains spread.Name) then
+                    match fragmentDefinitions |> List.tryFind (fun fragment -> fragment.Name = ValueSome spread.Name) with
+                    | Some fragment ->
+                        own
+                        @ incrementalDirectiveUsages fragmentDefinitions followSpreads (spread.Name :: visitedFragments) path fragment.SelectionSet
+                    | None -> own
+                else
+                    own)
+
+    /// <summary>
+    /// The <c>@defer</c> and <c>@stream</c> directives applied to the root fields of the selection set, through the
+    /// fragments spread at its root.
+    /// </summary>
+    let rec private rootIncrementalDirectiveUsages
+        (fragmentDefinitions : FragmentDefinition list)
+        (visitedFragments : string list)
+        (selectionSet : Selection list)
+        : (FieldPath * Directive) list =
+        selectionSet
+        |> List.collect (function
+            | Field field ->
+                field.Directives
+                |> List.filter isIncrementalDirective
+                |> List.map (fun directive -> [ box field.AliasOrName ], directive)
+            | InlineFragment fragment -> rootIncrementalDirectiveUsages fragmentDefinitions visitedFragments fragment.SelectionSet
+            | FragmentSpread spread when not (visitedFragments |> List.contains spread.Name) ->
+                match fragmentDefinitions |> List.tryFind (fun fragment -> fragment.Name = ValueSome spread.Name) with
+                | Some fragment -> rootIncrementalDirectiveUsages fragmentDefinitions (spread.Name :: visitedFragments) fragment.SelectionSet
+                | None -> []
+            | FragmentSpread _ -> [])
+
+    /// <summary>
+    /// The <c>@stream</c> directive may only be applied to list fields
+    /// (<see href="https://github.com/graphql/graphql-spec/pull/1110">Stream Directives Are Used On List Fields</see>).
+    /// </summary>
+    let internal validateStreamDirectiveOnListFields (ctx : ValidationContext) =
+        let rec isList (typeRef : IntrospectionTypeRef) =
+            match typeRef.Kind with
+            | TypeKind.LIST -> true
+            | TypeKind.NON_NULL -> typeRef.OfType |> ValueOption.exists isList
+            | _ -> false
+        onAllSelections ctx (fun selection ->
+            if selection.Field.Directives |> List.exists (fun directive -> directive.Name = "stream") then
+                match selection.FieldType with
+                | ValueSome fieldType when isList fieldType -> Success
+                | _ ->
+                    AstError.AsResult (
+                        $"Directive 'stream' on field '%s{selection.Field.Name}' of type '%s{selection.FragmentOrParentType.Name}' must be applied to a list field.",
+                        selection.Path
+                    )
+            else
+                Success)
+
+    /// <summary>
+    /// <c>@defer</c> and <c>@stream</c> are not allowed in subscription operations, unless disabled with <c>if: false</c>
+    /// (<see href="https://github.com/graphql/graphql-spec/pull/1110">Defer And Stream Directives Are Used On Valid Operations</see>).
+    /// </summary>
+    let internal validateDeferStreamDirectivesOnValidOperations (ctx : ValidationContext) =
+        let fragmentDefinitions = getFragmentDefinitions ctx.Document
+        ctx.Document.Definitions
+        |> ValidationResult.collect (function
+            | OperationDefinition def when def.OperationType = Subscription ->
+                incrementalDirectiveUsages fragmentDefinitions true [] [] def.SelectionSet
+                |> List.filter (fun (_, directive) -> not (isDisabledIncrementalDirective directive))
+                |> ValidationResult.collect (fun (path, directive) ->
+                    AstError.AsResult (
+                        $"Directive '%s{directive.Name}' is not allowed in a subscription operation. Disable it with `if: false` instead.",
+                        path
+                    ))
+            | _ -> Success)
+
+    /// <summary>
+    /// <c>@defer</c> and <c>@stream</c> cannot be applied to the root fields of a mutation, which are executed serially
+    /// (<see href="https://github.com/graphql/graphql-spec/pull/1110">Defer And Stream Directives Are Used On Valid Root Field</see>).
+    /// </summary>
+    let internal validateDeferStreamDirectivesOnRootFields (ctx : ValidationContext) =
+        let fragmentDefinitions = getFragmentDefinitions ctx.Document
+        let mutationTypeName =
+            ctx.Schema.MutationType
+            |> ValueOption.map _.Name
+            |> ValueOption.defaultValue "Mutation"
+        ctx.Document.Definitions
+        |> ValidationResult.collect (function
+            | OperationDefinition def when def.OperationType = Mutation ->
+                rootIncrementalDirectiveUsages fragmentDefinitions [] def.SelectionSet
+                |> List.filter (fun (_, directive) -> not (isDisabledIncrementalDirective directive))
+                |> ValidationResult.collect (fun (path, directive) ->
+                    AstError.AsResult (
+                        $"Directive '%s{directive.Name}' cannot be applied to a root field of the mutation type '%s{mutationTypeName}'.",
+                        path
+                    ))
+            | _ -> Success)
+
+    /// <summary>
+    /// The <c>label</c> of <c>@defer</c> and <c>@stream</c> must be a string literal, and unique within each operation,
+    /// counting the fragments the operation spreads
+    /// (<see href="https://github.com/graphql/graphql-spec/pull/1110">Defer And Stream Directive Labels Are Unique</see>).
+    /// </summary>
+    let internal validateDeferStreamDirectiveLabels (ctx : ValidationContext) =
+        let fragmentDefinitions = getFragmentDefinitions ctx.Document
+        let labelOf (directive : Directive) =
+            directive.Arguments
+            |> List.vtryFind (fun argument -> argument.Name = "label")
+            |> ValueOption.map _.Value
+        // A variable label is rejected wherever it is written, a fragment definition included
+        let literalErrors =
+            ctx.Document.Definitions
+            |> List.collect (fun def -> incrementalDirectiveUsages [] false [] [] def.SelectionSet)
+            |> ValidationResult.collect (fun (path, directive) ->
+                match labelOf directive with
+                | ValueSome (VariableName _) ->
+                    AstError.AsResult ($"Argument 'label' of directive '%s{directive.Name}' must be a string literal, not a variable.", path)
+                | _ -> Success)
+        // Labels are unique per operation, over the fragments the operation reaches: two operations may reuse a label
+        let uniquenessErrors =
+            ctx.Document.Definitions
+            |> ValidationResult.collect (function
+                | OperationDefinition def ->
+                    let seenLabels = HashSet<string> ()
+                    incrementalDirectiveUsages fragmentDefinitions true [] [] def.SelectionSet
+                    |> ValidationResult.collect (fun (path, directive) ->
+                        match labelOf directive with
+                        | ValueSome (StringValue label) when not (seenLabels.Add label) ->
+                            AstError.AsResult (
+                                $"Label '%s{label}' of directive '%s{directive.Name}' is used more than once. Defer and stream labels must be unique in an operation.",
+                                path
+                            )
+                        | _ -> Success)
+                | _ -> Success)
+        literalErrors @@ uniquenessErrors
+
     let private allValidations = [
         validateFragmentsMustNotFormCycles
         validateOperationNameUniqueness
@@ -1605,6 +1772,10 @@ module Ast =
         validateDirectivesDefined
         validateDirectivesAreInValidLocations
         validateUniqueDirectivesPerLocation
+        validateStreamDirectiveOnListFields
+        validateDeferStreamDirectivesOnValidOperations
+        validateDeferStreamDirectivesOnRootFields
+        validateDeferStreamDirectiveLabels
         validateVariableUniqueness
         validateVariablesAsInputTypes
         validateVariablesUsesDefined

@@ -32,6 +32,7 @@
     <Compile Include="LocalProviderWithOptionalParametersOnlyTests.fs" />
     <Compile Include="SwapiLocalProviderTests.fs" />
     <Compile Include="SwapiRemoteProviderTests.fs" />
+    <Compile Include="WebSocketTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -32,6 +32,7 @@
     <Compile Include="Helpers.fs" />
     <Compile Include="ErrorHelpers.fs" />
     <Compile Include="Literals.fs" />
+    <Compile Include="GQLExecutionResult.fs" />
     <Compile Include="Relay\NodeTests.fs" />
     <Compile Include="Relay\CursorTests.fs" />
     <Compile Include="Relay\ConnectionTests.fs" />
@@ -98,8 +99,11 @@
     <Compile Include="AspNetCore/TestSchema.fs" />
     <Compile Include="AspNetCore/InvalidMessageTests.fs" />
     <Compile Include="AspNetCore/SerializationTests.fs" />
-    <Compile Include="AspNetCore/IncrementalPayloadSplittingTests.fs" />
     <Compile Include="AspNetCore/RequestHandlerExtensibilityTests.fs" />
+    <Compile Include="AspNetCore/IncrementalDeliveryTests.fs" />
+    <Compile Include="AspNetCore/IncrementalDeliveryEndToEndTests.fs" />
+    <Compile Include="AspNetCore/SubscriptionWorkerTests.fs" />
+    <Compile Include="AspNetCore/WebSocketConnectionTests.fs" />
     <Compile Include="TaskSeqFieldTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

@@ -10,7 +10,6 @@ open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
-open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Server.Relay
 
 type Widget = { Id : string; Name : string }

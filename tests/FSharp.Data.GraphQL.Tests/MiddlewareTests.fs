@@ -480,11 +480,9 @@ let ``Deferred queries : Must pass when below threshold`` () =
         data |> equals (upcast expected)
         use sub = Observer.create deferred
         sub.WaitCompleted ()
-        sub.Received |> single |> equals expectedDeferred
-    result.Metadata.TryFind<float>("queryWeightThreshold")
-    |> equals (ValueSome 2.0)
-    result.Metadata.TryFind<float>("queryWeight")
-    |> equals (ValueSome 2.0)
+        (sub.Received |> withoutCompleted) |> single |> equals expectedDeferred
+    result.Metadata.TryFind<float> ("queryWeightThreshold") |> equals (ValueSome 2.0)
+    result.Metadata.TryFind<float> ("queryWeight") |> equals (ValueSome 2.0)
 
 [<Fact>]
 let ``Streamed queries : Must pass when below threshold`` () =
@@ -524,7 +522,7 @@ let ``Streamed queries : Must pass when below threshold`` () =
         data |> equals (upcast expected)
         use sub = Observer.create deferred
         sub.WaitCompleted (2)
-        sub.Received
+        (sub.Received |> withoutCompleted)
         |> Seq.cast<GQLDeferredResponseContent>
         |> contains expectedDeferred1
         |> contains expectedDeferred2

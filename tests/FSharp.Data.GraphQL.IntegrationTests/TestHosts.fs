@@ -1,6 +1,7 @@
 module FSharp.Data.GraphQL.IntegrationTests.TestHosts
 
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Shared.WebSockets
 open Microsoft.AspNetCore.Mvc.Testing
 open System.Net.Http
 open System
@@ -17,6 +18,12 @@ let private starWarsFactory = lazy (new StarWarsApplicationFactory ())
 let createIntegrationHttpClient () : HttpClient = integrationFactory.Value.CreateClient ()
 
 let createStarWarsHttpClient () : HttpClient = starWarsFactory.Value.CreateClient ()
+
+/// A WebSocket client for the Star Wars host, negotiating the graphql-transport-ws sub-protocol
+let createStarWarsWebSocketClient () =
+    let client = starWarsFactory.Value.Server.CreateWebSocketClient ()
+    client.SubProtocols.Add GraphQLTransportWS.SubProtocol
+    client
 
 let private getIntegrationServerUrl () =
     use client = createIntegrationHttpClient ()

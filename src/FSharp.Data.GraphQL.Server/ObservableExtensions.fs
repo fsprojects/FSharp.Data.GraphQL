@@ -5,8 +5,22 @@ open System.Collections.Generic
 open System.Reactive.Linq
 open System.Runtime.ExceptionServices
 open System.Threading
+open System.Threading.Channels
 open System.Threading.Tasks
 open FSharp.Control.Reactive.Observable
+
+/// <summary>
+/// An outcome of the resolution loop of <see cref="ofAsyncEnumerableResolved"/>, consumed by its single emitter.
+/// </summary>
+[<Struct>]
+type internal ResolutionEvent<'Result> =
+    /// A resolution produced its result.
+    | Resolved of result : 'Result
+    /// A resolution threw instead of producing a result.
+    | ResolutionFailed of failure : exn
+    /// The pull loop ended: how many resolutions it started in total, immediate results included, and the failures of
+    /// the enumeration itself and of disposing the enumerator, if any.
+    | EnumerationEnded of started : int * enumerationFailure : exn voption * disposalFailure : exn voption
 
 /// Extension methods to observable, used in place of FSharp.Control.Observable
 module internal Observable =
@@ -114,6 +128,11 @@ module internal Observable =
     /// what it already delivered.
     /// </para>
     /// <para>
+    /// A concurrency slot is held from the moment an item is pulled until its result has been delivered to the
+    /// observer, so a slow observer bounds the enumeration, and a <see cref="SemaphoreSlim"/> is the only
+    /// synchronization primitive involved: results reach the observer through a channel with a single reader.
+    /// </para>
+    /// <para>
     /// An observer whose <see cref="IObserver{T}.OnNext"/> throws while a result is delivered always has its
     /// concurrency slot released, so the enumeration never deadlocks over it, but nothing further is delivered to
     /// it: per the observable contract, the subscription is torn down by the caller as soon as <c>OnNext</c>
@@ -130,142 +149,150 @@ module internal Observable =
         (onFailure : exn -> 'Result)
         (source : IAsyncEnumerable<'T>)
         : IObservable<'Result> =
-        // backgroundTask, not task: besides the reasons that apply to ofAsyncEnumerable, the loop awaits a
-        // concurrency slot and, at the end, the resolutions still draining on the thread pool - a subscriber's
-        // synchronization context that has to be pumped for those continuations would be a deadlock waiting to happen
-        let enumerate (observer : IObserver<'Result>) (cancellationToken : CancellationToken) : Task = backgroundTask {
+        // Two loops, no lock: the pull loop enumerates the source and starts the resolutions, which settle on arbitrary
+        // threads and only ever write their outcome into a channel; the emitter is the channel's single reader and the
+        // only caller of the observer, so observer calls are serialized by construction. A concurrency slot is held
+        // from the moment an item is pulled until the emitter has delivered its result, so a slow observer bounds the
+        // pull loop exactly as before and the channel never holds more than maxConcurrency events.
+        // backgroundTask, not task: the loops await slots and the resolutions still draining on the thread pool - a
+        // subscriber's synchronization context that has to be pumped for those continuations would be a deadlock
+        // waiting to happen
+        let run (observer : IObserver<'Result>) (cancellationToken : CancellationToken) : Task = backgroundTask {
             use enumerationCancellation = CancellationTokenSource.CreateLinkedTokenSource cancellationToken
             use slots = new SemaphoreSlim (maxConcurrency, maxConcurrency)
-            // Observer calls are not required to be thread-safe, but resolutions complete on arbitrary threads
-            let sync = obj ()
-            let emit (result : 'Result) =
-                lock sync (fun () ->
-                    if not cancellationToken.IsCancellationRequested then
-                        observer.OnNext result)
-            // Only the number of resolutions still in flight is tracked, not the tasks themselves, so a long-running
-            // source does not retain one task per item; the last resolution to settle after the enumeration has ended
-            // completes drained. Ref cells, because the resolutions run on other threads.
-            let inFlight = ref 0
-            let enumerationEnded = ref false
-            let drained = TaskCompletionSource ()
-            let resolutionFailure = ref ValueNone
-            let failed () = lock sync (fun () -> resolutionFailure.Value.IsSome)
-            let stopped () = cancellationToken.IsCancellationRequested || failed ()
-            let recordResolutionFailure (ex : exn) =
-                let shouldCancelEnumeration =
-                    lock sync (fun () ->
-                        if resolutionFailure.Value.IsNone then
-                            resolutionFailure.Value <- ValueSome ex
-                            true
-                        else
-                            false)
-
-                if shouldCancelEnumeration then
-                    enumerationCancellation.Cancel ()
-            let settle () =
-                lock sync (fun () ->
-                    inFlight.Value <- inFlight.Value - 1
-                    if enumerationEnded.Value && inFlight.Value = 0 then
-                        drained.TrySetResult () |> ignore)
+            let events =
+                Channel.CreateUnbounded<ResolutionEvent<'Result>> (
+                    UnboundedChannelOptions (SingleReader = true, SingleWriter = false, AllowSynchronousContinuations = false)
+                )
+            // The writer is never completed: a resolution may settle after the pull loop has ended, and the emitter
+            // stops by counting the settled resolutions against the started ones instead
+            let post (event : ResolutionEvent<'Result>) = events.Writer.TryWrite event |> ignore
             let resolveInBackground (pendingResult : AsyncVal<'Result>) =
-                lock sync (fun () -> inFlight.Value <- inFlight.Value + 1)
                 // backgroundTask, not task: a resolution must never resume on a caller's synchronization context,
-                // and its synchronous prefix must not run on the enumeration loop's thread, which is pulling the
-                // next item in parallel
+                // and its synchronous prefix must not run on the pull loop's thread, which is pulling the next item
+                // in parallel
                 backgroundTask {
                     try
-                        try
-                            let! result = pendingResult |> AsyncVal.toTask
-                            emit result
-                        with ex ->
-                            // The first failure stops the enumeration; it is delivered once every started resolution has settled
-                            recordResolutionFailure ex
-                    finally
-                        // Released whatever happened, otherwise the enumeration would wait for this slot forever.
-                        // Released before settling, because settling lets the enumeration finish and dispose the semaphore.
-                        slots.Release () |> ignore
-                        settle ()
+                        let! result = pendingResult |> AsyncVal.toTask
+                        post (Resolved result)
+                    with ex ->
+                        post (ResolutionFailed ex)
                 }
                 |> ignore
-            let mutable enumerator = ValueNone
-            let mutable enumerationFailure = ValueNone
-            try
-                // Acquired inside the try, because a source may throw when asked for its enumerator
-                let acquired = source.GetAsyncEnumerator enumerationCancellation.Token
-                enumerator <- ValueSome acquired
-                let mutable index = 0
-                let mutable hasNext = true
-                // The token is checked explicitly, because a sequence is not obliged to observe the token it was given
-                while hasNext && not (stopped ()) do
-                    do! slots.WaitAsync cancellationToken
-                    // A resolution may have failed, or the subscription been disposed, while this waited for a slot
-                    // or while the source was producing the next item; rechecked after each await so nothing pulled
-                    // after that is resolved, let alone emitted (an item the source already produced is dropped:
-                    // the failure ends the stream anyway)
-                    if stopped () then
-                        slots.Release () |> ignore
-                        hasNext <- false
-                    else
-                        let! moved = acquired.MoveNextAsync ()
-                        if not moved || stopped () then
+            let pull () : Task = backgroundTask {
+                let mutable started = 0
+                let mutable enumerator = ValueNone
+                let mutable enumerationFailure = ValueNone
+                try
+                    // Acquired inside the try, because a source may throw when asked for its enumerator
+                    let acquired = source.GetAsyncEnumerator enumerationCancellation.Token
+                    enumerator <- ValueSome acquired
+                    let mutable hasNext = true
+                    // The token is checked explicitly, because a sequence is not obliged to observe the token it was given
+                    while hasNext && not enumerationCancellation.IsCancellationRequested do
+                        do! slots.WaitAsync enumerationCancellation.Token
+                        // A resolution may have failed, or the subscription been disposed, while this waited for a slot
+                        // or while the source was producing the next item; rechecked after each await so nothing pulled
+                        // after that is resolved, let alone emitted (an item the source already produced is dropped:
+                        // the failure ends the stream anyway)
+                        if enumerationCancellation.IsCancellationRequested then
                             slots.Release () |> ignore
                             hasNext <- false
                         else
-                            let itemIndex = index
-                            let item = acquired.Current
-                            index <- index + 1
-                            match resolve itemIndex item with
-                            // Items resolved synchronously are emitted immediately, which keeps them in the source order
-                            | Immediate result ->
-                                try
-                                    emit result
-                                finally
-                                    slots.Release () |> ignore
-                            | pendingResult -> resolveInBackground pendingResult
-            with ex ->
-                if failed () && not cancellationToken.IsCancellationRequested then
-                    ()
-                else
-                    enumerationFailure <- ValueSome ex
-            // Captured items no longer need the enumerator, so it is disposed before waiting for their resolutions
-            let failureBeforeDispose =
-                enumerationFailure
-                |> ValueOption.orElse resolutionFailure.Value
-            let! failureAfterDispose = disposeEnumerator enumerator failureBeforeDispose
-            let disposalFailure =
-                match failureBeforeDispose, failureAfterDispose with
-                | ValueNone, ValueSome ex -> ValueSome ex
-                | _ -> ValueNone
-            // Resolutions still in flight neither need the enumerator nor the loop, only their slots
-            lock sync (fun () ->
-                enumerationEnded.Value <- true
-                if inFlight.Value = 0 then
-                    drained.TrySetResult () |> ignore)
-            do! drained.Task
-            match
-                enumerationFailure
-                |> ValueOption.orElse resolutionFailure.Value
-                |> ValueOption.orElse disposalFailure
-            with
+                            let! moved = acquired.MoveNextAsync ()
+                            if not moved || enumerationCancellation.IsCancellationRequested then
+                                slots.Release () |> ignore
+                                hasNext <- false
+                            else
+                                let itemIndex = started
+                                let item = acquired.Current
+                                // The slot belongs to the started resolution from here on; a resolve function that
+                                // throws before returning its AsyncVal has not started one, so the slot is given back
+                                let resolution =
+                                    try
+                                        Ok (resolve itemIndex item)
+                                    with ex ->
+                                        slots.Release () |> ignore
+                                        Error ex
+                                match resolution with
+                                | Error ex -> raise ex
+                                | Ok resolution ->
+                                    started <- started + 1
+                                    match resolution with
+                                    // Items resolved synchronously are posted immediately, which keeps them in the source order
+                                    | Immediate result -> post (Resolved result)
+                                    | pendingResult -> resolveInBackground pendingResult
+                with ex ->
+                    // An exception raised once the enumeration was cancelled, by the subscriber or by a failed
+                    // resolution, is that cancellation's consequence, not a failure of the source
+                    if not enumerationCancellation.IsCancellationRequested then
+                        enumerationFailure <- ValueSome ex
+                // Captured items no longer need the enumerator, so it is disposed before their resolutions settle
+                let! failureAfterDispose = disposeEnumerator enumerator enumerationFailure
+                let disposalFailure =
+                    match enumerationFailure, failureAfterDispose with
+                    | ValueNone, ValueSome ex -> ValueSome ex
+                    | _ -> ValueNone
+                post (EnumerationEnded (started, enumerationFailure, disposalFailure))
+            }
+            let pullTask = pull ()
+            let mutable settled = 0
+            let mutable ended = ValueNone
+            let mutable resolutionFailureBeforeEnd = ValueNone
+            let mutable resolutionFailureAfterEnd = ValueNone
+            let mutable observerFailed = false
+            let emit (result : 'Result) =
+                // Per the observable contract the subscription is torn down as soon as OnNext throws, so nothing
+                // further is delivered; the enumeration is stopped and drained so no slot or enumerator is leaked
+                if not cancellationToken.IsCancellationRequested && not observerFailed then
+                    try
+                        observer.OnNext result
+                    with _ ->
+                        observerFailed <- true
+                        enumerationCancellation.Cancel ()
+            let finished () =
+                match ended with
+                | ValueSome struct (started, _, _) -> settled = started
+                | ValueNone -> false
+            while not (finished ()) do
+                let! event = events.Reader.ReadAsync ()
+                match event with
+                | Resolved result ->
+                    emit result
+                    slots.Release () |> ignore
+                    settled <- settled + 1
+                | ResolutionFailed ex ->
+                    // The first failure stops the enumeration; it is delivered once every started resolution has settled
+                    if ended.IsNone then
+                        if resolutionFailureBeforeEnd.IsNone then
+                            resolutionFailureBeforeEnd <- ValueSome ex
+                    elif resolutionFailureAfterEnd.IsNone then
+                        resolutionFailureAfterEnd <- ValueSome ex
+                    enumerationCancellation.Cancel ()
+                    slots.Release () |> ignore
+                    settled <- settled + 1
+                | EnumerationEnded (started, enumerationFailure, disposalFailure) ->
+                    ended <- ValueSome struct (started, enumerationFailure, disposalFailure)
+            do! pullTask
+            let failure =
+                match ended with
+                | ValueSome struct (_, enumerationFailure, disposalFailure) ->
+                    // A resolution failure that stopped the enumeration outranks what the enumeration reported when it
+                    // ended; a failure of the source itself outranks a resolution that failed only afterwards, and
+                    // a disposal failure is reported only when there was nothing else
+                    resolutionFailureBeforeEnd
+                    |> ValueOption.orElse enumerationFailure
+                    |> ValueOption.orElse resolutionFailureAfterEnd
+                    |> ValueOption.orElse disposalFailure
+                | ValueNone -> ValueNone
+            match failure with
             // A failure caused by disposing the subscription has no observer left to be delivered to
             | ValueSome ex when not cancellationToken.IsCancellationRequested -> emit (onFailure ex)
             | _ -> ()
-            if not cancellationToken.IsCancellationRequested then
-                lock sync (fun () -> observer.OnCompleted ())
+            if not cancellationToken.IsCancellationRequested && not observerFailed then
+                observer.OnCompleted ()
         }
-        Observable.Create<'Result>(
-            Func<IObserver<'Result>, CancellationToken, Task>(fun observer cancellationToken -> enumerate observer cancellationToken)
-        )
-
-    /// <summary>
-    /// Wraps every element into <see cref="ValueSome"/> and emits <see cref="ValueNone"/> when the source completes.
-    /// </summary>
-    /// <remarks>
-    /// A consumer can handle the completion like a regular element, for example to send a final message
-    /// before the completion itself is processed.
-    /// </remarks>
-    let withCompletionMarker (source : IObservable<'T>) : IObservable<'T voption> =
-        Observable.Concat (Observable.Select (source, fun item -> ValueSome item), Observable.Return ValueNone)
+        Observable.Create<'Result>(Func<IObserver<'Result>, CancellationToken, Task>(fun observer cancellationToken -> run observer cancellationToken))
 
 /// <summary>
 /// Functions for consuming <see cref="IAsyncEnumerable{T}"/> from <see cref="Async"/> computations.

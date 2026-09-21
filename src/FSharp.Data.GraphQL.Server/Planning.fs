@@ -161,11 +161,21 @@ let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: Object
         | ValueSome (Abstract conditionalType) -> schema.IsPossibleType conditionalType objectType
         | _ -> false
 
+/// <summary>
+/// Whether an <c>@defer</c> or <c>@stream</c> directive applies as far as planning can tell: it is disabled only by a
+/// literal <c>if: false</c>; an <c>if</c> given through a variable is decided at execution, so the field is planned
+/// as deferred.
+/// </summary>
+let private isEnabledAtPlanning (directive : Directive) =
+    match directive.Arguments |> List.vtryFind (fun argument -> argument.Name = "if") with
+    | ValueSome { Value = BooleanValue false } -> false
+    | _ -> true
+
 let private isDeferredField (field: Field) =
-    field.Directives |> List.exists(fun d -> d.Name = "defer")
+    field.Directives |> List.exists (fun d -> d.Name = "defer" && isEnabledAtPlanning d)
 
 let private isStreamedField (field : Field) =
-    field.Directives |> List.exists(fun d -> d.Name = "stream")
+    field.Directives |> List.exists (fun d -> d.Name = "stream" && isEnabledAtPlanning d)
 
 let private getStreamBufferMode (field : Field) =
     let cast argName value =

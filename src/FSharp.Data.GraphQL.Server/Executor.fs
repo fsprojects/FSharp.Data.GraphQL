@@ -102,7 +102,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     let eval (executionPlan: ExecutionPlan, data: 'Root voption, variables: ImmutableDictionary<string, JsonElement>, getInputContext : InputExecutionContextProvider): Async<GQLExecutionResult> =
         let documentId = executionPlan.DocumentId
         let prepareOutput res =
-            match res with
+            match res.Content with
             | RequestError errs -> GQLExecutionResult.Error (documentId, errs, res.Metadata)
             | Direct (data, errors) -> GQLExecutionResult.Direct (documentId, data |> ValueOption.toObj, errors, res.Metadata)
             | Deferred (data, errors, deferred) -> GQLExecutionResult.Deferred (documentId, data, errors, deferred, res.Metadata)

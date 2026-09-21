@@ -164,7 +164,7 @@ type SchemaConfig =
                     description = "An optional argument used to buffer stream results. " +
                         "When it's value is greater than zero, stream results will be buffered until item count reaches this value, then sent to the client. " +
                         "After that, starts buffering again until all results are streamed.") |]
-            { StreamDirective with Args = args }
+            { StreamDirective with Args = Array.append StreamDirective.Args args }
         { SchemaConfig.Default with
             Directives = [ IncludeDirective; SkipDirective; DeferDirective; streamDirective; LiveDirective ] }
 
