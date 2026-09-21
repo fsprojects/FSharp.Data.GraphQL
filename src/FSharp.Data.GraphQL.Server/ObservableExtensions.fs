@@ -9,7 +9,9 @@ open System.Threading.Channels
 open System.Threading.Tasks
 open FSharp.Control.Reactive.Observable
 
-/// An outcome of the resolution loop of <c>ofAsyncEnumerableResolved</c>, consumed by its single emitter.
+/// <summary>
+/// An outcome of the resolution loop of <see cref="ofAsyncEnumerableResolved"/>, consumed by its single emitter.
+/// </summary>
 [<Struct>]
 type internal ResolutionEvent<'Result> =
     /// A resolution produced its result.

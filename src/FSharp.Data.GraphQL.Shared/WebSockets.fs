@@ -50,7 +50,9 @@ type PendingResult = {
 type IncrementalResult = {
     /// Gets the id of the deferred or streamed field this payload belongs to.
     Id : string
+    /// <summary>
     /// Gets the path below the announced path where <see cref="Data"/> merges, when it is not the announced path itself.
+    /// </summary>
     SubPath : FieldPath Skippable
     /// <summary>Gets the deferred data, when the payload carries deferred data.</summary>
     /// <remarks>
@@ -122,7 +124,7 @@ type SubscriptionExecutionResult = {
         HasNext = Skip
     }
 
-    /// Creates a payload that carries only errors, omitting the top-level <c>data</c> property.
+    /// <summary>Creates a payload that carries only errors, omitting the top-level <c>data</c> property.</summary>
     static member CreateErrors (errors : GQLProblemDetails list) = {
         Data = Skip
         Errors = Include errors
@@ -217,10 +219,10 @@ type ServerMessage =
     /// Marks an operation as complete.
     | Complete of id : string
 
-/// The <c>graphql-transport-ws</c> protocol as the client negotiates it.
+/// <summary>The <c>graphql-transport-ws</c> protocol as the client negotiates it.</summary>
 module GraphQLTransportWS =
 
-    /// The WebSocket sub-protocol name of <c>graphql-transport-ws</c>.
+    /// <summary>The WebSocket sub-protocol name of <c>graphql-transport-ws</c>.</summary>
     [<Literal>]
     let SubProtocol = "graphql-transport-ws"
 

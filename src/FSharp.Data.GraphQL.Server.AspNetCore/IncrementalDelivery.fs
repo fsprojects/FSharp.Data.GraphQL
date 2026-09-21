@@ -351,9 +351,11 @@ type IncrementalDelivery () =
                 // Already closed by a preceding stream failure
                 ValueNone
 
+    /// <summary>
     /// The final payload of the delivery: completes every field the client learned of that has not completed on
     /// its own (normally none - a <c>@live</c> field is the only field this codebase produces that never completes by
     /// itself) and reports that no further payloads follow.
+    /// </summary>
     member _.Finish () : SubscriptionExecutionResult =
         let stillOpen =
             fields.Values

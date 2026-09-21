@@ -319,8 +319,10 @@ let deferResults path (res : ResolverResult<obj>) : IObservable<GQLDeferredRespo
     let ownResult, nested = ownDeferredResult path res
     withNestedEvents ownResult nested ValueNone
 
+/// <summary>
 /// As <see cref="deferResults"/>, followed by a <see cref="DeferredCompleted"/> for path once that field's own
 /// payload has been delivered; any nested deferred or streamed fields keep using their own pending ids afterwards.
+/// </summary>
 let private deferResultsCompleted path (res : ResolverResult<obj>) : IObservable<GQLDeferredResponseContent> =
     let ownResult, nested = ownDeferredResult path res
     let completed = Observable.singleton (DeferredCompleted (normalizeErrorPath path))
