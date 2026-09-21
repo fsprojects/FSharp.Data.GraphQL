@@ -349,27 +349,28 @@ let private deferredFragmentEntry (directive : Directive) (fragmentId : int) (in
 
 /// A field selected directly on the object is executed with it, so a deferred fragment that also selects it
 /// delivers only its other fields, and whatever the fragment selects under that field is selected on the object's
-/// own field instead; a fragment left without fields delivers nothing and is dropped
+/// own field instead, wherever in the selection the fragment stands; a fragment left without fields delivers nothing
+/// and is dropped
 let private withoutDirectlySelectedFields (plannedFields : ExecutionInfo list) =
-    let directlySelected =
-        plannedFields
-        |> List.vchoose (fun field ->
-            match field.Kind with
-            | ResolveDeferredFragment _ -> ValueNone
-            | _ -> ValueSome field.Identifier)
-        |> Set.ofList
     let ownFields, fragments =
         plannedFields
-        |> List.fold (fun (ownFields, fragments) field ->
+        |> List.partition (fun field ->
             match field.Kind with
+            | ResolveDeferredFragment _ -> false
+            | _ -> true)
+    let directlySelected = ownFields |> List.map _.Identifier |> Set.ofList
+    let ownFields, fragments =
+        ((ownFields, []), fragments)
+        ||> List.fold (fun (ownFields, fragments) fragment ->
+            match fragment.Kind with
             | ResolveDeferredFragment (label, fragmentId, enabled, fragmentFields) ->
                 let overlapping, remaining =
                     fragmentFields |> List.partition (fun fragmentField -> directlySelected.Contains fragmentField.Identifier)
                 let ownFields = deepMerge ownFields overlapping
                 match remaining with
                 | [] -> ownFields, fragments
-                | remaining -> ownFields, { field with Kind = ResolveDeferredFragment (label, fragmentId, enabled, remaining) } :: fragments
-            | _ -> [ yield! ownFields; yield field ], fragments) ([], [])
+                | remaining -> ownFields, { fragment with Kind = ResolveDeferredFragment (label, fragmentId, enabled, remaining) } :: fragments
+            | _ -> ownFields, fragments)
     [ yield! ownFields; yield! List.rev fragments ]
 
 let rec private plan (ctx : PlanningContext) (info : ExecutionInfo) : ExecutionInfo =
@@ -396,10 +397,11 @@ let rec private plan (ctx : PlanningContext) (info : ExecutionInfo) : ExecutionI
 and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) (info: ExecutionInfo) (scope : SelectionScope) : ExecutionInfo =
     let parentDef = downcast info.ReturnDef
     /// The fields of a fragment merged into the object's selection, or, when the fragment is deferred, delivered
-    /// later as one payload of the object
-    let withFragmentFields (fields : ExecutionInfo list) (directives : Directive list) (fragmentFields : ExecutionInfo list) =
+    /// later as one payload of the object; the entry carries the fragment's own includer, so `@skip`/`@include` on
+    /// the spread or inline fragment decide whether it is delivered at all
+    let withFragmentFields (fields : ExecutionInfo list) (fragmentInfo : ExecutionInfo) (directives : Directive list) (fragmentFields : ExecutionInfo list) =
         match deferredFragmentDirective directives with
-        | ValueSome directive -> [ yield! fields; yield deferredFragmentEntry directive (allocateFragmentId scope) info fragmentFields ]
+        | ValueSome directive -> [ yield! fields; yield deferredFragmentEntry directive (allocateFragmentId scope) fragmentInfo fragmentFields ]
         | ValueNone -> deepMerge fields fragmentFields // filter out already existing fields
     let plannedFields =
         selectionSet
@@ -431,13 +433,13 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                         // TODO: Check if the path is correctly defined
                         let fragmentInfo = planSelection ctx fragment.SelectionSet updatedInfo scope
                         let fragmentFields = getSelectionFrag fragmentInfo.Kind
-                        withFragmentFields fields spread.Directives fragmentFields
+                        withFragmentFields fields updatedInfo spread.Directives fragmentFields
                     | _ -> fields
             | InlineFragment fragment when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                  // retrieve fragment data just as it was normal selection set
                  let fragmentInfo = planSelection ctx fragment.SelectionSet updatedInfo scope
                  let fragmentFields = getSelectionFrag fragmentInfo.Kind
-                 withFragmentFields fields fragment.Directives fragmentFields
+                 withFragmentFields fields updatedInfo fragment.Directives fragmentFields
             | _ -> fields
         ) []
     { info with Kind = SelectFields (withoutDirectlySelectedFields plannedFields) }
@@ -445,7 +447,7 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
 and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list) (info : ExecutionInfo) (scope : SelectionScope) typeCondition : ExecutionInfo =
     /// The fields of a fragment merged into every type's selection, or, when the fragment is deferred, delivered
     /// later as one payload of the object, whatever its concrete type turns out to be
-    let withFragmentFields (fields : Map<string, ExecutionInfo list>) (directives : Directive list) (fragmentFields : Map<string, ExecutionInfo list>) =
+    let withFragmentFields (fields : Map<string, ExecutionInfo list>) (fragmentInfo : ExecutionInfo) (directives : Directive list) (fragmentFields : Map<string, ExecutionInfo list>) =
         match deferredFragmentDirective directives with
         | ValueSome directive ->
             let fragmentId = allocateFragmentId scope
@@ -453,7 +455,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
             // there is nothing to merge
             (fields, fragmentFields)
             ||> Map.fold (fun fields typeName typeFields ->
-                let entry = deferredFragmentEntry directive fragmentId info typeFields
+                let entry = deferredFragmentEntry directive fragmentId fragmentInfo typeFields
                 fields
                 |> Map.change typeName (function
                     | Some existing -> Some [ yield! existing; yield entry ]
@@ -484,13 +486,13 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                         // Retrieve fragment data just as it was normal selection set
                         let fragmentInfo = planAbstraction ctx fragment.SelectionSet innerData scope fragment.TypeCondition
                         let fragmentFields = getAbstractionFrag fragmentInfo.Kind
-                        withFragmentFields fields spread.Directives fragmentFields
+                        withFragmentFields fields innerData spread.Directives fragmentFields
                     | _ -> fields
             | InlineFragment fragment ->
                 // Retrieve fragment data just as it was normal selection set
                 let fragmentInfo = planAbstraction ctx fragment.SelectionSet innerData scope fragment.TypeCondition
                 let fragmentFields = getAbstractionFrag fragmentInfo.Kind
-                withFragmentFields fields fragment.Directives fragmentFields
+                withFragmentFields fields innerData fragment.Directives fragmentFields
         ) Map.empty
     // Always return ResolveAbstraction kind, even for empty maps.
     // An empty map is a valid state representing "no fields selected for this type condition."

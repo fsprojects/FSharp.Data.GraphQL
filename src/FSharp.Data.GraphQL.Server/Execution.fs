@@ -867,7 +867,8 @@ and executeObjectFields
         | Error errs -> asyncVal { return Error (errs |> List.map GQLProblemDetails.OfError) }
 
     // A deferred fragment stands among the fields of the object; it contributes nothing to the object's own value
-    // and is delivered afterwards, its fields resolved together against the same object
+    // and is delivered afterwards, its fields resolved together against the same object, unless `@skip`/`@include`
+    // on the fragment excludes it
     let ownFields, deferredFragments =
         fields
         |> inlineDisabledFragments ctx.Variables
@@ -875,6 +876,8 @@ and executeObjectFields
             match field.Kind with
             | ResolveDeferredFragment _ -> false
             | _ -> true)
+    let deferredFragments =
+        deferredFragments |> List.filter (fun fragment -> fragment.Include ctx.Variables <> Ok false)
 
     let executeDeferredFragment (deferred : IObservable<GQLDeferredResponseContent> voption) (fragment : ExecutionInfo) =
         match fragment.Kind with

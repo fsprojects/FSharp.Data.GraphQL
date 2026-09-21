@@ -2024,6 +2024,73 @@ let ``A deferred fragment selecting under a field selected directly adds its sel
         data |> equals (upcast expectedDirect)
 
 [<Fact>]
+let ``A deferred fragment standing before the field it selects under still adds its selection to that field`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "innerList", upcast [
+                    NameValueLookup.ofList [
+                        "a", upcast "Inner A"
+                        "innerList", upcast [
+                            NameValueLookup.ofList [ "a", upcast "Inner B" ]
+                            NameValueLookup.ofList [ "a", upcast "Inner C" ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+    let query = parse """{
+        testData {
+            ... @defer {
+                innerList {
+                    innerList {
+                        a
+                    }
+                }
+            }
+            innerList {
+                a
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+
+[<Fact>]
+let ``A deferred fragment skipped with a directive is not delivered`` () =
+    let query = parse """{
+        testData {
+            id
+            ... @defer @skip(if: true) {
+                a
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast NameValueLookup.ofList [ "testData", upcast NameValueLookup.ofList [ "id", upcast "1" ] ])
+
+[<Fact>]
+let ``A deferred root fragment excluded with a directive is not delivered`` () =
+    let query = parse """{
+        testData {
+            id
+        }
+        ... @defer @include(if: false) {
+            nullableTestData {
+                id
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast NameValueLookup.ofList [ "testData", upcast NameValueLookup.ofList [ "id", upcast "1" ] ])
+
+[<Fact>]
 let ``A fragment spread directly is resolved with the object whichever spread of it comes first`` () =
     let expectedDirect =
         NameValueLookup.ofList [
