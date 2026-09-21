@@ -425,6 +425,12 @@ let rec private compose inputContext vars ir =
 /// Get unrelated tracks from current info and its children (if any)
 /// Returned set of trackers ALWAYS consists of Direct trackers only
 let rec private getTracks alreadyFound info =
+    match info.Kind with
+    // A deferred fragment has no resolver of its own: its fields are tracked as fields of the object containing it
+    | ResolveDeferredFragment (_, _, _, fields) -> IR(info, Set.empty, fields |> List.map (getTracks alreadyFound))
+    | _ -> getFieldTracks alreadyFound info
+
+and private getFieldTracks alreadyFound info =
     let expr =
         match info.Definition.Resolve.Expr with
         | (Patterns.WithValue(_,_, (Patterns.Lambda(_, Patterns.Lambda(_, expr))))) -> expr
@@ -434,6 +440,7 @@ let rec private getTracks alreadyFound info =
         |> Set.map(fun track -> Direct(track, []))
         |> flip Set.difference alreadyFound
     match info.Kind with
+    | ResolveDeferredFragment _ -> getTracks alreadyFound info
     | ResolveDeferred inner -> getTracks alreadyFound inner
     | ResolveStreamed (inner,_) -> getTracks alreadyFound inner
     | ResolveLive inner -> getTracks alreadyFound inner

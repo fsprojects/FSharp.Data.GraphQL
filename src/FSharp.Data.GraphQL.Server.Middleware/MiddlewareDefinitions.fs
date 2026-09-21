@@ -57,6 +57,7 @@ type internal QueryWeightMiddleware (threshold : float, reportToMetadata : bool)
                         | ResolveDeferred info -> checkThreshold current (info :: xs)
                         | ResolveStreamed (info, _) -> checkThreshold current (info :: xs)
                         | ResolveLive info -> checkThreshold current (info :: xs)
+                        | ResolveDeferredFragment (_, _, _, fields) -> checkThreshold current [ yield! fields; yield! xs ]
             checkThreshold 0.0 fields
         let error (ctx : ExecutionContext) =
             GQLExecutionResult.ErrorAsync (
