@@ -236,7 +236,9 @@ let private getAbstractionFrag = function
         Debug.Fail "Must be prevented by validation"
         raise (InvalidOperationException $"Expected a fragment to be planned as {nameof ResolveAbstraction}, but it was planned as {kindName kind}")
 
-let rec private deepMerge (xs: ExecutionInfo list) (ys: ExecutionInfo list) =
+/// The fields of both selections as one: a field selected by both has the selections under it merged, in the order
+/// of the first selection, and the fields only the second selects follow.
+let rec internal deepMerge (xs: ExecutionInfo list) (ys: ExecutionInfo list) =
      let rec merge (x: ExecutionInfo) (y: ExecutionInfo) =
          match x.Kind, y.Kind with
          | ResolveValue, ResolveValue -> x
@@ -263,20 +265,53 @@ let rec private deepMerge (xs: ExecutionInfo list) (ys: ExecutionInfo list) =
          |> List.filter(fun y -> not <| List.exists(fun x -> x.Identifier = y.Identifier) xs')
      xs' @ ys'
 
-/// The state of planning one selection set together with the fragments spread into it: the fragments already
-/// planned, each spread once, and the next id of a deferred fragment, unique among the deferred fragments of the
-/// selection set.
+/// <summary>
+/// The state of planning one selection set together with the fragments spread into it: the fragments already spread
+/// into the object's own selection, the fragments already spread deferred, and the next id of a deferred fragment,
+/// unique among the deferred fragments of the selection set.
+/// </summary>
+/// <remarks>
+/// A fragment is spread once. A deferred spread never stands in for a direct spread of the same fragment, whichever
+/// comes first in the document, so the two are tracked apart: a direct spread is skipped only after a direct spread,
+/// a deferred spread after a spread of either kind.
+/// </remarks>
 type private SelectionScope = {
     mutable VisitedFragments : string list
+    mutable DeferredFragments : string list
     mutable NextFragmentId : int
 }
 
-let private newScope () = { VisitedFragments = []; NextFragmentId = 0 }
+/// The scope of a selection set no fragment was spread into yet.
+let private newScope () = { VisitedFragments = []; DeferredFragments = []; NextFragmentId = 0 }
 
-/// The @defer directive of a fragment spread or inline fragment, when it applies
+/// <summary>
+/// Whether the fragment spread is planned, recording it in the scope when it is, as documented on
+/// <see cref="SelectionScope"/>.
+/// </summary>
+let private tryVisitSpread (scope : SelectionScope) (spreadName : string) (isDeferred : bool) =
+    let spreadDirectly = scope.VisitedFragments |> List.contains spreadName
+    if isDeferred then
+        if spreadDirectly || scope.DeferredFragments |> List.contains spreadName then
+            false
+        else
+            scope.DeferredFragments <- spreadName :: scope.DeferredFragments
+            true
+    elif spreadDirectly then
+        false
+    else
+        scope.VisitedFragments <- spreadName :: scope.VisitedFragments
+        true
+
+/// <summary>
+/// The <c>@defer</c> directive of a fragment spread or inline fragment, when it applies as far as planning can tell.
+/// </summary>
 let private deferredFragmentDirective (directives : Directive list) =
     directives |> List.vtryFind (fun d -> d.Name = "defer" && isEnabledAtPlanning d)
 
+/// <summary>
+/// The <c>label</c> argument of the directive: a string literal, as validation requires, so there is none for any
+/// other value.
+/// </summary>
 let private directiveLabel (directive : Directive) =
     directive.Arguments
     |> List.vtryFind (fun argument -> argument.Name = "label")
@@ -285,6 +320,21 @@ let private directiveLabel (directive : Directive) =
         | StringValue label -> ValueSome label
         | _ -> ValueNone)
 
+/// <summary>
+/// Whether the directive is enabled with the variables of a request: a literal <c>if</c> was decided by
+/// <see cref="isEnabledAtPlanning"/>, so only an <c>if</c> given through a variable is evaluated here, the same way
+/// the execution engine evaluates it for a deferred field.
+/// </summary>
+let private directiveEnabledAtExecution (directive : Directive) : Includer =
+    match directive.Arguments |> List.vtryFind (fun argument -> argument.Name = "if") with
+    | ValueSome { Value = VariableName name } ->
+        fun variables ->
+            match variables.TryGetValue name with
+            | true, (:? bool as enabled) -> Ok enabled
+            | _ -> Ok true
+    | _ -> incl
+
+/// The next id of a deferred fragment of the selection set.
 let private allocateFragmentId (scope : SelectionScope) =
     let fragmentId = scope.NextFragmentId
     scope.NextFragmentId <- fragmentId + 1
@@ -295,26 +345,32 @@ let private allocateFragmentId (scope : SelectionScope) =
 let private deferredFragmentEntry (directive : Directive) (fragmentId : int) (info : ExecutionInfo) (fragmentFields : ExecutionInfo list) =
     { info with
         Identifier = $"@defer#{fragmentId}"
-        Kind = ResolveDeferredFragment (directiveLabel directive, fragmentId, fragmentFields) }
+        Kind = ResolveDeferredFragment (directiveLabel directive, fragmentId, directiveEnabledAtExecution directive, fragmentFields) }
 
 /// A field selected directly on the object is executed with it, so a deferred fragment that also selects it
-/// delivers only its other fields; a fragment left without fields delivers nothing and is dropped
+/// delivers only its other fields, and whatever the fragment selects under that field is selected on the object's
+/// own field instead; a fragment left without fields delivers nothing and is dropped
 let private withoutDirectlySelectedFields (plannedFields : ExecutionInfo list) =
     let directlySelected =
         plannedFields
-        |> List.choose (fun field ->
+        |> List.vchoose (fun field ->
             match field.Kind with
-            | ResolveDeferredFragment _ -> None
-            | _ -> Some field.Identifier)
+            | ResolveDeferredFragment _ -> ValueNone
+            | _ -> ValueSome field.Identifier)
         |> Set.ofList
-    plannedFields
-    |> List.choose (fun field ->
-        match field.Kind with
-        | ResolveDeferredFragment (label, fragmentId, fragmentFields) ->
-            match fragmentFields |> List.filter (fun fragmentField -> not (directlySelected.Contains fragmentField.Identifier)) with
-            | [] -> None
-            | remaining -> Some { field with Kind = ResolveDeferredFragment (label, fragmentId, remaining) }
-        | _ -> Some field)
+    let ownFields, fragments =
+        plannedFields
+        |> List.fold (fun (ownFields, fragments) field ->
+            match field.Kind with
+            | ResolveDeferredFragment (label, fragmentId, enabled, fragmentFields) ->
+                let overlapping, remaining =
+                    fragmentFields |> List.partition (fun fragmentField -> directlySelected.Contains fragmentField.Identifier)
+                let ownFields = deepMerge ownFields overlapping
+                match remaining with
+                | [] -> ownFields, fragments
+                | remaining -> ownFields, { field with Kind = ResolveDeferredFragment (label, fragmentId, enabled, remaining) } :: fragments
+            | _ -> [ yield! ownFields; yield field ], fragments) ([], [])
+    [ yield! ownFields; yield! List.rev fragments ]
 
 let rec private plan (ctx : PlanningContext) (info : ExecutionInfo) : ExecutionInfo =
     match info.ReturnDef with
@@ -343,7 +399,7 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
     /// later as one payload of the object
     let withFragmentFields (fields : ExecutionInfo list) (directives : Directive list) (fragmentFields : ExecutionInfo list) =
         match deferredFragmentDirective directives with
-        | ValueSome directive -> fields @ [ deferredFragmentEntry directive (allocateFragmentId scope) info fragmentFields ]
+        | ValueSome directive -> [ yield! fields; yield deferredFragmentEntry directive (allocateFragmentId scope) info fragmentFields ]
         | ValueNone -> deepMerge fields fragmentFields // filter out already existing fields
     let plannedFields =
         selectionSet
@@ -366,10 +422,9 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     | Planned -> fields @ [ executionPlan ]
             | FragmentSpread spread ->
                 let spreadName = spread.Name
-                if scope.VisitedFragments |> List.exists (fun name -> name = spreadName)
+                if not (tryVisitSpread scope spreadName (deferredFragmentDirective spread.Directives).IsSome)
                 then fields // Fragment already found
                 else
-                    scope.VisitedFragments <- spreadName :: scope.VisitedFragments
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                         // Retrieve fragment data just as it was normal selection set
@@ -394,9 +449,15 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
         match deferredFragmentDirective directives with
         | ValueSome directive ->
             let fragmentId = allocateFragmentId scope
-            fragmentFields
-            |> Map.map (fun _ typeFields -> [ deferredFragmentEntry directive fragmentId info typeFields ])
-            |> Map.merge (fun _ -> deepMerge) fields
+            // One entry per concrete type, appended to that type's fields: an entry's identifier is no field's, so
+            // there is nothing to merge
+            (fields, fragmentFields)
+            ||> Map.fold (fun fields typeName typeFields ->
+                let entry = deferredFragmentEntry directive fragmentId info typeFields
+                fields
+                |> Map.change typeName (function
+                    | Some existing -> Some [ yield! existing; yield entry ]
+                    | None -> Some [ entry ]))
         | ValueNone -> Map.merge (fun _ -> deepMerge) fields fragmentFields // Filter out already existing fields
     let plannedTypeFields =
         selectionSet
@@ -415,10 +476,9 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                 | Planned -> Map.merge (fun _ -> deepMerge) fields infoMap
             | FragmentSpread spread ->
                 let spreadName = spread.Name
-                if scope.VisitedFragments |> List.exists (fun name -> name = spreadName)
+                if not (tryVisitSpread scope spreadName (deferredFragmentDirective spread.Directives).IsSome)
                 then fields // Fragment already found
                 else
-                    scope.VisitedFragments <- spreadName :: scope.VisitedFragments
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) ->
                         // Retrieve fragment data just as it was normal selection set

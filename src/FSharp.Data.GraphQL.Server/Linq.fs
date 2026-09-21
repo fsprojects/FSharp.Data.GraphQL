@@ -427,7 +427,7 @@ let rec private compose inputContext vars ir =
 let rec private getTracks alreadyFound info =
     match info.Kind with
     // A deferred fragment has no resolver of its own: its fields are tracked as fields of the object containing it
-    | ResolveDeferredFragment (_, _, fields) -> IR(info, Set.empty, fields |> List.map (getTracks alreadyFound))
+    | ResolveDeferredFragment (_, _, _, fields) -> IR(info, Set.empty, fields |> List.map (getTracks alreadyFound))
     | _ -> getFieldTracks alreadyFound info
 
 and private getFieldTracks alreadyFound info =

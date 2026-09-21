@@ -713,7 +713,7 @@ and ExecutionInfo = {
             fields
             |> Seq.collect (fun f ->
                 match f.Kind with
-                | ResolveDeferredFragment (_, _, fragmentFields) -> flattenDeferredFragments fragmentFields
+                | ResolveDeferredFragment (_, _, _, fragmentFields) -> flattenDeferredFragments fragmentFields
                 | _ -> Seq.singleton f)
         let rec path info segments =
             match segments with
@@ -729,7 +729,7 @@ and ExecutionInfo = {
                 | ResolveValue -> ValueNone
                 | ResolveCollection inner -> path inner segments
                 | SelectFields fields
-                | ResolveDeferredFragment (_, _, fields) ->
+                | ResolveDeferredFragment (_, _, _, fields) ->
                     fields
                     |> flattenDeferredFragments
                     |> Seq.vtryFind (fun f -> f.Identifier = head)
@@ -767,13 +767,15 @@ and ExecutionInfo = {
                 sb.Append("ResolveLive: ").AppendLine (nameAs info)
                 |> ignore
                 str (indent + 1) sb inner
-            | ResolveDeferredFragment (label, fragmentId, fields) ->
+            | ResolveDeferredFragment (label, fragmentId, _, fields) ->
                 pad indent sb
                 let labelText =
                     match label with
                     | ValueSome label -> $" (label: {label})"
                     | ValueNone -> ""
-                sb.Append("ResolveDeferredFragment: ").AppendLine ($"#{fragmentId}{labelText}")
+                sb
+                |> _.Append("ResolveDeferredFragment: ")
+                |> _.AppendLine($"#{fragmentId}{labelText}")
                 |> ignore
                 fields |> List.iter (str (indent + 1) sb)
             | ResolveStreamed (inner, mode) ->
@@ -828,9 +830,13 @@ and ExecutionInfoKind =
     | ResolveStreamed of ExecutionInfo * BufferedStreamOptions
     /// Reduce the current field as a live query.
     | ResolveLive of ExecutionInfo
-    /// Reduce a fragment deferred with @defer: its fields are delivered later, as one payload
-    /// of the object containing them, identified within that object's selection by the id.
-    | ResolveDeferredFragment of label : string voption * fragmentId : int * fields : ExecutionInfo list
+    /// <summary>
+    /// Reduce a fragment deferred with <c>@defer</c>: its fields are delivered later, as one payload of the object
+    /// containing them, identified within that object's selection by the id. When the directive's <c>if</c> argument
+    /// evaluates to <see langword="false"/> with the variables of the request, the fields are resolved with the object
+    /// instead, as if the directive were absent.
+    /// </summary>
+    | ResolveDeferredFragment of label : string voption * fragmentId : int * enabled : Includer * fields : ExecutionInfo list
 
 /// Buffered stream options. Used to specify how the buffer will behavior in a stream.
 and BufferedStreamOptions = {

@@ -357,6 +357,27 @@ let private deferredFragmentEvents
     | ValueSome _ -> AnnouncedEvents.announced (DeferredFragmentPending (fragmentPath, label, fragmentId)) events
     | ValueNone -> events
 
+/// <summary>
+/// The fields with every deferred fragment whose <c>if</c> argument is <see langword="false"/> with the variables of
+/// the request replaced by its own fields, merged into the selection as if the directive were absent; a fragment
+/// still deferred stays among the fields as it is.
+/// </summary>
+let private inlineDisabledFragments (variables : ImmutableDictionary<string, obj>) (fields : ExecutionInfo list) =
+    let rec inlineDisabled (fields : ExecutionInfo list) =
+        ([], fields)
+        ||> List.fold (fun fields field ->
+            match field.Kind with
+            | ResolveDeferredFragment (_, _, enabled, fragmentFields) when enabled variables = Ok false ->
+                Planning.deepMerge fields (inlineDisabled fragmentFields)
+            | _ -> [ yield! fields; yield field ])
+    inlineDisabled fields
+
+/// The root fields a deferred fragment at the operation's root selects, those of the fragments nested in it included.
+let rec private rootFieldsOfFragment (info : ExecutionInfo) =
+    match info.Kind with
+    | ResolveDeferredFragment (_, _, _, fragmentFields) -> fragmentFields |> Seq.collect rootFieldsOfFragment
+    | _ -> Seq.singleton info
+
 /// Collect together an array of results using the appropriate execution strategy.
 let collectFields
     (strategy : ExecutionStrategy)
@@ -849,6 +870,7 @@ and executeObjectFields
     // and is delivered afterwards, its fields resolved together against the same object
     let ownFields, deferredFragments =
         fields
+        |> inlineDisabledFragments ctx.Variables
         |> List.partition (fun field ->
             match field.Kind with
             | ResolveDeferredFragment _ -> false
@@ -856,7 +878,7 @@ and executeObjectFields
 
     let executeDeferredFragment (deferred : IObservable<GQLDeferredResponseContent> voption) (fragment : ExecutionInfo) =
         match fragment.Kind with
-        | ResolveDeferredFragment (label, fragmentId, fragmentFields) ->
+        | ResolveDeferredFragment (label, fragmentId, _, fragmentFields) ->
             let events =
                 executeObjectFields fragmentFields objName objDef inputContext ctx path value
                 |> deferredFragmentEvents label fragmentId (normalizeErrorPath path)
@@ -947,7 +969,7 @@ let private executeQueryOrMutation
     /// value once the root's own fields have been delivered
     let executeRootDeferredFragment (deferred : IObservable<GQLDeferredResponseContent> voption) (info : ExecutionInfo) =
         match info.Kind with
-        | ResolveDeferredFragment (label, fragmentId, fragmentFields) ->
+        | ResolveDeferredFragment (label, fragmentId, _, fragmentFields) ->
             let rootCtx = {
                 ExecutionInfo = info
                 Context = ctx
@@ -984,10 +1006,21 @@ let private executeQueryOrMutation
             match getArgumentValues argDefs info.Ast.Arguments ctx.GetInputContext ctx.Variables with
             | Ok args -> coerced.Add (i, struct (args, []))
             | Error errs -> coerced.Add (i, struct (Map.empty, errs)))
-        let coercionErrors =
-            coerced.Values
-            |> Seq.collect (fun struct (_, errs) -> errs)
-            |> Seq.toList
+        // The root fields of a deferred fragment are validated the same way, so that an argument one of them rejects
+        // fails the request before any root resolver runs instead of surfacing later as a deferred execution error;
+        // the fragment coerces them again when it executes, since it resolves its fields as any object's
+        let fragmentCoercionErrors =
+            deferredFragments
+            |> Seq.collect (snd >> rootFieldsOfFragment)
+            |> Seq.collect (fun info ->
+                let argDefs = ctx.FieldExecuteMap.GetArgs (ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
+                match getArgumentValues argDefs info.Ast.Arguments ctx.GetInputContext ctx.Variables with
+                | Ok _ -> []
+                | Error errs -> errs)
+        let coercionErrors = [
+            yield! coerced.Values |> Seq.collect (fun struct (_, errs) -> errs)
+            yield! fragmentCoercionErrors
+        ]
         if not coercionErrors.IsEmpty then
             return GQLExecutionResult.Error (documentId, coercionErrors, ctx.Metadata)
         else
@@ -1194,6 +1227,8 @@ let internal coerceVariables
 let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLExecutionResult> =
     let includeResults =
         ctx.ExecutionPlan.Fields
+        // A root fragment disabled with `if: false` through a variable contributes its fields to the root selection
+        |> inlineDisabledFragments ctx.Variables
         |> List.map (fun info ->
             info.Include ctx.Variables
             |> Result.map (fun include -> struct (info, include)))

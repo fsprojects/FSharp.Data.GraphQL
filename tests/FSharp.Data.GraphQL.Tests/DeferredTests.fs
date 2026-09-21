@@ -1988,6 +1988,141 @@ let ``A field selected both directly and in a deferred fragment is executed with
         ]
 
 [<Fact>]
+let ``A deferred fragment selecting under a field selected directly adds its selection to that field`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "innerList", upcast [
+                    NameValueLookup.ofList [
+                        "a", upcast "Inner A"
+                        "innerList", upcast [
+                            NameValueLookup.ofList [ "a", upcast "Inner B" ]
+                            NameValueLookup.ofList [ "a", upcast "Inner C" ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+    let query = parse """{
+        testData {
+            innerList {
+                a
+            }
+            ... @defer {
+                innerList {
+                    innerList {
+                        a
+                    }
+                }
+            }
+        }
+    }"""
+    let result = executor.AsyncExecute(query, getMockInputContext) |> sync
+    // The fragment selects nothing but the field the object selects itself, so it delivers nothing
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expectedDirect)
+
+[<Fact>]
+let ``A fragment spread directly is resolved with the object whichever spread of it comes first`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "a", upcast "Apple"
+                "b", upcast "Banana"
+            ]
+        ]
+    let execute (selection : string) =
+        let query = parse $"""query {{
+            testData {{
+                {selection}
+            }}
+        }}
+        fragment Rest on Data {{
+            a
+            b
+        }}"""
+        executor.AsyncExecute(query, getMockInputContext) |> sync
+    for selection in [ "...Rest @defer ...Rest"; "...Rest ...Rest @defer" ] do
+        ensureDirect (execute selection) <| fun data errors ->
+            empty errors
+            data |> equals (upcast expectedDirect)
+
+[<Fact>]
+let ``Defer directive on a fragment with if false through a variable resolves the fragment's fields with the object`` () =
+    let query = parse """query ($d: Boolean!) {
+        testData {
+            id
+            ... @defer(if: $d) {
+                a
+                b
+            }
+        }
+    }"""
+    let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("d", JsonDocument.Parse("false").RootElement)
+    let result = executor.AsyncExecute(query, getMockInputContext, variables = variables) |> sync
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data
+        |> equals (
+            upcast NameValueLookup.ofList [
+                "testData", upcast NameValueLookup.ofList [
+                    "id", upcast "1"
+                    "a", upcast "Apple"
+                    "b", upcast "Banana"
+                ]
+            ]
+        )
+
+[<Fact>]
+let ``Defer directive on a fragment with if true through a variable defers the fragment's fields`` () =
+    let query = parse """query ($d: Boolean!) {
+        testData {
+            id
+            ... @defer(if: $d) {
+                a
+            }
+        }
+    }"""
+    let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("d", JsonDocument.Parse("true").RootElement)
+    let result = executor.AsyncExecute(query, getMockInputContext, variables = variables) |> sync
+    ensureDeferred result <| fun data errors deferred ->
+        empty errors
+        data |> equals (upcast NameValueLookup.ofList [ "testData", upcast NameValueLookup.ofList [ "id", upcast "1" ] ])
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.toList
+        |> equals [
+            DeferredFragmentResult (ValueSome (upcast NameValueLookup.ofList [ "a", upcast "Apple" ]), [], [ "testData" ], 0)
+            DeferredFragmentCompleted ([ "testData" ], 0)
+        ]
+
+[<Fact>]
+let ``A root fragment with if false through a variable resolves its root fields with the root`` () =
+    let query = parse """query ($d: Boolean!) {
+        testData {
+            id
+        }
+        ... @defer(if: $d) {
+            nullableTestData {
+                id
+            }
+        }
+    }"""
+    let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("d", JsonDocument.Parse("false").RootElement)
+    let result = executor.AsyncExecute(query, getMockInputContext, variables = variables) |> sync
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data
+        |> equals (
+            upcast NameValueLookup.ofList [
+                "testData", upcast NameValueLookup.ofList [ "id", upcast "1" ]
+                "nullableTestData", upcast NameValueLookup.ofList [ "id", upcast "1" ]
+            ]
+        )
+
+[<Fact>]
 let ``A fragment deferred at the operation root delivers root fields`` () =
     let query = parse """{
         ... @defer {
