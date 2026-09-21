@@ -333,15 +333,35 @@ let ``The same deferred field announced twice with the same label is announced t
     let id = pendingIds payload |> single
     (incrementalOf payload |> single).Id |> equals id
 
-[<Fact(Skip = "Not implemented: @defer on fragments; two fragments deferred at the same path need an identity in the engine's events to get distinct ids")>]
-let ``Distinct labels at the same path are distinct pendings`` () =
+[<Fact>]
+let ``Distinct fragments deferred at the same path are distinct pendings`` () =
     let delivery = IncrementalDelivery ()
     let path = [ box "testData" ]
-    delivery.Apply (DeferredPending (path, ValueSome "a", false, 0)) |> ignore
-    delivery.Apply (DeferredPending (path, ValueSome "b", false, 0)) |> ignore
-    let payload = delivery.Apply (DeferredResult (box (NameValueLookup.ofList [ "a", upcast "Apple" ]), path))
+    delivery.Apply (DeferredFragmentPending (path, ValueSome "a", 0)) |> equals ValueNone
+    delivery.Apply (DeferredFragmentPending (path, ValueSome "b", 1)) |> equals ValueNone
+    let payload = delivery.Apply (DeferredFragmentResult (ValueSome (upcast NameValueLookup.ofList [ "a", upcast "Apple" ]), [], path, 0))
+    // The first fragment's payload exposes the object both fragments belong to, so both are announced with it
     pendingLabels payload |> equals [ Include "a"; Include "b" ]
-    pendingIds payload |> List.distinct |> List.length |> equals 2
+    let ids = pendingIds payload
+    ids |> List.distinct |> List.length |> equals 2
+    (incrementalOf payload |> single).Id |> equals ids.Head
+    (incrementalOf payload |> single).Data
+    |> equals (Include (ValueSome (box (NameValueLookup.ofList [ "a", upcast "Apple" ]))))
+    (completedOf (delivery.Apply (DeferredFragmentCompleted (path, 1))) |> single).Id |> equals ids[1]
+
+[<Fact>]
+let ``A deferred fragment failing as a whole is announced and completed with its errors in one payload`` () =
+    let delivery = IncrementalDelivery ()
+    let path = [ box "testData" ]
+    let error = fieldError "Non-null field error!" (path @ [ box "nonNullError" ])
+    let payload = delivery.Apply (DeferredFragmentResult (ValueNone, [ error ], path, 0))
+    let id = pendingIds payload |> single
+    incrementalOf payload |> empty
+    let completion = completedOf payload |> single
+    completion.Id |> equals id
+    completion.Errors |> equals (Include [ error ])
+    delivery.Apply (DeferredFragmentCompleted (path, 0)) |> equals ValueNone
+    (delivery.Finish ()).Completed |> equals Skip
 
 [<Fact>]
 let ``A pre-announced stream whose parent is null is neither announced nor completed`` () =

@@ -181,7 +181,11 @@ module Observer =
 /// filter this announcement out.
 /// </remarks>
 let withoutPending (events : GQLDeferredResponseContent seq) =
-    events |> Seq.filter (function DeferredPending _ -> false | _ -> true)
+    events
+    |> Seq.filter (function
+        | DeferredPending _
+        | DeferredFragmentPending _ -> false
+        | _ -> true)
 
 /// <summary>
 /// Drops every <see cref="GQLDeferredResponseContent.DeferredPending"/> and
@@ -198,7 +202,10 @@ let withoutPending (events : GQLDeferredResponseContent seq) =
 let withoutCompleted (events : GQLDeferredResponseContent seq) =
     events
     |> withoutPending
-    |> Seq.filter (function DeferredCompleted _ -> false | _ -> true)
+    |> Seq.filter (function
+        | DeferredCompleted _
+        | DeferredFragmentCompleted _ -> false
+        | _ -> true)
 
 open System.Runtime.CompilerServices
 

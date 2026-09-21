@@ -478,16 +478,29 @@ let CoercionGuardInputType =
             | "US" -> Success
             | _ -> ValidationError [ { new IGQLError with member _.Message = "Unsupported country" } ])
 
+/// A query type whose `boom` resolver counts its calls and fails, and whose `bad` field rejects any country but US
+let private coercionGuardSchema (boomCalls : int ref) =
+    Schema(Define.Object<unit>(
+        "Query", [
+            Define.Field("boom", StringType, (fun _ _ -> boomCalls.Value <- boomCalls.Value + 1; failwith "Resolver Error!"))
+            Define.Field("bad", Nullable StringType, [ Define.Input("input", CoercionGuardInputType) ], fun _ _ -> None)
+        ]))
+
 [<Fact>]
 let ``Execution rejects inline argument coercion failures on one root field before running another root field's resolver`` () =
     let boomCalls = ref 0
-    let schema =
-        Schema(Define.Object<unit>(
-            "Query", [
-                Define.Field("boom", StringType, (fun _ _ -> boomCalls.Value <- boomCalls.Value + 1; failwith "Resolver Error!"))
-                Define.Field("bad", Nullable StringType, [ Define.Input("input", CoercionGuardInputType) ], fun _ _ -> None)
-            ]))
+    let schema = coercionGuardSchema boomCalls
     let query = """query Test { boom bad(input: { country: "FR" }) }"""
+    let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, ())
+    ensureRequestError result <| fun [ error ] ->
+        error |> ensureInputObjectValidationError (Argument "input") "Unsupported country" [] "CoercionGuardInput!"
+    Assert.Equal(0, boomCalls.Value)
+
+[<Fact>]
+let ``Execution rejects inline argument coercion failures on a root field of a deferred fragment before running another root field's resolver`` () =
+    let boomCalls = ref 0
+    let schema = coercionGuardSchema boomCalls
+    let query = """query Test { boom ... @defer { bad(input: { country: "FR" }) } }"""
     let result = sync <| Executor(schema).AsyncExecute(query, getMockInputContext, ())
     ensureRequestError result <| fun [ error ] ->
         error |> ensureInputObjectValidationError (Argument "input") "Unsupported country" [] "CoercionGuardInput!"

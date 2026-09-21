@@ -39,6 +39,10 @@ module private IncrementalDeliveryPaths =
         | (:? string as fieldName) :: parentPathRev -> ValueSome (List.rev parentPathRev, fieldName)
         | _ -> ValueNone
 
+/// Distinguishes a deferred fragment from the fields of the object it belongs to, in the key of its bookkeeping.
+[<Struct>]
+type private FragmentKey = FragmentKey of fragmentId : int
+
 /// <summary>
 /// Mutable per-field bookkeeping of IncrementalDelivery, keyed by a field's own path (with any item index or batch removed).
 /// </summary>
@@ -104,16 +108,23 @@ type IncrementalDelivery () =
             | DeferredFieldPath (parentPath, _) -> parentPath
             | _ -> fieldPath
 
-    let stateFor (fieldPath : obj list) (isStream : bool) =
-        match fields.TryGetValue fieldPath with
+    /// The bookkeeping under the key, announced at the wire path; a closed key delivered again (a live field's
+    /// nested deferred fields on a later update) is a new delivery, with a fresh id and a fresh announcement
+    let stateUnder (key : obj list) (wirePath : obj list) (isStream : bool) =
+        match fields.TryGetValue key with
         | true, state when not state.Closed -> state, false
         | _ ->
-            // A closed path delivered again (a live field's nested deferred fields on a later update) is a new
-            // delivery: it gets a fresh id and a fresh announcement
-            let state = FieldState (string nextId, wirePathOf fieldPath isStream, isStream)
+            let state = FieldState (string nextId, wirePath, isStream)
             nextId <- nextId + 1
-            fields[fieldPath] <- state
+            fields[key] <- state
             state, true
+
+    let stateFor (fieldPath : obj list) (isStream : bool) = stateUnder fieldPath (wirePathOf fieldPath isStream) isStream
+
+    /// The key of a deferred fragment: the path of the object it belongs to, distinguished from that object's fields
+    let fragmentKey (path : obj list) (fragmentId : int) = [ yield! path; yield box (FragmentKey fragmentId) ]
+
+    let stateForFragment (path : obj list) (fragmentId : int) = stateUnder (fragmentKey path fragmentId) path false
 
     let pendingResultFor (state : FieldState) = {
         Id = state.Id
@@ -121,11 +132,7 @@ type IncrementalDelivery () =
         Label = state.Label |> Skippable.ofValueOption
     }
 
-    let announcePending (fieldPath : obj list) (label : string voption) (isStream : bool) (initialCount : int) =
-        // DeferredCompleted must be able to recover the field id even when a pre-announced stream completes without
-        // ever producing an item, so every pending announcement creates the per-field state eagerly.
-        let state, isNew = stateFor fieldPath isStream
-
+    let announce (key : obj list) (label : string voption) (initialCount : int) (state : FieldState, isNew : bool) =
         match label with
         | ValueSome _ -> state.Label <- label
         | ValueNone -> ()
@@ -133,11 +140,19 @@ type IncrementalDelivery () =
         if isNew then
             // The items delivered with the initial payload are never streamed: the stream starts after them
             state.NextIndex <- initialCount
-            pending.Add (struct (fieldPath, pendingResultFor state))
+            pending.Add (struct (key, pendingResultFor state))
 
         state, isNew
 
+    let announcePending (fieldPath : obj list) (label : string voption) (isStream : bool) (initialCount : int) =
+        // DeferredCompleted must be able to recover the field id even when a pre-announced stream completes without
+        // ever producing an item, so every pending announcement creates the per-field state eagerly.
+        stateFor fieldPath isStream |> announce fieldPath label initialCount
+
     let announceStream (fieldPath : obj list) = announcePending fieldPath ValueNone true 0
+
+    let announceFragment (path : obj list) (label : string voption) (fragmentId : int) =
+        stateForFragment path fragmentId |> announce (fragmentKey path fragmentId) label 0
 
     let rec pathExistsInData (relativePath : obj list) (data : obj) =
         match relativePath, data with
@@ -283,6 +298,32 @@ type IncrementalDelivery () =
         let pending = [ yield! fieldPending; yield! takePendingVisibleIn wirePath wireData ]
         ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
 
+    /// A deferred fragment's fields, delivered together as an object map of the object it belongs to, or the errors
+    /// that propagated up to the fragment itself, which complete it without data.
+    let fragmentEvent (path : obj list) (fragmentId : int) (data : Output voption) (errors : GQLProblemDetails list) =
+        let key = fragmentKey path fragmentId
+        let state, isNew = stateForFragment path fragmentId
+        let fieldPending =
+            match takeFieldPending key with
+            | [] -> pendingFor state isNew
+            | pending -> pending
+        match data with
+        | ValueSome data ->
+            let incremental = {
+                Id = state.Id
+                SubPath = Skip
+                Data = Include (ValueSome (box data))
+                Items = Skip
+                Errors = (if errors.IsEmpty then Skip else Include errors)
+            }
+            let pending = [ yield! fieldPending; yield! takePendingVisibleIn path (box data) ]
+            ValueSome (SubscriptionExecutionResult.CreateSubsequent (pending, [ incremental ], [], true))
+        | ValueNone ->
+            // The object the fragment belongs to was already delivered, so nothing can be nulled on the client: the
+            // fragment is announced, if not yet, and completed with its errors in the same payload
+            state.Closed <- true
+            ValueSome (SubscriptionExecutionResult.CreateSubsequent (fieldPending, [], [ { Id = state.Id; Errors = Include errors } ], true))
+
     /// Closes the field, completing it for the client when the client learned of it.
     let complete (fieldPath : obj list) (state : FieldState) (errors : GQLProblemDetails list Skippable) =
         state.Closed <- true
@@ -350,6 +391,17 @@ type IncrementalDelivery () =
             | true, state when not state.Closed -> complete fieldPath state Skip
             | _ ->
                 // Already closed by a preceding stream failure
+                ValueNone
+        | DeferredFragmentPending (path, label, fragmentId) ->
+            announceFragment path label fragmentId |> ignore
+            ValueNone
+        | DeferredFragmentResult (data, errors, path, fragmentId) -> fragmentEvent path fragmentId data errors
+        | DeferredFragmentCompleted (path, fragmentId) ->
+            let key = fragmentKey path fragmentId
+            match fields.TryGetValue key with
+            | true, state when not state.Closed -> complete key state Skip
+            | _ ->
+                // Already closed by the errors that propagated up to the fragment
                 ValueNone
 
     /// <summary>

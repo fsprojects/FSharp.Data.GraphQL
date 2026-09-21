@@ -31,7 +31,8 @@ let private translate (data : Output) (errors : GQLProblemDetails list) (events 
             payloads.Add (SubscriptionExecutionResult.CreateInitial (data, errors, delivery.TakePendingVisibleIn data))
     for event in events do
         match event with
-        | DeferredPending _ when not initialSent -> delivery.Apply event |> ignore
+        | DeferredPending _
+        | DeferredFragmentPending _ when not initialSent -> delivery.Apply event |> ignore
         | event ->
             sendInitial ()
             delivery.Apply event |> ValueOption.iter payloads.Add
@@ -312,6 +313,58 @@ let ``A live field is announced with its first update and only closed by the fin
         expectDeferredField [ box "liveData" ] "live" (box "another value") pending (incrementalOf update |> single)
         // A live field never completes on its own; only the final payload closes it
         (completedOf final |> single).Id |> equals pending.Id
+        final.HasNext |> equals (Include false)
+    | payloads -> fail $"Expected three payloads but got %A{payloads}"
+
+[<Fact>]
+let ``A deferred fragment is announced and delivered as one payload of its object`` () =
+    let query = parse """{
+        testData {
+            id
+            ... @defer(label: "rest") {
+                a
+                b
+            }
+        }
+    }"""
+    let payloads = executor.AsyncExecute(query, getMockInputContext) |> sync |> deliver
+    assertWellFormed payloads |> ignore
+    match payloads with
+    | [ initial; delivered; completed; final ] ->
+        initial.Data
+        |> equals (Include (ValueSome (box (NameValueLookup.ofList [ "testData", upcast NameValueLookup.ofList [ "id", upcast "1" ] ]))))
+        let pending = pendingOf initial |> single
+        pending.Path |> equals [ box "testData" ]
+        pending.Label |> equals (Include "rest")
+        let entry = incrementalOf delivered |> single
+        entry.Id |> equals pending.Id
+        entry.Data |> equals (Include (ValueSome (box (NameValueLookup.ofList [ "a", upcast "Apple"; "b", upcast "Banana" ]))))
+        (completedOf completed |> single).Id |> equals pending.Id
+        final.HasNext |> equals (Include false)
+    | payloads -> fail $"Expected four payloads but got %A{payloads}"
+
+[<Fact>]
+let ``A deferred fragment that fails as a whole is completed with its errors`` () =
+    let query = parse """{
+        testData {
+            id
+            ... @defer {
+                nonNullError
+            }
+        }
+    }"""
+    let payloads = executor.AsyncExecute(query, getMockInputContext) |> sync |> deliver
+    assertWellFormed payloads |> ignore
+    match payloads with
+    | [ initial; failed; final ] ->
+        initial.Pending |> equals Skip
+        let pending = pendingOf failed |> single
+        pending.Path |> equals [ box "testData" ]
+        incrementalOf failed |> empty
+        let completion = completedOf failed |> single
+        completion.Id |> equals pending.Id
+        completion.Errors
+        |> equals (Include [ GQLProblemDetails.CreateWithKind ("Non-null field error!", Execution, [ box "testData"; box "nonNullError" ]) ])
         final.HasNext |> equals (Include false)
     | payloads -> fail $"Expected three payloads but got %A{payloads}"
 

@@ -412,12 +412,13 @@ module Ast =
                 }
                 |> List.singleton
             | InlineFragment inlineFrag ->
-                voption {
-                    let! typeCondition = inlineFrag.TypeCondition
-                    let! fragType = ctx.Schema.TryGetTypeByName typeCondition
-                    let fragType = Inline fragType
-                    return getFragSelectionSetInfo visitedFragments fragType inlineFrag.SelectionSet ctx
-                }
+                // An inline fragment without a type condition applies to its parent type
+                let fragType =
+                    match inlineFrag.TypeCondition with
+                    | ValueSome typeCondition -> ctx.Schema.TryGetTypeByName typeCondition |> ValueOption.ofOption
+                    | ValueNone -> ValueSome ctx.FragmentOrParentType
+                fragType
+                |> ValueOption.map (fun fragType -> getFragSelectionSetInfo visitedFragments (Inline fragType) inlineFrag.SelectionSet ctx)
                 |> ValueOption.defaultValue List.empty
             | FragmentSpread fragSpread ->
                 voption {
@@ -776,20 +777,22 @@ module Ast =
         (frag : FragmentDefinition)
         =
         let typeConditionsValid =
-            let fragType = voption {
-                let! typeCondition = frag.TypeCondition
-                return! schemaInfo.TryGetTypeByName typeCondition
-            }
-            match fragType with
-            | ValueSome _ -> Success
-            | ValueNone when frag.Name.IsSome ->
-                AstError.AsResult
-                    $"Fragment '%s{frag.Name.Value}' has type condition '%s{frag.TypeCondition.Value}', but that type does not exist in the schema."
-            | ValueNone ->
-                AstError.AsResult (
-                    $"Inline fragment has type condition '%s{frag.TypeCondition.Value}', but that type does not exist in the schema.",
-                    path
-                )
+            match frag.TypeCondition with
+            // An inline fragment without a type condition applies to its parent type
+            | ValueNone -> Success
+            | ValueSome typeCondition ->
+                match schemaInfo.TryGetTypeByName typeCondition with
+                | Some _ -> Success
+                | None ->
+                    match frag.Name with
+                    | ValueSome name ->
+                        AstError.AsResult
+                            $"Fragment '%s{name}' has type condition '%s{typeCondition}', but that type does not exist in the schema."
+                    | ValueNone ->
+                        AstError.AsResult (
+                            $"Inline fragment has type condition '%s{typeCondition}', but that type does not exist in the schema.",
+                            path
+                        )
         typeConditionsValid
         @@ (frag.SelectionSet
             |> ValidationResult.collect (checkFragmentTypeExistenceInSelection fragmentDefinitions schemaInfo path))
