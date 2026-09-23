@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DotNetVersion)</TargetFramework>
+    <AssemblyName>FSharp.Data.GraphQL.Samples.MagicEightBall</AssemblyName>
+    <RootNamespace>FSharp.Data.GraphQL.Samples.MagicEightBall</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Referenced only for its embedded GraphiQL page (see GraphiQL.fs) - its middleware is ASP.NET Core-only. -->
+    <PackageReference Include="GraphQL.Server.Ui.GraphiQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Schema.fs" />
+    <Compile Include="GraphiQL.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Suave\FSharp.Data.GraphQL.Server.Suave.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+  </ItemGroup>
+
+</Project>
