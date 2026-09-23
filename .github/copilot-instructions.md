@@ -22,6 +22,7 @@
 │   ├── FSharp.Data.GraphQL.Server.AspNetCore/  – ASP.NET Core integration (HTTP and WebSocket)
 │   ├── FSharp.Data.GraphQL.Server.Giraffe/     – Giraffe integration
 │   ├── FSharp.Data.GraphQL.Server.Oxpecker/    – Oxpecker integration
+│   ├── FSharp.Data.GraphQL.Server.Suave/       – Suave integration
 │   ├── FSharp.Data.GraphQL.Client/             – client type provider runtime
 │   └── FSharp.Data.GraphQL.Client.DesignTime/  – client type provider design-time component
 ├── tests/
