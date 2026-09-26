@@ -63,20 +63,12 @@ Use GitHub MCP tools for code search in these repositories when needed.
 
 ## MCP Servers
 
-MCP server configuration lives in #file:'.mcp.json':
+Agents discover servers from #file:'.mcp.json'; these are only hints on when to prefer one.
 
-* `servers` – read by VS Code / GitHub Copilot.
-* `mcpServers` – read by Claude Code. Mirrors the same servers; keep both sections in sync when adding or changing a server.
-
-Local tool packages are pinned in #file:'.config/dotnet-tools.json' – run `dotnet tool restore` before first use.
-
-| Server | Tool package | Command | Notes |
-|---|---|---|---|
-| `F#` | `fslangmcp` | `dotnet tool run fslangmcp` | Semantic F# MCP backed by the compiler and FSAC. Use it for cross-project symbol search, project/file outlines, diagnostics, rename previews, dead-code checks, and other F#-aware analysis that plain text search misses. See <https://github.com/Neftedollar/FsLangMCP>. |
-| `GitHub` | – | HTTP | Code search in dependency repositories. |
-| `Microsoft Docs` | – | HTTP | Official Microsoft and .NET documentation. |
-
-For F# work, prefer FsLangMCP over `rg`/plain text search whenever the task depends on symbol meaning, compile context, cross-project usage, diagnostics, or safe refactoring preview.
+* For F# work, prefer the `F#` server ([FsLangMCP](https://github.com/Neftedollar/FsLangMCP)) over `rg`/plain text search whenever the task depends on symbol meaning, compile context, cross-project usage, diagnostics, or safe refactoring preview. Its tool package is pinned in #file:'.config/dotnet-tools.json' – run `dotnet tool restore` before first use.
+* Use the `GitHub` server for code search in dependency repositories. In Claude Code it authenticates through `.claude/scripts/github-mcp-headers.ps1`, which reuses the GitHub token stored by Git Credential Manager, because the server does not support the OAuth dynamic client registration Claude Code needs.
+* Use the `Microsoft Docs` server for official Microsoft and .NET documentation.
+* When adding or changing a server, keep `servers` (VS Code / GitHub Copilot) and `mcpServers` (Claude Code) in sync and sorted alphabetically by key.
 
 ## F# Coding Guidelines
 
