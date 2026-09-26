@@ -1,9 +1,13 @@
+# EditorConfig is awesome: https://EditorConfig.org
+# Comments must be on their own lines: the specification does not support inline comments
+
 root = true
 ###############################
 # Core EditorConfig Options   #
 ###############################
 # All files
-[*]                            # Do not apply to all files not to break something
+# Do not apply to all files not to break something
+[*]
 guidelines = 120 dashed, 150
 # Either crlf | lf, default is system-dependent (when not specified at all)
 # end_of_line=crlf
@@ -13,8 +17,10 @@ guidelines = 120 dashed, 150
 [*.{cs,csx,fs,fsi,fsx}]
 trim_trailing_whitespace = true
 insert_final_newline     = true
-indent_style             = space # default=space
-indent_size              = 4     # default=4
+# default=space
+indent_style             = space
+# default=4
+indent_size              = 4
 charset                  = utf-8
 
 # Project files and app specific XML files
@@ -33,7 +39,8 @@ indent_size              = 2
 
 # XML files
 [*.xml]
-trim_trailing_whitespace = false # do not trim as it affects CData
+# do not trim as it affects CData
+trim_trailing_whitespace = false
 insert_final_newline     = true
 indent_style             = space
 indent_size              = 2
