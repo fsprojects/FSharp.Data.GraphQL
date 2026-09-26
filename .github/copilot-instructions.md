@@ -89,7 +89,8 @@ Agents discover servers from #file:'.mcp.json'; these are only hints on when to 
 
 ### Values and Collections
 
-* Prefer `voption` over `option`.
+* Prefer `voption` (`ValueSome`/`ValueNone`) over `option`. Fields, members, parameters and values shared between threads included: none of them is a reason to pick `option`. Exception: when an API hands you `'T option` and has no `voption` counterpart, unwrap it with `Option.defaultValue`/`Option.defaultWith` directly – do not insert `ValueOption.ofOption` just to switch modules.
+* The mirror case, an API that *takes* `'T option` (an optional argument `?name = …`, a field typed `'T option`): stay in `ValueOption` through the whole chain and convert once, last – `x |> ValueOption.bind _.Value |> ValueOption.toOption`, never `x |> ValueOption.toOption |> Option.bind _.Value`.
 * Prefer `struct ('T1 * 'T2)` over reference tuples, and anonymous struct records (`struct {| ... |}`) over tuples for return types of public functions and methods.
 * Never group with `Seq.groupBy` – use `ToLookup` from `System.Linq`. It groups once into an `ILookup<'Key, 'T>` instead of re-grouping on every enumeration and does not allocate a tuple per group. Pass a lambda (`xs.ToLookup (fun x -> keyOf x)`), not a bare function value.
 * When casting sequence items use `Seq.cast<TargetType>` instead of `Seq.map (fun item -> item :> TargetType)`.
@@ -98,9 +99,14 @@ Agents discover servers from #file:'.mcp.json'; these are only hints on when to 
 
 ### Functions, Lambdas and Strings
 
-* Prefer underscore lambda syntax like `Seq.map _.Name` over `Seq.map (fun x -> x.Name)`, but only when the expression is a simple member access. Complex expressions like `Seq.where (fun x -> x.Name = name)` or `Seq.map (fun x -> x.Field1, x.Field2)` cannot be simplified. Never write a space in `_.MethodCall()` – it breaks parsing.
+* Prefer underscore lambda syntax like `Seq.map _.Name` over `Seq.map (fun x -> x.Name)`, but only when the expression is a simple member access. Complex expressions like `Seq.where (fun x -> x.Name = name)` or `Seq.map (fun x -> x.Field1, x.Field2)` cannot be simplified. A member chain ending in a method call is not complex: `_.Changed.Subscribe(handler)`. The shorthand needs its input type known, so pipe the value in first – `value |> ValueOption.map _.Id`, not `ValueOption.map _.Id value` (FS0072). Never write a space in `_.MethodCall()` – it breaks parsing.
 * Simplify `Seq.map (fun x -> someFunction x)` to `Seq.map someFunction`.
 * Prefer interpolated strings over `printf` functions for string formatting. Format specifiers like `$"%s{value}"` are valid in interpolated strings and help type inference.
+* Pass an explicit `StringComparison` to every `Equals`, `StartsWith`, `EndsWith`, `IndexOf`, `Contains` and `Compare`, and an explicit comparer to every `HashSet<string>` and `Dictionary<string, _>`. `Ordinal` by default; culture-sensitive comparison is a decision, never a default. Use `OrdinalIgnoreCase` only where the thing compared really is case-insensitive – never for GraphQL names (types, fields, arguments, directives, enum values), which are case-sensitive.
+* A slice of a string that is only inspected – compared, trimmed, scanned, matched against a prefix – is a `ReadOnlySpan<char>` (`text.AsSpan (start, length)`), not a `Substring`: the substring allocates a copy per call, the span does not. Materialize with `Substring`/`ToString ()` only for the value that leaves the function or is stored.
+* The `StringComparison` rule applies to spans unchanged: `MemoryExtensions` has `StringComparison` overloads of `StartsWith`, `EndsWith`, `Equals`, `CompareTo`, `IndexOf` and `Contains` for `ReadOnlySpan<char>` – `s.AsSpan().TrimStart(' ').StartsWith("//", StringComparison.Ordinal)`. The overloads without one are the generic element-wise `ReadOnlySpan<'T>` ones – ordinal for `char` by accident, not by statement.
+* A slice that must outlive the stack frame – kept in a record, captured by a closure (including a `task` CE), returned from a member – is `ReadOnlyMemory<char>` (`text.AsMemory (...)`), never a `ReadOnlySpan<char>`: a byref-like value cannot be stored.
+* To compare two slices without building either, use `String.CompareOrdinal (a, aIndex, b, bIndex, length)` or `spanA.Equals (spanB, StringComparison.Ordinal)`.
 * Use descriptive function names that indicate transformation direction.
 
 ### Nullable Reference Types
