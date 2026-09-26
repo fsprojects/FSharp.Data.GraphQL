@@ -12,6 +12,13 @@
 *.vbproj merge=union
 *.fsproj merge=union
 *.dbproj merge=union
+*.sh text eol=lf
+# cmd.exe misreads labels and goto in LF batch files
+*.cmd text eol=crlf
+*.bat text eol=crlf
+# LF keeps the `#!/usr/bin/env pwsh` shebang working on Linux; PowerShell on Windows reads LF too
+*.ps1 text eol=lf
+*.psm1 text eol=lf
 
 # Standard to msysgit
 *.doc diff=astextplain

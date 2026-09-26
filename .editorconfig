@@ -52,6 +52,21 @@ insert_final_newline     = true
 indent_style             = space
 indent_size              = 4
 
+# Batch Files
+# keep in sync with .gitattributes
+[*.{cmd,bat}]
+end_of_line              = crlf
+
+# Shell scripts
+# keep in sync with .gitattributes
+[*.sh]
+end_of_line              = lf
+
+# Powershell Files
+# keep in sync with .gitattributes
+[*.{ps1,psm1}]
+end_of_line              = lf
+
 ###############################
 # F# Coding Conventions       #
 ###############################
