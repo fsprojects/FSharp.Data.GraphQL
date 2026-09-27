@@ -42,16 +42,16 @@ type OperationExecutionMiddleware =
 /// A middleware can have one to three sub-middlewares, one for each phase of the query execution.
 type IExecutorMiddleware =
     /// Defines the sub-middleware that intercepts the schema compile process of the Executor.
-    abstract CompileSchema : SchemaCompileMiddleware option
+    abstract CompileSchema : SchemaCompileMiddleware voption
     /// Defines the sub-middleware that executes after the schema compilation phase of the Executor is complete.
-    abstract PostCompileSchema : SchemaPostCompileMiddleware option
+    abstract PostCompileSchema : SchemaPostCompileMiddleware voption
     /// Defines the sub-middleware that intercepts the operation planning phase of the Executor.
-    abstract PlanOperation : OperationPlanningMiddleware option
+    abstract PlanOperation : OperationPlanningMiddleware voption
     /// Defines the sub-middleware that intercepts the operation execution phase of the Executor.
-    abstract ExecuteOperationAsync : OperationExecutionMiddleware option
+    abstract ExecuteOperationAsync : OperationExecutionMiddleware voption
 
 /// A simple, concrete implementation for the IExecutorMiddleware interface.
-type ExecutorMiddleware(?compile, ?postCompile, ?plan, ?execute) =
+type ExecutorMiddleware([<Struct>] ?compile, [<Struct>] ?postCompile, [<Struct>] ?plan, [<Struct>] ?execute) =
     interface IExecutorMiddleware with
         member _.CompileSchema = compile
         member _.PostCompileSchema = postCompile
@@ -77,7 +77,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     let middlewaresList = Seq.toList middlewares
 
-    let rec runMiddlewares (phaseSel : IExecutorMiddleware -> ('ctx -> ('ctx -> 'res) -> 'res) option)
+    let rec runMiddlewares (phaseSel : IExecutorMiddleware -> ('ctx -> ('ctx -> 'res) -> 'res) voption)
                            (initialCtx : 'ctx)
                            (onComplete : 'ctx -> 'res)
                            : 'res =
@@ -86,8 +86,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
             | [] -> onComplete ctx
             | m :: ms ->
                 match (phaseSel m) with
-                | Some f -> f ctx (fun ctx' -> go ctx' ms)
-                | None -> go ctx ms
+                | ValueSome f -> f ctx (fun ctx' -> go ctx' ms)
+                | ValueNone -> go ctx ms
         go initialCtx middlewaresList
 
     do
@@ -124,7 +124,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                           FieldExecuteMap = fieldExecuteMap
                           Metadata = executionPlan.Metadata }
                     let executorMiddlewareFunc = fun (executorMiddleware : IExecutorMiddleware) ->
-                            executorMiddleware.ExecuteOperationAsync |> Option.map (fun middleware -> middleware(getInputContext))
+                            executorMiddleware.ExecuteOperationAsync |> ValueOption.map (fun middleware -> middleware(getInputContext))
                     let! res = runMiddlewares executorMiddlewareFunc executionCtx executeOperation |> AsyncVal.toAsync
                     return prepareOutput res
             with

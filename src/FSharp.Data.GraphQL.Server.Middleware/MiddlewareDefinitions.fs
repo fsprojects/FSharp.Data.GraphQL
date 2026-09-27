@@ -76,10 +76,10 @@ type internal QueryWeightMiddleware (threshold : float, reportToMetadata : bool)
         if pass then next ctx else error ctx
 
     interface IExecutorMiddleware with
-        member _.CompileSchema = None
-        member _.PostCompileSchema = None
-        member _.PlanOperation = None
-        member _.ExecuteOperationAsync = Some (middleware threshold)
+        member _.CompileSchema = ValueNone
+        member _.PostCompileSchema = ValueNone
+        member _.PlanOperation = ValueNone
+        member _.ExecuteOperationAsync = ValueSome (middleware threshold)
 
 type internal ObjectListFilterMiddleware<'ObjectType, 'ListType> (reportToMetadata : bool) =
 
@@ -153,10 +153,10 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType> (reportToMetada
             return GQLExecutionResult.RequestError (ctx.ExecutionPlan.DocumentId, (errs |> List.map GQLProblemDetails.OfError), ctx.Metadata)
           }
     interface IExecutorMiddleware with
-        member _.CompileSchema = Some compileMiddleware
-        member _.PostCompileSchema = None
-        member _.PlanOperation = None
-        member _.ExecuteOperationAsync = Some reportMiddleware
+        member _.CompileSchema = ValueSome compileMiddleware
+        member _.PostCompileSchema = ValueNone
+        member _.PlanOperation = ValueNone
+        member _.ExecuteOperationAsync = ValueSome reportMiddleware
 
 /// A function that resolves an identity name for a schema object, based on a object definition of it.
 type IdentityNameResolver = ObjectDef -> string
@@ -203,7 +203,7 @@ type internal LiveQueryMiddleware (identityNameResolver : IdentityNameResolver) 
         next ctx
 
     interface IExecutorMiddleware with
-        member _.CompileSchema = Some middleware
-        member _.PostCompileSchema = None
-        member _.PlanOperation = None
-        member _.ExecuteOperationAsync = None
+        member _.CompileSchema = ValueSome middleware
+        member _.PostCompileSchema = ValueNone
+        member _.PlanOperation = ValueNone
+        member _.ExecuteOperationAsync = ValueNone

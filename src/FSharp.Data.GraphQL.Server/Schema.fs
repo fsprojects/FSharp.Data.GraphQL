@@ -169,12 +169,9 @@ type SchemaConfig =
             Directives = [ IncludeDirective; SkipDirective; DeferDirective; streamDirective; LiveDirective ] }
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
-type Schema<'Root> (query: ObjectDef<'Root>, [<Struct>] ?mutation: ObjectDef<'Root>, [<Struct>] ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
+type Schema<'Root> (query: ObjectDef<'Root>, [<Struct>] ?mutation: ObjectDef<'Root>, [<Struct>] ?subscription: SubscriptionObjectDef<'Root>, [<Struct>] ?config: SchemaConfig) =
 
-    let schemaConfig =
-        match config with
-        | None -> SchemaConfig.Default
-        | Some c -> c
+    let schemaConfig = defaultValueArg config SchemaConfig.Default
 
     let typeMap : TypeMap =
 
