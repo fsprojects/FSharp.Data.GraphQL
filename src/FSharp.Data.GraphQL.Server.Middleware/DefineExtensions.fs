@@ -18,8 +18,8 @@ module DefineExtensions =
         /// A boolean flag indicating if the values of the threshold and the weight of the current query should
         /// be reported to the metadata object in the GQLResponse.
         /// </param>
-        static member QueryWeightMiddleware(threshold : float, ?reportToMetadata : bool) : IExecutorMiddleware =
-            let reportToMetadata = defaultArg reportToMetadata false
+        static member QueryWeightMiddleware(threshold : float, [<Struct>] ?reportToMetadata : bool) : IExecutorMiddleware =
+            let reportToMetadata = defaultValueArg reportToMetadata false
             upcast QueryWeightMiddleware(threshold, reportToMetadata)
 
         /// <summary>
@@ -35,8 +35,8 @@ module DefineExtensions =
         /// This argument can be used on the query to specify a filter with operations like "less than", "equals", etc. on the
         /// field of the specified object of 'ObjectType type.
         /// </remarks>
-        static member ObjectListFilterMiddleware<'ObjectType, 'ListType>(?reportToMetadata : bool) : IExecutorMiddleware =
-            let reportToMetadata = defaultArg reportToMetadata false
+        static member ObjectListFilterMiddleware<'ObjectType, 'ListType>([<Struct>] ?reportToMetadata : bool) : IExecutorMiddleware =
+            let reportToMetadata = defaultValueArg reportToMetadata false
             upcast ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadata)
 
         /// <summary>
@@ -47,6 +47,6 @@ module DefineExtensions =
         /// An optional function to resolve the name of the identity field based on the object definition.
         /// If no function is provided, it takes the default "Id" value as the identity field.
         /// </param>
-        static member LiveQueryMiddleware(?identityName : IdentityNameResolver) : IExecutorMiddleware =
-            let identityName = defaultArg identityName (fun _ -> "Id")
+        static member LiveQueryMiddleware([<Struct>] ?identityName : IdentityNameResolver) : IExecutorMiddleware =
+            let identityName = defaultValueArg identityName (fun _ -> "Id")
             upcast LiveQueryMiddleware(identityName)

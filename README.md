@@ -279,17 +279,19 @@ type OperationExecutionMiddleware =
     ExecutionContext -> (ExecutionContext -> AsyncVal<GQLResponse>) -> AsyncVal<GQLResponse>
 
 type IExecutorMiddleware =
-    abstract CompileSchema : SchemaCompileMiddleware option
-    abstract PlanOperation : OperationPlanningMiddleware option
-    abstract ExecuteOperationAsync : OperationExecutionMiddleware option
+    abstract CompileSchema : SchemaCompileMiddleware voption
+    abstract PostCompileSchema : SchemaPostCompileMiddleware voption
+    abstract PlanOperation : OperationPlanningMiddleware voption
+    abstract ExecuteOperationAsync : OperationExecutionMiddleware voption
 ```
 
 Optionally, for ease of implementation, concrete class to derive from can be used, receiving only the optional sub-middleware functions in the constructor:
 
 ```fsharp
-type ExecutorMiddleware(?compile, ?plan, ?execute) =
+type ExecutorMiddleware([<Struct>] ?compile, [<Struct>] ?postCompile, [<Struct>] ?plan, [<Struct>] ?execute) =
     interface IExecutorMiddleware with
         member _.CompileSchema = compile
+        member _.PostCompileSchema = postCompile
         member _.PlanOperation = plan
         member _.ExecuteOperationAsync = execute
 ```
@@ -297,7 +299,7 @@ type ExecutorMiddleware(?compile, ?plan, ?execute) =
 Each of the middleware functions act like an intercept function, with two parameters: the context of the phase, the function of the next middleware (or the actual phase itself, which is the last to run), and the return value. Those functions can be passed as an argument to the constructor of the `Executor<'Root>` object:
 
 ```fsharp
-let middleware = [ ExecutorMiddleware(compileFn, planningFn, executionFn) ]
+let middleware = [ ExecutorMiddleware(compile = compileFn, plan = planningFn, execute = executionFn) ]
 let executor = Executor(schema, middleware)
 ```
 

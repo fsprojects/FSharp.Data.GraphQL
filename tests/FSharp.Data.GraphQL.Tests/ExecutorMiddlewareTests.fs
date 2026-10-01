@@ -99,10 +99,10 @@ let executionMiddleware (inputContext : InputExecutionContextProvider) (ctx : Ex
 
 let middleware =
     { new IExecutorMiddleware with
-        member _.CompileSchema = Some compileMiddleware
-        member _.PostCompileSchema = Some postCompileMiddleware
-        member _.PlanOperation = Some planningMiddleware
-        member _.ExecuteOperationAsync = Some executionMiddleware }
+        member _.CompileSchema = ValueSome compileMiddleware
+        member _.PostCompileSchema = ValueSome postCompileMiddleware
+        member _.PlanOperation = ValueSome planningMiddleware
+        member _.ExecuteOperationAsync = ValueSome executionMiddleware }
 
 let executor = Executor(schema, [ middleware ])
 
