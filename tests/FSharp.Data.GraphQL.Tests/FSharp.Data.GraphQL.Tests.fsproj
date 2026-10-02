@@ -22,6 +22,7 @@
     <PackageReference Include="FSharp.Control.TaskSeq" />
     <PackageReference Include="IcedTasks" />
     <PackageReference Include="Validus" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
 

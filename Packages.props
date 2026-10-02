@@ -54,6 +54,7 @@
   <ItemGroup Label="Test platform">
     <PackageReference Update="BenchmarkDotNet" Version="0.15.*" />
     <PackageReference Update="BenchmarkDotNet.Annotations" Version="0.*" />
+    <PackageReference Update="Microsoft.Testing.Extensions.CodeCoverage" Version="18.*" />
     <PackageReference Update="xunit.analyzers" Version="2.*" />
     <PackageReference Update="xunit.v3" Version="$(XUnitVersion)" />
     <PackageReference Update="xunit.v3.assert" Version="$(XUnitVersion)" />
@@ -76,7 +77,6 @@
     <PackageReference Update="Iced" Version="1.17.*" />
     <PackageReference Update="Microsoft.AspNetCore.Mvc.Testing" Version="$(AspNetCoreVersion)" />
     <PackageReference Update="Microsoft.Azure.Cosmos" Version="3.*" />
-    <PackageReference Update="Microsoft.CodeCoverage" Version="17.3.*" />
     <PackageReference Update="Microsoft.Data.Sqlite" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Update="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
     <PackageReference Update="Microsoft.Diagnostics.NETCore.Client" Version="0.2.*" />
