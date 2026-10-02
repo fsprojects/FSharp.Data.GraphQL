@@ -140,13 +140,13 @@ let private getIncluder (directives: Directive list) parentIncluder : Includer =
         | "skip" ->
             fun vars -> result {
                 let! accValue = acc vars
-                and! skipValue = directiveIncluder directive vars
+                let! skipValue = directiveIncluder directive vars
                 return accValue && not(skipValue)
             }
         | "include" ->
             fun vars -> result {
                 let! accValue = acc vars
-                and! includeValue = directiveIncluder directive vars
+                let! includeValue = directiveIncluder directive vars
                 return accValue && includeValue
             }
         | _ -> acc) parentIncluder
