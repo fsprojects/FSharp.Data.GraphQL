@@ -5,7 +5,7 @@
     <MicrosoftExtensionsVersion>10.0.*</MicrosoftExtensionsVersion>
     <AspNetCoreVersion>10.0.*</AspNetCoreVersion>
     <FSharpCoreVersion>10.1.401</FSharpCoreVersion>
-    <FsToolkitVersion>4.17.*</FsToolkitVersion>
+    <FsToolkitVersion>5.*</FsToolkitVersion>
     <XUnitVersion>2.9.3</XUnitVersion>
     <FAKEVersion>6.*</FAKEVersion>
   </PropertyGroup>
@@ -19,7 +19,6 @@
     <PackageReference Update="FSharp.Control.Reactive" Version="6.*" />
     <PackageReference Update="FSharp.SystemTextJson" Version="1.*" />
     <PackageReference Update="FsToolkit.ErrorHandling" Version="$(FsToolkitVersion)" />
-    <PackageReference Update="FsToolkit.ErrorHandling.TaskResult" Version="$(FsToolkitVersion)" />
     <PackageReference Update="Giraffe" Version="7.*" />
     <PackageReference Update="IcedTasks" Version="0.11.*" />
     <PackageReference Update="Microsoft.Bcl.AsyncInterfaces" Version="$(SystemVersion)" />

@@ -6,7 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
     <PackageReference Include="Giraffe" />
     <PackageReference Include="GraphQL.Server.Ui.Voyager" />
     <PackageReference Include="HotChocolate.AspNetCore" />

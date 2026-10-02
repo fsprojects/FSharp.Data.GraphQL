@@ -8,7 +8,7 @@
 
   <ItemGroup Label="PackageReferences">
     <PackageReference Include="FSharp.Control.TaskSeq" />
-    <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
+    <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="GraphQL.Server.Ui.Altair" />
     <PackageReference Include="GraphQL.Server.Ui.GraphiQL" />
     <PackageReference Include="GraphQL.Server.Ui.Voyager" />
