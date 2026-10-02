@@ -4,6 +4,7 @@
 
 * F# 10, C# 14, .NET 10, nullability checks enabled
 * .NET SDK roll-forward policy in #file:'global.json'; the exact SDK version is pinned in the GitHub workflows and #file:'build/Program.fs'
+* Never change the pinned .NET SDK version without moving `FSharpCoreVersion` in #file:'Packages.props' to the FSharp.Core version that SDK ships – the `FSharp.Core.<version>.nupkg` in `sdk/<SDK version>/FSharp/library-packs` of the installation (for example, SDK 10.0.401 ships FSharp.Core 10.1.401). A compiler older than the referenced FSharp.Core may not behave correctly (see the [FSharp.Core notes](https://github.com/dotnet/fsharp/blob/main/docs/fsharp-core-notes.md)), so the SDK and FSharp.Core versions always change together, in the same commit
 * Common parameters specified in #file:'Directory.Build.props'
 * Central NuGet package version management – versions go in #file:'Packages.props', not in `.fsproj` files
 * Build: `dotnet build FSharp.Data.GraphQL.slnx`
