@@ -17,6 +17,8 @@
   <ItemGroup>
     <PackageReference Include="Azure.Core" />
     <PackageReference Include="Microsoft.Azure.Cosmos" />
+    <!-- Microsoft.Azure.Cosmos needs Newtonsoft.Json at run time but leaves the reference to the consuming project -->
+    <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="FSharp.Control.TaskSeq" />
