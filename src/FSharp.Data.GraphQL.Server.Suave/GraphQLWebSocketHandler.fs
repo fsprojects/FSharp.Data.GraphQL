@@ -34,7 +34,7 @@ let private serializeServerMessage (serializerOptions : JsonSerializerOptions) (
             Payload = ValueSome (ExecutionResult payload)
           }
         | Complete id -> { Id = ValueSome id; Type = "complete"; Payload = ValueNone }
-        | Error (id, errMessages) -> {
+        | ServerError (id, errMessages) -> {
             Id = ValueSome id
             Type = "error"
             Payload = ValueSome (ErrorMessages errMessages)
@@ -151,61 +151,82 @@ let private waitForConnectionInitAndRespondToClient (options : GraphQLOptions<'R
         return Result.Error $"{nameof ConnectionInit} failed (not because of timeout)"
 }
 
+/// <summary>
+/// Converts an exception raised by a subscription's source into the errors of its terminal <c>error</c> message,
+/// exposing only messages of GraphQL-facing errors.
+/// </summary>
+let private problemDetailsOfSourceError (ex : exn) : GQLProblemDetails list =
+    match box ex with
+    | :? IGQLError as error -> [ GQLProblemDetails.OfError error ]
+    | _ -> [ GQLProblemDetails.Create "Unexpected error during subscription" ]
+
 /// Runs the <c>graphql-transport-ws</c> message loop for an already-initialized connection.
 let private handleMessages (options : GraphQLOptions<'Root>) (ctx : HttpContext) (webSocket : WebSocket) : Async<unit> =
     let serializerOptions = options.SerializerOptions
-    let subscriptions = Dictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction>()
+    let subscriptions = GraphQLSubscriptionsManagement.createSubscriptions ()
     let sendMsg msg = sendMessage serializerOptions webSocket msg
 
     let sendOutput id (output : SubscriptionExecutionResult) = sendMsg (Next (id, output))
 
     let sendSubscriptionResponseOutput id subscriptionResult =
         match subscriptionResult with
-        | SubscriptionResult output -> sendOutput id { Data = ValueSome output; Errors = [] }
-        | SubscriptionErrors (_, errors) -> sendOutput id { Data = ValueNone; Errors = errors }
-
-    let sendDeferredResponseOutput id deferredResult =
-        match deferredResult with
-        | DeferredResult (data, _path) -> sendOutput id { Data = ValueSome (data :?> Output); Errors = [] }
-        | DeferredErrors (_, errors, _path) -> sendOutput id { Data = ValueNone; Errors = errors }
-
-    let sendDeferredResultDelayedBy (ms : int) id deferredResult = async {
-        do! Async.Sleep ms
-        do! sendDeferredResponseOutput id deferredResult
-    }
+        | SubscriptionResult output -> sendOutput id (SubscriptionExecutionResult.Create (ValueSome output, []))
+        // The executor may still have resolved partial data alongside the field errors; it is forwarded as-is
+        | SubscriptionErrors (ValueSome output, errors) -> sendOutput id (SubscriptionExecutionResult.Create (ValueSome output, errors))
+        | SubscriptionErrors (ValueNone, errors) -> sendOutput id (SubscriptionExecutionResult.CreateErrors errors)
 
     let addClientSubscription
         (id : SubscriptionId)
         (howToSendDataOnNext : SubscriptionId -> 'ResponseContent -> Async<unit>)
         (streamSource : IObservable<'ResponseContent>)
         =
+        // Set once the source has ended, so that a source ending synchronously inside `Subscribe` does not leave its id
+        // registered after the end has already tried to remove it
+        let mutable ended = false
+
+        let endSubscription (message : ServerMessage) =
+            ended <- true
+            sendMsg message |> Async.RunSynchronously
+            subscriptions
+            |> GraphQLSubscriptionsManagement.removeSubscription id
+
         let observer = {
             new IObserver<'ResponseContent> with
                 member _.OnNext value = howToSendDataOnNext id value |> Async.RunSynchronously
                 member _.OnError ex =
                     ctx.runtime.logger.info (Suave.Logging.Message.eventX $"Error on subscription with Id = '{id}': {ex}")
-                member _.OnCompleted () =
-                    sendMsg (Complete id) |> Async.RunSynchronously
-                    subscriptions
-                    |> GraphQLSubscriptionsManagement.removeSubscription id
+                    endSubscription (ServerError (id, problemDetailsOfSourceError ex))
+                member _.OnCompleted () = endSubscription (Complete id)
         }
 
         let unsubscriber = streamSource.Subscribe observer
-        subscriptions
-        |> GraphQLSubscriptionsManagement.addSubscription (id, unsubscriber, ignore)
+        lock subscriptions (fun () ->
+            if ended then
+                unsubscriber.Dispose ()
+            else
+                subscriptions
+                |> GraphQLSubscriptionsManagement.addSubscription (id, unsubscriber))
 
     let applyPlanExecutionResult (id : SubscriptionId) (executionResult : GQLExecutionResult) = async {
-        match executionResult with
+        match executionResult.Content with
         | Stream observableOutput ->
             observableOutput
             |> addClientSubscription id sendSubscriptionResponseOutput
-        | Deferred (data, errors, observableOutput) ->
-            do! sendOutput id { Data = ValueSome data; Errors = [] }
-            if errors.IsEmpty then
-                observableOutput
-                |> addClientSubscription id (sendDeferredResultDelayedBy 5000)
-        | Direct (data, _) -> do! sendOutput id { Data = ValueSome data; Errors = [] }
-        | RequestError problemDetails -> do! sendOutput id { Data = ValueNone; Errors = problemDetails }
+        | Deferred (data, errors, _deferred) ->
+            // TODO: deliver the deferred and streamed payloads in the incremental delivery format, as the ASP.NET Core
+            // integration does through its `IncrementalDelivery`; until then only the initial result is sent
+            do! sendOutput id (SubscriptionExecutionResult.Create (ValueSome data, errors))
+            do! sendMsg (Complete id)
+        | Direct (data, errors) ->
+            // An execution result, whose data is null when a non-null root field failed during execution; still a
+            // result, so it is sent as Next + Complete like any other, not as the terminal Error
+            do! sendOutput id (SubscriptionExecutionResult.Create (data, errors))
+            // The graphql-transport-ws protocol requires Complete after the single Next of a query or mutation
+            do! sendMsg (Complete id)
+        | RequestError problemDetails ->
+            // The request was rejected before execution, so it is not a result: the protocol requires it to be sent
+            // as the terminal Error message instead of a Next followed by Complete
+            do! sendMsg (ServerError (id, problemDetails))
     }
 
     let handleSubscribe (id : SubscriptionId) (query : GQLRequestContent) = async {
@@ -221,7 +242,7 @@ let private handleMessages (options : GraphQLOptions<'Root>) (ctx : HttpContext)
                 do! applyPlanExecutionResult id planExecutionResult
             with ex ->
                 ctx.runtime.logger.info (Suave.Logging.Message.eventX $"Unexpected error during subscription with id '{id}': {ex}")
-                do! sendMsg (Error (id, [ NameValueLookup ([ ("subscription", "Unexpected error during subscription" :> obj) ]) ]))
+                do! sendMsg (ServerError (id, [ GQLProblemDetails.Create "Unexpected error during subscription" ]))
     }
 
     let rec loop () = async {

@@ -19,7 +19,8 @@ let private jsonResponse (serializerOptions : JsonSerializerOptions) (statusCode
 
 let private toResponse ({ DocumentId = documentId; Content = content } : GQLExecutionResult) =
     match content with
-    | Direct (data, errs) -> GQLResponse.Direct (documentId, data, errs)
+    // `GQLResponse` carries a null `data` for a result whose non-null root field failed
+    | Direct (data, errs) -> GQLResponse.Direct (documentId, data |> ValueOption.toObj, errs)
     | Deferred (data, errs, _deferred) -> GQLResponse.Direct (documentId, data, errs)
     | Stream _stream -> GQLResponse.Stream documentId
     | RequestError errs -> GQLResponse.RequestError (documentId, errs)
