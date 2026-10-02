@@ -937,7 +937,20 @@ module internal Provider =
                                 operationWrapper.AddMember(operationDef)
                                 operationDef.AddMember(methodDef)
                                 methodDef
-                            staticMethodDef.DefineStaticParameters(staticParams, instanceBuilder)
+                            // The compiler applies the same static arguments again for every file that uses an operation,
+                            // and each instantiation adds its operation type to Operations. A second type of the same name
+                            // makes the two incompatible (FS0193), so every instantiation is built once and then reused.
+                            // The lock also keeps the instantiations from adding members to Operations concurrently.
+                            let instances = Dictionary<string, ProvidedMethod>(StringComparer.Ordinal)
+                            let getOrBuildInstance (methodName : string) (args : obj []) =
+                                lock instances (fun () ->
+                                    match instances.TryGetValue(methodName) with
+                                    | true, instance -> instance
+                                    | false, _ ->
+                                        let instance = instanceBuilder methodName args
+                                        instances.Add(methodName, instance)
+                                        instance)
+                            staticMethodDef.DefineStaticParameters(staticParams, getOrBuildInstance)
                             staticMethodDef
                         let schemaPropertyDef =
                             let getter = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
