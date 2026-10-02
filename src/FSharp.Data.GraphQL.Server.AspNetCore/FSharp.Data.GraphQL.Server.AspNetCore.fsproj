@@ -43,7 +43,6 @@
   <ItemGroup>
     <PackageReference Include="Collections.Pooled" />
     <PackageReference Include="FsToolkit.ErrorHandling" />
-    <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
   </ItemGroup>
 
 </Project>
