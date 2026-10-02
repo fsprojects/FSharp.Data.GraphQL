@@ -114,36 +114,42 @@ let runTests (project : string) (resultsFileName : string) (filter : string vopt
     if File.Exists resultsFilePath then
         File.Delete resultsFilePath
 
-    DotNet.test
-        (fun options ->
-            {
-                options with
-                    NoBuild = true
-                    Logger = Some $"trx;LogFileName={resultsFileName}"
-                    ResultsDirectory = Some TestResultsDirectory
-                    Framework = Some DotNetMoniker
-                    Configuration = configuration
-                    Common = {
-                        options.Common with
-                            CustomParams = filter |> ValueOption.map (fun filter -> $"--filter {filter}") |> ValueOption.toOption
-                    }
-                    MSBuildParams = {
-                        options.MSBuildParams with
-                            DisableInternalBinLog = true
-                            Verbosity = Some Normal
-                            Properties = [
-                                if embedAll then
-                                    ("DebugType", "embedded")
-                                    ("EmbedAllSources", "true")
-                            ]
-                    }
-            }
-            |> _.WithRedirectOutput(true)
-            |> _.WithCommon(DotNetCli.setVersion))
+    // global.json runs `dotnet test` on Microsoft.Testing.Platform, which takes the project only through `--project`
+    // and leaves the TRX report to the xUnit.net test application. DotNet.test cannot produce that command line:
+    // it passes the project positionally after its other options and asks for the report through the VSTest `--logger`
+    let args = [
+        "--project"
         project
+        "--no-build"
+        "--configuration"
+        configurationString
+        "--framework"
+        DotNetMoniker
+        "--results-directory"
+        TestResultsDirectory
+        "--verbosity"
+        "normal"
+        if embedAll then
+            "-p:DebugType=embedded"
+            "-p:EmbedAllSources=true"
+        "--report-xunit-trx"
+        "--report-xunit-trx-filename"
+        resultsFileName
+        match filter with
+        | ValueSome filter ->
+            "--filter"
+            filter
+        | ValueNone -> ()
+    ]
 
-    // `dotnet test --no-build` on a project that was never restored does not import the test SDK,
-    // so it runs nothing and still exits with 0. The missing results file is the only trace of that.
+    let result =
+        DotNet.exec (fun options -> options.WithRedirectOutput true |> DotNetCli.setVersion) "test" (Args.toWindowsCommandLine args)
+
+    if not result.OK then
+        failwith $"'dotnet test {project}' failed with exit code %i{result.ExitCode}"
+
+    // `dotnet test --no-build` cannot tell that a project which was never restored is a test project,
+    // so it may run nothing and still exit with 0. The missing results file is the only trace of that.
     if not (File.Exists resultsFilePath) then
         failwith $"'dotnet test {project}' produced no test results at '{resultsFilePath}'. Was the project restored and built?"
 

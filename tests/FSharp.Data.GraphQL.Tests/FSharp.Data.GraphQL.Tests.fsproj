@@ -3,7 +3,6 @@
   <PropertyGroup>
     <TargetFramework>$(DotNetVersion)</TargetFramework>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-    <GenerateProgramFile>false</GenerateProgramFile>
     <OutputType>Exe</OutputType>
 
     <Description>FSharp implementation of Facebook GraphQL query language (Server)</Description>
@@ -19,14 +18,11 @@
     <PackageReference Include="Microsoft.Azure.Cosmos" />
     <!-- Microsoft.Azure.Cosmos needs Newtonsoft.Json at run time but leaves the reference to the consuming project -->
     <PackageReference Include="Newtonsoft.Json" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="FSharp.Control.TaskSeq" />
     <PackageReference Include="IcedTasks" />
     <PackageReference Include="Validus" />
-    <PackageReference Include="xunit" />
-    <PackageReference Include="xunit.runner.utility" />
-    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="xunit.v3" />
   </ItemGroup>
 
   <ItemGroup>
@@ -107,7 +103,7 @@
     <Compile Include="AspNetCore/SubscriptionWorkerTests.fs" />
     <Compile Include="AspNetCore/WebSocketConnectionTests.fs" />
     <Compile Include="TaskSeqFieldTests.fs" />
-    <Compile Include="Program.fs" />
+    <Compile Include="AssemblyInfo.fs" />
   </ItemGroup>
 
   <ItemGroup>

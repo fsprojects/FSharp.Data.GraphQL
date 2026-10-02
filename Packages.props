@@ -6,7 +6,7 @@
     <AspNetCoreVersion>10.0.*</AspNetCoreVersion>
     <FSharpCoreVersion>10.1.401</FSharpCoreVersion>
     <FsToolkitVersion>5.*</FsToolkitVersion>
-    <XUnitVersion>2.9.3</XUnitVersion>
+    <XUnitVersion>4.*</XUnitVersion>
     <FAKEVersion>6.*</FAKEVersion>
   </PropertyGroup>
   <ItemGroup Label="Common">
@@ -54,18 +54,13 @@
   <ItemGroup Label="Test platform">
     <PackageReference Update="BenchmarkDotNet" Version="0.15.*" />
     <PackageReference Update="BenchmarkDotNet.Annotations" Version="0.*" />
-    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.14.1" />
-    <PackageReference Update="Microsoft.TestPlatform.TestHost" Version="17.7.*" />
-    <PackageReference Update="Microsoft.TestPlatform.ObjectModel" Version="17.7.*" />
-    <PackageReference Update="xunit" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.analyzers" Version="1.*" />
-    <PackageReference Update="xunit.assert" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.core" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.extensibility.core" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.extensibility.execution" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.runner.console" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.runner.utility" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Update="xunit.analyzers" Version="2.*" />
+    <PackageReference Update="xunit.v3" Version="$(XUnitVersion)" />
+    <PackageReference Update="xunit.v3.assert" Version="$(XUnitVersion)" />
+    <PackageReference Update="xunit.v3.core" Version="$(XUnitVersion)" />
+    <PackageReference Update="xunit.v3.extensibility.core" Version="$(XUnitVersion)" />
+    <PackageReference Update="xunit.v3.runner.console" Version="$(XUnitVersion)" />
+    <PackageReference Update="xunit.v3.runner.utility" Version="$(XUnitVersion)" />
   </ItemGroup>
   <ItemGroup Label="Tests and Samples">
     <PackageReference Update="Azure.Core" Version="1.*" />
