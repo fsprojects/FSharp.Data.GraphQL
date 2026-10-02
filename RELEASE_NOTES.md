@@ -324,4 +324,5 @@
 * Fixed `graphql-transport-ws` sending a request error (rejected before execution: validation, planning, variable coercion, a middleware, or the executor itself failing) as a `next` result followed by `complete`, instead of the terminal `error` message the protocol requires for it; a query or mutation whose non-null root field fails during execution still gets `next` + `complete`, since it is a result, not a request error
 * Fixed `graphql-transport-ws` throwing while serializing an `error` message or a `pong` carrying a payload, since neither was written under the `payload` property name `Utf8JsonWriter` requires
 * Fixed validation of an inline fragment without a type condition (`... { … }`), which used to fail with an exception instead of applying to the parent type
+* Fixed the GraphQL client provider building `Operation<...>` again for every file that uses the same operation, which added another operation type of the same name to `Operations` each time
 * Removed the internal `Observable.withCompletionMarker`
