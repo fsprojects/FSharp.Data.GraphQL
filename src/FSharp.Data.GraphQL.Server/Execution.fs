@@ -1218,7 +1218,7 @@ let internal coerceVariables
             })
             (variablesBuilder |> Ok)
 
-    and! nulls = nulls |> splitSeqErrorsList
+    let! nulls = nulls |> splitSeqErrorsList
 
     nulls |> Array.iter variablesBuilder.Add
 
