@@ -4,7 +4,7 @@
     <SystemVersion>10.0.*</SystemVersion>
     <MicrosoftExtensionsVersion>10.0.*</MicrosoftExtensionsVersion>
     <AspNetCoreVersion>10.0.*</AspNetCoreVersion>
-    <FSharpCoreVersion>10.1.202</FSharpCoreVersion>
+    <FSharpCoreVersion>10.1.401</FSharpCoreVersion>
     <FsToolkitVersion>4.17.*</FsToolkitVersion>
     <XUnitVersion>2.9.3</XUnitVersion>
     <FAKEVersion>6.*</FAKEVersion>
