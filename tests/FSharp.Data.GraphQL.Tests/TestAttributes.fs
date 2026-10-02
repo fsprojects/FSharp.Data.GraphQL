@@ -2,7 +2,7 @@ namespace FSharp.Data.GraphQL.Tests
 
 open System
 open System.Globalization
-open Xunit.Sdk
+open Xunit.v3
 
 type UseInvariantCultureAttribute() =
     inherit BeforeAfterTestAttribute()
@@ -10,14 +10,14 @@ type UseInvariantCultureAttribute() =
     let mutable _originalUICulture: CultureInfo = null
     let mutable _originalCulture: CultureInfo = null
 
-    override _.Before (methodUnderTest) =
+    override _.Before (methodUnderTest, test) =
         _originalUICulture <- CultureInfo.CurrentUICulture
         _originalCulture <- CultureInfo.CurrentCulture
 
         CultureInfo.CurrentUICulture <- CultureInfo.InvariantCulture
         CultureInfo.CurrentCulture <- CultureInfo.InvariantCulture
 
-    override _.After (methodUnderTest) =
+    override _.After (methodUnderTest, test) =
         CultureInfo.CurrentUICulture <- _originalUICulture
         CultureInfo.CurrentCulture <- _originalCulture
 

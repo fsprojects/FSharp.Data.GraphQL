@@ -268,9 +268,10 @@ During the implementation, if you need some types or members defined in the othe
 
 ## Testing
 
-* Tests use xUnit.
+* Tests use xUnit.net v3 on Microsoft.Testing.Platform (MTP): #file:'global.json' switches `dotnet test` to MTP mode.
 * If you work with tests, then do not build the whole solution as it is large and the build happens very slow. Run the tests individually or the whole test project instead.
 * Prefer running tests through the IDE's MCP test tools; fall back to the `--no-build` switch of `dotnet test` first to speed up execution when those tools are unavailable or fail to run the tests, and use the trx format for results so failures can be consumed and fixed.
+* In MTP mode pass the project through `--project` and request TRX results with `--report-xunit-trx --report-xunit-trx-filename <name>.trx`. VSTest switches such as `--logger` are rejected, while `--filter` still takes the VSTest filter syntax.
 * Use `Assert.Equal`, `Assert.Collection`, `Assert.Contains` / `Assert.DoesNotContain`, `Assert.Empty` / `Assert.NotEmpty` and `Assert.Single` for collection assertions – they work directly with F# lists, arrays and sequences.
 * Every assertion should produce a self-explanatory failure output.
 * Async tests must return `Task`, not `Async` or `Task<unit>` – always declare `) : Task = task {`.

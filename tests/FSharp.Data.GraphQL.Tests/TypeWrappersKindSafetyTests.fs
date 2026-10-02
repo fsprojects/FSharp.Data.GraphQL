@@ -3,8 +3,9 @@ module FSharp.Data.GraphQL.Tests.TypeWrappersKindSafetyTests
 open System
 open System.Diagnostics
 open System.Threading.Tasks
-open FSharp.Data.GraphQL.Types
+open IcedTasks
 open Xunit
+open FSharp.Data.GraphQL.Types
 
 type private InputOnly = { Value : int }
 type private OutputOnly = { Value : int }
@@ -61,7 +62,7 @@ type TypeWrappersKindSafetyFixture () =
 
     interface IAsyncLifetime with
 
-        member this.InitializeAsync () : Task = task {
+        member this.InitializeAsync () : ValueTask = valueTaskUnit {
                 IO.Directory.CreateDirectory (scriptsDir) |> ignore
                 IO.Directory.CreateDirectory (sourceScriptsDir) |> ignore
 
@@ -71,7 +72,9 @@ type TypeWrappersKindSafetyFixture () =
                 do! ensureFileContentAsync sourceReferencesPath content
             }
 
-        member _.DisposeAsync () = Task.CompletedTask
+    interface IAsyncDisposable with
+
+        member _.DisposeAsync () = ValueTask.CompletedTask
 
 type TypeWrappersKindSafetyTests (fixture : TypeWrappersKindSafetyFixture) =
     interface IClassFixture<TypeWrappersKindSafetyFixture>
