@@ -179,11 +179,22 @@ let ``Brackets in comments do not count as nesting`` () =
     |> ignore
 
 [<Fact>]
-let ``Brackets in block strings do not count as nesting`` () =
-    let braces = String.replicate 200 "{"
-    let brackets = String.replicate 200 "["
-    Parser.tryFindNestingViolation 128 $"\"\"\"%s{braces}\\\"\"\"%s{brackets}\"\"\" {{ a }}"
-    |> equals ValueNone
+let ``Runs of quotes do not hide nesting`` () =
+    // The grammar has no block strings: it reads """" as two empty strings, so the brackets after them are nested values
+    let value = String.replicate 140 "[" + "1" + String.replicate 140 "]"
+    parseIsolated $"{{ f(a: [\"\"\"\" %s{value} \"\"\"\"\n]) }}"
+    |> wantError
+    |> assertNestedTooDeeply
+
+[<Theory>]
+[<InlineData(0x2028)>]
+[<InlineData(0x2029)>]
+let ``Comments ended by a Unicode line or paragraph separator do not hide nesting`` (separator : int) =
+    // The grammar ends a comment at these separators, so the braces after them are nested selection sets.
+    // The separator is built from its code because Fantomas would write an escape of it out as the raw character.
+    parseIsolated ("# c" + string (char separator) + nestedSelections 200)
+    |> wantError
+    |> assertNestedTooDeeply
 
 [<Fact>]
 let ``A quote in a comment does not hide brackets`` () =

@@ -13,16 +13,20 @@ open FsToolkit.ErrorHandling
 [<AutoOpen>]
 module internal Internal =
 
+    // 2.1.3 LineTerminator
+    //   New Line (U+000A)
+    //   Carriage Return (U+000D)New Line (U+000A) | (U+000D)New Line (U+000A)
+    // This grammar also ends comments and strings at the Unicode line (U+2028) and paragraph (U+2029) separators.
+    // tryFindNestingViolation must split comments and strings exactly as the grammar does, so both use this set.
+    let lineTerminatorChars = [| '\u000A'; '\u000D'; '\u2028'; '\u2029' |]
+
     // 2.1.7 Ignored tokens
     let ignored =
         // 2.1.2 WhiteSpace
         //    Horizontal Tab (U+0009) | Space (U+0020)
         let whiteSpace = skipAnyOf [| '\u0009'; '\u000B'; '\u000C'; '\u0020'; '\u00A0' |]
 
-        // 2.1.3 LineTerminator
-        //   New Line (U+000A)
-        //   Carriage Return (U+000D)New Line (U+000A) | (U+000D)New Line (U+000A)
-        let lineTerminators = skipAnyOf [| '\u000A'; '\u000D'; '\u2028'; '\u2029' |]
+        let lineTerminators = skipAnyOf lineTerminatorChars
 
         // 2.1.4 CommentChar
         //  SourceCharacter but not LineTerminator
@@ -104,7 +108,7 @@ module internal Internal =
                     |> char)
             pchar '\\' >>. (escaped <|> unicode)
 
-        let normalCharacter = noneOf [| '\u000A'; '\u000D'; '\u2028'; '\u2029'; '"' |]
+        let normalCharacter = noneOf [| yield! lineTerminatorChars; '"' |]
         let quote = pchar '"'
 
         between quote quote (manyChars (escapedCharacter <|> normalCharacter))
@@ -381,20 +385,26 @@ module internal Internal =
 
 /// <summary>
 /// The line and column of the first brace, bracket or parenthesis nested deeper than <paramref name="maxDepth"/>,
-/// skipping comments, strings and block strings.
+/// skipping comments and strings.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The parser recurses once per nesting level, so a deeply nested document overflows the stack, which terminates the process.
-/// This linear scan rejects such a document before it is parsed. Lines and columns are 1-based, columns count UTF-16 code units,
-/// and <c>\r\n</c>, <c>\r</c> and <c>\n</c> each end a line.
+/// This linear scan rejects such a document before it is parsed.
+/// </para>
+/// <para>
+/// It must split comments and strings exactly as the grammar does: a bracket the scan takes for comment or string text,
+/// but the grammar parses, escapes the limit. Comments and strings therefore end at the same line terminators as in the
+/// grammar, and there are no block strings, which the grammar does not support either.
+/// </para>
+/// <para>
+/// Lines and columns are 1-based and columns count UTF-16 code units. As in FParsec error positions,
+/// <c>\r\n</c>, <c>\r</c> and <c>\n</c> each start a new line.
+/// </para>
 /// </remarks>
 let internal tryFindNestingViolation (maxDepth : int) (query : string) : struct (int * int) voption =
     let length = query.Length
-    let isBlockStringQuote index =
-        index + 2 < length
-        && query[index] = '"'
-        && query[index + 1] = '"'
-        && query[index + 2] = '"'
+    let isLineTerminator (c : char) = Array.contains c lineTerminatorChars
     let mutable depth = 0
     let mutable line = 1
     let mutable lineStart = 0
@@ -403,29 +413,9 @@ let internal tryFindNestingViolation (maxDepth : int) (query : string) : struct 
     while violation.IsNone && index < length do
         match query[index] with
         | '#' ->
-            // A comment runs to the end of the line, which the next iteration counts
-            while index < length && query[index] <> '\n' && query[index] <> '\r' do
+            // A comment runs to the line terminator, which the next iteration handles
+            while index < length && not (isLineTerminator query[index]) do
                 index <- index + 1
-        | '"' when isBlockStringQuote index ->
-            index <- index + 3
-            let mutable closed = false
-            while not closed && index < length do
-                match query[index] with
-                | '\\' when isBlockStringQuote (index + 1) -> index <- index + 4
-                | '"' when isBlockStringQuote index ->
-                    index <- index + 3
-                    closed <- true
-                | '\r' ->
-                    if index + 1 < length && query[index + 1] = '\n' then
-                        index <- index + 1
-                    index <- index + 1
-                    line <- line + 1
-                    lineStart <- index
-                | '\n' ->
-                    index <- index + 1
-                    line <- line + 1
-                    lineStart <- index
-                | _ -> index <- index + 1
         | '"' ->
             index <- index + 1
             let mutable closed = false
@@ -435,9 +425,8 @@ let internal tryFindNestingViolation (maxDepth : int) (query : string) : struct 
                 | '"' ->
                     index <- index + 1
                     closed <- true
-                // A string cannot span lines: the next iteration counts the line terminator
-                | '\n'
-                | '\r' -> closed <- true
+                // A string cannot contain a line terminator, which the next iteration handles
+                | c when isLineTerminator c -> closed <- true
                 | _ -> index <- index + 1
         | '{'
         | '['

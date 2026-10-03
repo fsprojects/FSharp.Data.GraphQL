@@ -24,7 +24,7 @@ module DocumentLimitsDefaults =
     /// operations and fragment definitions of the document.
     /// </para>
     /// <para>
-    /// Validation and planning take time in proportion to this number, so a higher limit lets a small document
+    /// The work of validating and planning a document grows with this number, so a higher limit lets a small document
     /// keep a server busy for longer.
     /// </para>
     /// </summary>
