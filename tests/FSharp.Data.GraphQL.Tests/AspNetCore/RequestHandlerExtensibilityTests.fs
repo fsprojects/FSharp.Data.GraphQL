@@ -2,8 +2,10 @@ module FSharp.Data.GraphQL.Tests.AspNetCore.RequestHandlerExtensibilityTests
 
 open System
 open System.IO
+open System.Net.Http
 open System.Text
 open System.Text.Json
+open System.Threading
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
@@ -47,13 +49,13 @@ type private SentinelHandler
 let private requestBody (query : string) = JsonSerializer.Serialize {| query = query |}
 
 /// Builds a handler of the given type wired through the real `AddGraphQL` DI registration (the same path
-/// a hosted app uses), backed by an `HttpContext` with the given method and JSON body. Returns it both as
-/// the base type (to prove `HandleAsync` dispatches virtually) and downcast to the concrete type (to
-/// assert on what it recorded), plus the DI scope to dispose once the test is done with it.
-let private createHandler<'Handler when 'Handler :> GraphQLRequestHandler<Root> and 'Handler : not struct>
-    (method : string)
-    (body : string voption)
-    : GraphQLRequestHandler<Root> * 'Handler * IDisposable =
+/// a hosted app uses), backed by an `HttpContext` whose request `configureRequest` sets up. Returns it both
+/// as the base type (to prove `HandleAsync` dispatches virtually) and downcast to the concrete type (to
+/// assert on what it recorded), the `HttpContext` (to execute the handler's result against), plus the DI
+/// scope to dispose once the test is done with it.
+let private createHandlerFor<'Handler when 'Handler :> GraphQLRequestHandler<Root> and 'Handler : not struct>
+    (configureRequest : HttpRequest -> unit)
+    : struct (GraphQLRequestHandler<Root> * 'Handler * HttpContext * IDisposable) =
     let services = ServiceCollection ()
     services.AddLogging () |> ignore
     services.AddGraphQL<Root, 'Handler>(TestSchema.executor, (fun _ -> { RequestId = "test" }))
@@ -62,22 +64,32 @@ let private createHandler<'Handler when 'Handler :> GraphQLRequestHandler<Root> 
     let serviceProvider = scope.ServiceProvider
 
     let ctx = DefaultHttpContext (RequestServices = serviceProvider)
-    ctx.Request.Method <- method
     ctx.Request.Path <- PathString "/graphql"
-
-    body
-    |> ValueOption.iter (fun json ->
-        ctx.Request.ContentType <- "application/json"
-        let bytes = Encoding.UTF8.GetBytes (json : string)
-        ctx.Request.Body <- new MemoryStream (bytes)
-        ctx.Request.ContentLength <- int64 bytes.Length)
+    configureRequest ctx.Request
 
     // The handler captures `httpContextAccessor.HttpContext` in its own constructor, so the accessor
     // must carry the request's HttpContext before the handler is resolved from the container.
     serviceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext <- ctx
 
     let handler = serviceProvider.GetRequiredService<GraphQLRequestHandler<Root>>()
-    handler, (handler :?> 'Handler), (scope :> IDisposable)
+    struct (handler, (handler :?> 'Handler), (ctx :> HttpContext), (scope :> IDisposable))
+
+let private setJsonBody (json : string) (request : HttpRequest) =
+    request.ContentType <- "application/json"
+    let bytes = Encoding.UTF8.GetBytes json
+    request.Body <- new MemoryStream (bytes)
+    request.ContentLength <- int64 bytes.Length
+
+/// Builds a handler as `createHandlerFor` does, backed by an `HttpContext` with the given method and JSON body.
+let private createHandler<'Handler when 'Handler :> GraphQLRequestHandler<Root> and 'Handler : not struct>
+    (method : string)
+    (body : string voption)
+    : GraphQLRequestHandler<Root> * 'Handler * IDisposable =
+    let struct (handler, concreteHandler, _, scope) =
+        createHandlerFor<'Handler> (fun request ->
+            request.Method <- method
+            body |> ValueOption.iter (fun json -> setJsonBody json request))
+    handler, concreteHandler, scope
 
 let private assertOkResponse (outcome : Result<IResult, IResult>) =
     match outcome with
@@ -141,4 +153,229 @@ let ``Overridden HandleAsync is used when the handler is resolved as GraphQLRequ
         let ok = Assert.IsType<Microsoft.AspNetCore.Http.HttpResults.Ok<string>> iresult
         Assert.Equal ("sentinel", ok.Value)
     | Error iresult -> fail $"Expected HandleAsync to succeed, but it returned an error result: %A{iresult}"
+}
+
+// Automatic persisted queries (APQ): Apollo Client's persisted query link first sends only a hash of the query in
+// `extensions.persistedQuery` and falls back to the full query once the server answers `PersistedQueryNotSupported`.
+
+let private persistedQueryName = "HeroName"
+let private persistedQueryText = "query HeroName { hero(id: \"1000\") { name } }"
+
+/// The extension Apollo Client's persisted query link sends: the SHA-256 of `persistedQueryText`
+let private persistedQueryExtensions =
+    """{"persistedQuery":{"version":1,"sha256Hash":"1cbc2ac2578b38723ede16940d5c898aac7cad1fd978cba363154afb07d130fc"}}"""
+
+/// Sets the request up as a multipart request, the way file uploads are sent, carrying the given `operations` JSON
+let private setMultipartOperations (operations : string) (request : HttpRequest) =
+    use content = new MultipartFormDataContent ()
+    content.Add (new StringContent (operations), "operations")
+    content.Add (new StringContent ("{}"), "map")
+    let body = new MemoryStream ()
+    content.CopyTo (body, null, CancellationToken.None)
+    body.Position <- 0L
+    request.ContentType <- string content.Headers.ContentType
+    request.Body <- body
+    request.ContentLength <- body.Length
+
+let private setQueryString (parameters : (string * string) list) (request : HttpRequest) =
+    request.QueryString <-
+        parameters
+        |> List.fold (fun (queryString : QueryString) (name, value) -> queryString.Add (name, value)) QueryString.Empty
+
+/// Executes the handler's result against its `HttpContext`, as the Giraffe and Oxpecker endpoints do, and returns the
+/// status code and the body written to the response.
+let private executeOutcome (ctx : HttpContext) (outcome : Result<IResult, IResult>) : Task<struct (int * string)> = task {
+    let result =
+        match outcome with
+        | Ok result
+        | Error result -> result
+    use body = new MemoryStream ()
+    ctx.Response.Body <- body
+    do! result.ExecuteAsync ctx
+    return struct (ctx.Response.StatusCode, Encoding.UTF8.GetString (body.ToArray ()))
+}
+
+let private wantMember (name : string) (responseBody : string) (element : JsonElement) =
+    match element.TryGetProperty name with
+    | true, value -> value
+    | false, _ ->
+        fail $"Expected a '%s{name}' member in %A{element.ValueKind} %s{element.GetRawText ()} of the response:\n%s{responseBody}"
+        Unchecked.defaultof<_>
+
+/// Asserts that the request was answered the way Apollo Server answers a persisted query when they are disabled: an HTTP 200
+/// response, uncacheable, with a single `PersistedQueryNotSupported` error and no data, and that nothing was executed.
+let private assertPersistedQueryNotSupported (recorder : RecordingHandler) (ctx : HttpContext) (outcome : Result<IResult, IResult>) = task {
+    Assert.True (
+        recorder.IntrospectionCalls.Count = 0,
+        $"Expected a persisted query request not to be answered with the introspection result, but ExecuteIntrospectionQuery was called %d{recorder.IntrospectionCalls.Count} time(s)"
+    )
+    Assert.True (
+        recorder.OperationCalls.Count = 0,
+        $"Expected a persisted query request not to be executed, but ExecuteOperation was called %d{recorder.OperationCalls.Count} time(s)"
+    )
+
+    let! struct (statusCode, responseBody) = executeOutcome ctx outcome
+
+    Assert.True (
+        (statusCode = StatusCodes.Status200OK),
+        $"Expected HTTP 200, as Apollo Server answers an unsupported persisted query, but got HTTP %d{statusCode} with body:\n%s{responseBody}"
+    )
+    use document = JsonDocument.Parse responseBody
+    let root = document.RootElement
+    Assert.False (fst (root.TryGetProperty "data"), $"Expected no 'data' member in the response of a rejected request, but got:\n%s{responseBody}")
+    let errors = root |> wantMember "errors" responseBody
+    let error =
+        match errors.EnumerateArray () |> Seq.toList with
+        | [ error ] -> error
+        | _ ->
+            fail $"Expected exactly one error in the response, but got:\n%s{responseBody}"
+            Unchecked.defaultof<_>
+    Assert.Equal ("PersistedQueryNotSupported", (error |> wantMember "message" responseBody).GetString ())
+    let code = error |> wantMember "extensions" responseBody |> wantMember "code" responseBody
+    Assert.Equal ("PERSISTED_QUERY_NOT_SUPPORTED", code.GetString ())
+    Assert.Equal ("private, no-cache, must-revalidate", ctx.Response.Headers.CacheControl.ToString ())
+}
+
+[<Fact>]
+let ``POST with only a persisted query hash is answered with PersistedQueryNotSupported`` () : Task = task {
+    let body = $"""{{"operationName":"%s{persistedQueryName}","variables":{{}},"extensions":%s{persistedQueryExtensions}}}"""
+    let struct (handler, recorder, ctx, scope) =
+        createHandlerFor<RecordingHandler> (fun request ->
+            request.Method <- HttpMethods.Post
+            setJsonBody body request)
+    use _ = scope
+
+    let! outcome = handler.HandleAsync ()
+
+    do! assertPersistedQueryNotSupported recorder ctx outcome
+}
+
+[<Fact>]
+let ``GET with only a persisted query hash is answered with PersistedQueryNotSupported instead of the introspection result`` () : Task = task {
+    let struct (handler, recorder, ctx, scope) =
+        createHandlerFor<RecordingHandler> (fun request ->
+            request.Method <- HttpMethods.Get
+            request
+            |> setQueryString [
+                "operationName", persistedQueryName
+                "variables", "{}"
+                "extensions", persistedQueryExtensions
+            ])
+    use _ = scope
+
+    let! outcome = handler.HandleAsync ()
+
+    do! assertPersistedQueryNotSupported recorder ctx outcome
+}
+
+[<Fact>]
+let ``POST with both a query and a persisted query hash is answered with PersistedQueryNotSupported as Apollo Server does`` () : Task = task {
+    let body =
+        $"""{{"query":%s{JsonSerializer.Serialize persistedQueryText},"operationName":"%s{persistedQueryName}","extensions":%s{persistedQueryExtensions}}}"""
+    let struct (handler, recorder, ctx, scope) =
+        createHandlerFor<RecordingHandler> (fun request ->
+            request.Method <- HttpMethods.Post
+            setJsonBody body request)
+    use _ = scope
+
+    let! outcome = handler.HandleAsync ()
+
+    do! assertPersistedQueryNotSupported recorder ctx outcome
+}
+
+[<Fact>]
+let ``Multipart POST with a persisted query hash in its operations is answered with PersistedQueryNotSupported`` () : Task = task {
+    let operations = $"""{{"operationName":"%s{persistedQueryName}","extensions":%s{persistedQueryExtensions}}}"""
+    let struct (handler, recorder, ctx, scope) =
+        createHandlerFor<RecordingHandler> (fun request ->
+            request.Method <- HttpMethods.Post
+            setMultipartOperations operations request)
+    use _ = scope
+
+    let! outcome = handler.HandleAsync ()
+
+    do! assertPersistedQueryNotSupported recorder ctx outcome
+}
+
+[<Fact>]
+let ``Multipart POST operation is executed as before`` () : Task = task {
+    let query = "query { hero(id: \"1000\") { id name } }"
+    let struct (handler, recorder, _, scope) =
+        createHandlerFor<RecordingHandler> (fun request ->
+            request.Method <- HttpMethods.Post
+            setMultipartOperations (requestBody query) request)
+    use _ = scope
+
+    let! outcome = handler.HandleAsync ()
+
+    Assert.True (
+        (recorder.OperationCalls.Count = 1),
+        $"Expected the operation of a multipart request to be executed once, but ExecuteOperation was called %d{recorder.OperationCalls.Count} time(s); outcome: %A{outcome}"
+    )
+    Assert.Equal (query, recorder.OperationCalls[0].Query)
+    Assert.Equal (0, recorder.IntrospectionCalls.Count)
+    assertOkResponse outcome
+}
+
+[<Fact>]
+let ``GET with both a query and a persisted query hash is answered with PersistedQueryNotSupported as Apollo Server does`` () : Task = task {
+    let struct (handler, recorder, ctx, scope) =
+        createHandlerFor<RecordingHandler> (fun request ->
+            request.Method <- HttpMethods.Get
+            request
+            |> setQueryString [
+                "query", persistedQueryText
+                "operationName", persistedQueryName
+                "extensions", persistedQueryExtensions
+            ])
+    use _ = scope
+
+    let! outcome = handler.HandleAsync ()
+
+    do! assertPersistedQueryNotSupported recorder ctx outcome
+}
+
+// Apollo Server tests `extensions.persistedQuery` for JavaScript truthiness, so null, false, "" and 0 do not ask for one
+[<Theory>]
+[<InlineData("null")>]
+[<InlineData("""{"tracing":true}""")>]
+[<InlineData("""{"persistedQuery":null}""")>]
+[<InlineData("""{"persistedQuery":false}""")>]
+[<InlineData("""{"persistedQuery":""}""")>]
+[<InlineData("""{"persistedQuery":0}""")>]
+[<InlineData("""[]""")>]
+let ``POST operation whose extensions do not ask for a persisted query is executed as before`` (extensions : string) : Task = task {
+    let query = "query { hero(id: \"1000\") { id name } }"
+    let body = $"""{{"query":%s{JsonSerializer.Serialize query},"extensions":%s{extensions}}}"""
+    let handler, recorder, scope = createHandler<RecordingHandler> HttpMethods.Post (ValueSome body)
+    use _ = scope
+
+    let! outcome = handler.HandleAsync ()
+
+    Assert.True (
+        (recorder.OperationCalls.Count = 1),
+        $"Expected the operation to be executed once despite extensions %s{extensions}, but ExecuteOperation was called %d{recorder.OperationCalls.Count} time(s)"
+    )
+    Assert.Equal (query, recorder.OperationCalls[0].Query)
+    Assert.Equal (0, recorder.IntrospectionCalls.Count)
+    assertOkResponse outcome
+}
+
+[<Fact>]
+let ``GET whose extensions do not ask for a persisted query is still answered with the introspection result`` () : Task = task {
+    let struct (handler, recorder, _, scope) =
+        createHandlerFor<RecordingHandler> (fun request ->
+            request.Method <- HttpMethods.Get
+            request |> setQueryString [ "extensions", """{"tracing":true}""" ])
+    use _ = scope
+
+    let! outcome = handler.HandleAsync ()
+
+    Assert.True (
+        (recorder.IntrospectionCalls.Count = 1),
+        $"Expected the introspection query to be executed once, but ExecuteIntrospectionQuery was called %d{recorder.IntrospectionCalls.Count} time(s)"
+    )
+    Assert.Equal (ValueNone, recorder.IntrospectionCalls[0])
+    Assert.Equal (0, recorder.OperationCalls.Count)
+    assertOkResponse outcome
 }
