@@ -2,6 +2,7 @@ namespace FSharp.Data.GraphQL.Validation
 
 open System.Collections.Generic
 open System.Text.Json.Serialization
+open Microsoft.FSharp.Core.CompilerServices
 open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL
@@ -35,8 +36,17 @@ module ValidationResult =
 
     /// Call the given sequence of validations, accumulating any errors, and return one ValidationResult.
     let collect (f : 'T -> ValidationResult<'Err>) (xs : 'T seq) : ValidationResult<'Err> =
-        // TODO: Use PSeq
-        Seq.fold (fun acc t -> acc @@ (f t)) Success xs
+        // Appending to the accumulated list with @@ copies it on every step,
+        // which makes a validation reporting many errors quadratic
+        let mutable errors = ListCollector<'Err> ()
+        let mutable failed = false
+        for x in xs do
+            match f x with
+            | Success -> ()
+            | ValidationError e ->
+                failed <- true
+                errors.AddMany e
+        if failed then ValidationError (errors.Close ()) else Success
 
     let mapErrors (f : 'Err1 -> 'Err2) (res : ValidationResult<'Err1>) : ValidationResult<'Err2> =
         match res with
@@ -52,18 +62,21 @@ module GQLValidator =
 [<AbstractClass; Sealed>]
 type AstError =
 
+    /// <summary>Creates a validation error.</summary>
+    /// <param name="message">The message of the error.</param>
+    /// <param name="path">The reversed path of the selection that the error is about.</param>
+    static member Create (message : string, ?path : FieldPath) : GQLProblemDetails = {
+        Message = message
+        Exception = ValueNone
+        Path = path |> Skippable.ofOption |> Skippable.map List.rev
+        Locations = Skip
+        Extensions =
+            Include (
+                Dictionary<string, obj> ()
+                |> GQLProblemDetails.SetErrorKind ErrorKind.Validation
+            )
+    }
+
     static member AsResult (message : string, ?path : FieldPath) =
-        [
-            {
-                Message = message
-                Exception = ValueNone
-                Path = path |> Skippable.ofOption |> Skippable.map List.rev
-                Locations = Skip
-                Extensions =
-                    Include (
-                        Dictionary<string, obj> ()
-                        |> GQLProblemDetails.SetErrorKind ErrorKind.Validation
-                    )
-            }
-        ]
+        [ AstError.Create (message, ?path = path) ]
         |> ValidationResult.ValidationError
