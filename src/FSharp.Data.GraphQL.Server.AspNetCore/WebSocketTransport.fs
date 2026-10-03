@@ -36,18 +36,30 @@ module internal WebSocketStates =
 /// Reads whole client messages from a socket and deserializes them into protocol messages.
 /// </summary>
 /// <remarks>
+/// <para>
 /// A receive is never cancelled: the managed socket aborts on a cancelled receive and the client would never see a close code. A pending receive ends
 /// when the client sends its next message or its close frame, when the sender loop completes a close handshake, or when the socket is aborted.
+/// </para>
+/// <para>
+/// A message is buffered only up to the maximum size: a message exceeding it is rejected with
+/// <see cref="WebSocketCloseStatus.MessageTooBig"/> as soon as one byte beyond the limit is read, and the rest of it is left unread.
+/// </para>
 /// </remarks>
 type internal WebSocketMessageReader
     /// <param name="socket">The socket to read from.</param>
     /// <param name="serializerOptions">The options client messages are deserialized with.</param>
     /// <param name="readBufferSize">The size of the buffer rented for every receive.</param>
+    /// <param name="maxMessageSize">The maximum size in bytes of a message; must be positive.</param>
     /// <param name="logger">The logger of the connection.</param>
-    (socket : WebSocket, serializerOptions : JsonSerializerOptions, readBufferSize : int, logger : ILogger) =
+    (socket : WebSocket, serializerOptions : JsonSerializerOptions, readBufferSize : int, maxMessageSize : int, logger : ILogger) =
 
     static let invalidJsonInClientMessageError =
         Error (InvalidMessage (CustomWebSocketStatus.InvalidMessage, "Invalid json in client message"))
+
+    do ArgumentOutOfRangeException.ThrowIfNegativeOrZero (maxMessageSize, nameof maxMessageSize)
+
+    let messageTooBigError =
+        Error (InvalidMessage (int WebSocketCloseStatus.MessageTooBig, $"Message exceeds the maximum size of %d{maxMessageSize} bytes"))
 
     let deserializeClientMessage (message : IReadOnlyPooledList<byte>) = taskResult {
         try
@@ -76,26 +88,39 @@ type internal WebSocketMessageReader
         try
             use completeMessage = new PooledList<byte> ()
             let mutable segmentResponse : WebSocketReceiveResult | null = null
-            while socket |> WebSocketStates.isOpen
+            let mutable tooBig = false
+            while not tooBig
+                  && socket |> WebSocketStates.isOpen
                   && (match segmentResponse with
                       | null -> true
                       | segment -> not segment.EndOfMessage) do
-                let! received = socket.ReceiveAsync (ArraySegment<byte> buffer, CancellationToken.None)
+                // Never more than one byte beyond the limit is requested, so that a message over it is detected without reading,
+                // let alone buffering, the rest of it. Never negative, since no more than the limit is ever buffered.
+                let remaining = maxMessageSize - completeMessage.Count
+                let count = if remaining < buffer.Length then remaining + 1 else buffer.Length
+                let! received = socket.ReceiveAsync (ArraySegment<byte>(buffer, 0, count), CancellationToken.None)
                 segmentResponse <- received
-                completeMessage.AddRange (ArraySegment<byte>(buffer, 0, received.Count))
+                if received.Count > remaining then
+                    tooBig <- true
+                else
+                    completeMessage.AddRange (ArraySegment<byte>(buffer, 0, received.Count))
 
-            if Debugger.IsAttached then
-                let message =
-                    completeMessage
-                    |> Seq.filter (fun x -> x > 0uy)
-                    |> Seq.toArray
-                    |> Encoding.UTF8.GetString
-                logger.LogInformation ("-> Request: {request}", message)
-            if completeMessage.All (fun b -> b = 0uy) then
-                return ValueNone
+            if tooBig then
+                logger.LogWarning ("Rejecting a client message exceeding the maximum size of {maxMessageSize} bytes", maxMessageSize)
+                return! messageTooBigError
             else
-                let! result = deserializeClientMessage completeMessage
-                return ValueSome result
+                if Debugger.IsAttached then
+                    let message =
+                        completeMessage
+                        |> Seq.filter (fun x -> x > 0uy)
+                        |> Seq.toArray
+                        |> Encoding.UTF8.GetString
+                    logger.LogInformation ("-> Request: {request}", message)
+                if completeMessage.All (fun b -> b = 0uy) then
+                    return ValueNone
+                else
+                    let! result = deserializeClientMessage completeMessage
+                    return ValueSome result
         finally
             ArrayPool.Shared.Return buffer
     }

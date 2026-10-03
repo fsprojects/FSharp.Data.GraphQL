@@ -20,16 +20,36 @@ open FSharp.Data.GraphQL.Shared.WebSockets
 open FSharp.Data.GraphQL.Server.AspNetCore.ObservableErrorHandling
 open FSharp.Data.GraphQL.Server.AspNetCore.ClientMessagePatterns
 
+/// The bounds of the queues between the loops of a <c>graphql-transport-ws</c> connection.
+module internal WebSocketConnectionLimits =
+
+    /// <summary>
+    /// How many received client messages may wait for the control loop of a connection.
+    /// </summary>
+    /// <remarks>
+    /// The control loop handles one message at a time, executing a query or mutation to its end before the next one, so a client can send faster than
+    /// its messages are handled. Once this many are waiting, the reader waits for room instead of reading from the socket, and TCP flow control slows
+    /// the client down; a connection never holds more than this many messages, plus the one the reader waits to queue and the one being handled. The
+    /// value leaves room for a client starting a burst of subscriptions at once, while bounding what a connection holds to 18 messages of at most
+    /// <see cref="GraphQLTransportWSOptions.MaxReceiveMessageSize"/> bytes each.
+    /// </remarks>
+    [<Literal>]
+    let IncomingMessageQueueCapacity = 16
+
 /// <summary>
 /// One <c>graphql-transport-ws</c> connection: the connection handshake, then three loops that each own one piece of state and talk through channels.
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
-/// <item><description>The reader loop is the only reader of the socket; it queues every client message for the control loop.</description></item>
-/// <item><description>The control loop is the only owner of the subscription registry; it executes requests, starts and cancels subscription workers, and queues messages for the sender.</description></item>
+/// <item><description>The reader loop is the only reader of the socket; it queues every client message for the control loop, waiting for room while
+/// <see cref="WebSocketConnectionLimits.IncomingMessageQueueCapacity"/> messages are already queued, and stops at the first message that is not a valid
+/// protocol message, since the connection is closed on it.</description></item>
+/// <item><description>The control loop is the only owner of the subscription registry; it executes requests, starts and cancels subscription workers,
+/// and queues messages for the sender. The ends the workers report are handled before every client message, whose id they may free.</description></item>
 /// <item><description>The sender loop is the only writer of the socket, including its close.</description></item>
 /// </list>
-/// Every producer only ever writes into a channel, so no lock is needed anywhere, and no thread ever blocks on a send.
+/// Every producer only ever writes into a channel, so no lock is needed anywhere. Only the reader ever waits for room in one, and the queue it waits on
+/// is completed once the control loop stops, so that wait cannot outlive the connection.
 /// </remarks>
 type internal GraphQLWebSocketConnection<'Root>
     /// <param name="httpContext">The HTTP context of the request the socket was accepted from.</param>
@@ -52,9 +72,32 @@ type internal GraphQLWebSocketConnection<'Root>
     static let channelOptions () =
         UnboundedChannelOptions (SingleReader = true, SingleWriter = false, AllowSynchronousContinuations = false)
 
-    let inbox = Channel.CreateUnbounded<ConnectionEvent>(channelOptions ())
+    // The client messages, from the reader loop to the control loop. Bounded, so that a client sending faster than the
+    // control loop handles its messages cannot make the connection queue them without limit: the reader waits for room.
+    // Completed by the reader once the client can send no more, and after the control loop stops, which fails a write the
+    // reader is waiting on instead of leaving it waiting forever.
+    let inbox =
+        Channel.CreateBounded<ConnectionEvent>(
+            BoundedChannelOptions (
+                WebSocketConnectionLimits.IncomingMessageQueueCapacity,
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleReader = true,
+                SingleWriter = false,
+                AllowSynchronousContinuations = false
+            )
+        )
+    // The ends the subscription workers report. Unbounded, since a worker must never wait to report its end: the shutdown
+    // awaits every worker without reading this queue. Never holds more than one end per worker in the registry.
+    let workerEnds = Channel.CreateUnbounded<ConnectionEvent>(channelOptions ())
     let outbound = Channel.CreateUnbounded<OutboundMessage>(channelOptions ())
-    let reader = WebSocketMessageReader (socket, options.SerializerOptions, options.ReadBufferSize, logger)
+    let reader =
+        WebSocketMessageReader (
+            socket,
+            options.SerializerOptions,
+            options.ReadBufferSize,
+            options.WebsocketOptions.MaxReceiveMessageSize,
+            logger
+        )
     let sender = WebSocketMessageSender (socket, options.SerializerOptions, gracefulCloseTimeout, logger)
 
     // Owned by the control loop alone: the running workers by generation, and the id each client-visible
@@ -84,7 +127,7 @@ type internal GraphQLWebSocketConnection<'Root>
         nextGeneration <- nextGeneration + 1
         let cancellation = CancellationTokenSource.CreateLinkedTokenSource connectionToken
         let worker =
-            SubscriptionWorker<'T>(id, generation, source, payloads, outbound.Writer, inbox.Writer, logger)
+            SubscriptionWorker<'T>(id, generation, source, payloads, outbound.Writer, workerEnds.Writer, logger)
         active[id] <- generation
         // Registered in the same synchronous stretch as the start, so a worker that ends synchronously only queues
         // its end: the control loop processes it after this registration
@@ -160,6 +203,26 @@ type internal GraphQLWebSocketConnection<'Root>
             return true
     }
 
+    /// Handles one connection event; returns whether the connection keeps running.
+    let handleEvent (event : ConnectionEvent) : Task<bool> = task {
+        match event with
+        | MessageReceived message -> return! handleClientMessage message
+        | ProtocolFailure (code, explanation) ->
+            nameof InvalidMessage |> logMessageReceived ValueNone
+            closeWith code explanation
+            return false
+        | SubscriptionEnded (id, generation) ->
+            match workers.TryGetValue generation with
+            | true, handle ->
+                workers.Remove generation |> ignore
+                handle.Cancellation.Dispose ()
+            | false, _ -> ()
+            match active.TryGetValue id with
+            | true, current when current = generation -> active.Remove id |> ignore
+            | _ -> () // The id was already re-used by a newer subscription
+            return true
+    }
+
     let waitForEvent () : Task<bool> = task {
         try
             let! available = inbox.Reader.WaitToReadAsync connectionToken
@@ -177,38 +240,41 @@ type internal GraphQLWebSocketConnection<'Root>
             if not available then
                 running <- false
             else
-                match inbox.Reader.TryRead () with
-                | true, MessageReceived message ->
-                    let! keepRunning = handleClientMessage message
-                    running <- keepRunning
-                | true, ProtocolFailure (code, explanation) ->
-                    nameof InvalidMessage |> logMessageReceived ValueNone
-                    closeWith code explanation
-                    running <- false
-                | true, SubscriptionEnded (id, generation) ->
-                    match workers.TryGetValue generation with
-                    | true, handle ->
-                        workers.Remove generation |> ignore
-                        handle.Cancellation.Dispose ()
+                // A worker's end only updates the registry, which nothing but a client message or the shutdown reads,
+                // so the ends are not waited for: every end reported so far is handled before the next client message,
+                // whose id it may free, and the shutdown awaits every worker anyway
+                let mutable reconciling = true
+                while running && reconciling do
+                    match workerEnds.Reader.TryRead () with
+                    | true, workerEnd ->
+                        let! keepRunning = handleEvent workerEnd
+                        running <- keepRunning
+                    | false, _ -> reconciling <- false
+                if running then
+                    match inbox.Reader.TryRead () with
+                    | true, event ->
+                        let! keepRunning = handleEvent event
+                        running <- keepRunning
                     | false, _ -> ()
-                    match active.TryGetValue id with
-                    | true, current when current = generation -> active.Remove id |> ignore
-                    | _ -> () // The id was already re-used by a newer subscription
-                | false, _ -> ()
     }
 
-    /// Reads client messages into the inbox until the socket can deliver no more.
+    /// Reads client messages into the inbox until the socket can deliver no more, or the client sent something that
+    /// is not a valid protocol message.
     let readLoop () : Task = backgroundTask {
         try
             try
-                while socket |> WebSocketStates.isOpen do
+                let mutable reading = true
+                while reading && socket |> WebSocketStates.isOpen do
                     let! receivedMessage = reader.ReceiveAsync ()
                     match receivedMessage with
                     | InvalidReceivedMessage (code, explanation) ->
-                        inbox.Writer.TryWrite (ProtocolFailure (code, explanation))
-                        |> ignore
+                        do! inbox.Writer.WriteAsync (ProtocolFailure (code, explanation))
+                        // The control loop closes the connection on it, so nothing the client sends afterwards needs
+                        // reading: neither the rest of a message over the size limit, nor anything after it
+                        reading <- false
                     | EmptyReceivedMessage -> logger.LogTrace ("WebSocket received empty message! State = '{socketState}'", socket.State)
-                    | ReceivedClientMessage message -> inbox.Writer.TryWrite (MessageReceived message) |> ignore
+                    // Waits while the inbox is full: the socket is not read meanwhile, which slows the client down
+                    | ReceivedClientMessage message -> do! inbox.Writer.WriteAsync (MessageReceived message)
             with ex ->
                 logger.LogDebug (ex, "Receiving from the WebSocket ended")
         finally
@@ -286,12 +352,16 @@ type internal GraphQLWebSocketConnection<'Root>
             // At this point, only something really weird must have happened. In order to avoid faulty state
             // scenarios and unimagined damages, the socket is closed without further ado.
             logger.LogError (ex, "Cannot handle a message; dropping a websocket connection")
+        // Nothing reads the inbox any more: completing it fails a write the reader is waiting on for room, which would
+        // otherwise never end, and makes the reader stop
+        inbox.Writer.TryComplete () |> ignore
         // Workers are stopped before the sender queue is completed, so none of them can find it closed
         do! shutdownWorkers ()
         // Ignored by the sender when a protocol close already went out
         close WebSocketCloseStatus.NormalClosure "Normal Closure"
         outbound.Writer.TryComplete () |> ignore
         do! senderTask
-        // Cannot hang: the sender closed or aborted the socket, which ends the pending receive
+        // Cannot hang: the sender closed or aborted the socket, which ends the pending receive, and the inbox is
+        // completed, which ends a pending write
         do! readerTask
     }
