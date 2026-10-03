@@ -106,6 +106,7 @@
     <Compile Include="TaskSeqFieldTests.fs" />
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Helpers and Extensions\ReflectionHelperTests.fs" />
+    <Compile Include="ValueLiteralsTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -60,6 +60,7 @@
     <Compile Include="WebSockets.fs" />
     <Compile Include="Serialization/JsonConverters.fs" />
     <Compile Include="Serialization/JSON.fs" />
+    <Compile Include="ValueLiterals.fs" />
   </ItemGroup>
 
 </Project>
