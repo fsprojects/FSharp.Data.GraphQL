@@ -123,6 +123,59 @@ let ``AsyncVal sequential collection collects all exceptions into AggregareExcep
 }
 
 [<Fact>]
+let ``AsyncVal lazy sequential collection maps each item only after the previous one has completed`` () : Task = task {
+    let mapped = ResizeArray<int> ()
+    let gate = TaskCompletionSource<int> (TaskCreationOptions.RunContinuationsAsynchronously)
+    let mapping item =
+        mapped.Add item
+        match item with
+        | 2 -> AsyncVal.ofAsync (Async.AwaitTask gate.Task)
+        | _ -> AsyncVal.wrap item
+    let collected = [| 1; 2; 3; 4 |] |> AsyncVal.collectSequentialWith mapping
+    Assert.True (AsyncVal.isAsync collected, $"Expected the collection to become asynchronous at the asynchronous item, but got %O{collected}")
+    let result = collected |> AsyncVal.toTask
+    Assert.Equal<int list> ([ 1; 2 ], mapped |> Seq.toList)
+    gate.SetResult 2
+    let! values = result
+    Assert.Equal<int[]> ([| 1; 2; 3; 4 |], values)
+    Assert.Equal<int list> ([ 1; 2; 3; 4 ], mapped |> Seq.toList)
+}
+
+[<Fact>]
+let ``AsyncVal lazy sequential collection stays immediate when every item is`` () =
+    match [| 1; 2; 3 |] |> AsyncVal.collectSequentialWith AsyncVal.wrap with
+    | Value values -> Assert.Equal<int[]> ([| 1; 2; 3 |], values)
+    | collected -> fail $"Expected an immediate value, but got %O{collected}"
+
+[<Fact>]
+let ``AsyncVal lazy sequential collection does not map the items after an immediate failure`` () =
+    let mapped = ResizeArray<int> ()
+    let error = Exception "test"
+    let mapping item =
+        mapped.Add item
+        match item with
+        | 2 -> AsyncVal.Failure error
+        | _ -> AsyncVal.wrap item
+    match [| 1; 2; 3 |] |> AsyncVal.collectSequentialWith mapping with
+    | Failure failure -> Assert.Same (error, failure)
+    | collected -> fail $"Expected the failure of the second item, but got %O{collected}"
+    Assert.Equal<int list> ([ 1; 2 ], mapped |> Seq.toList)
+
+[<Fact>]
+let ``AsyncVal lazy sequential collection does not map the items after an asynchronous failure`` () : Task = task {
+    let mapped = ResizeArray<int> ()
+    let error = Exception "test"
+    let mapping item =
+        mapped.Add item
+        match item with
+        | 2 -> AsyncVal.Failure error
+        | _ -> AsyncVal.ofAsync (async { return item })
+    let! ex = throwsAsyncVal<Exception> ([| 1; 2; 3 |] |> AsyncVal.collectSequentialWith mapping |> AsyncVal.map ignore)
+    Assert.Same (error, ex)
+    Assert.Equal<int list> ([ 1; 2 ], mapped |> Seq.toList)
+}
+
+[<Fact>]
 let ``AsyncVal parallel collection resolves all values with no order of execution`` () =
     let mutable flag = "none"
     let a = async {
