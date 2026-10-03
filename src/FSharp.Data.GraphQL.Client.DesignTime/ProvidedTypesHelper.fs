@@ -8,6 +8,7 @@ open System.Collections
 open System.Collections.Generic
 open System.Net.Http
 open System.Reflection
+open System.Text.Json
 open System.Text.Json.Serialization
 open FSharp.Core
 open FSharp.Data.GraphQL
@@ -333,7 +334,7 @@ module internal ProvidedOperation =
                     let serverUrl = info.ServerUrl
                     let headerNames = info.HttpHeaders |> Seq.map fst |> Array.ofSeq
                     let headerValues = info.HttpHeaders |> Seq.map snd |> Array.ofSeq
-                    <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues; Connection = new GraphQLClientConnection() } @@>
+                    <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues; Connection = new GraphQLClientConnection(); JsonSerializerOptions = Serialization.defaultSerializerOptions.Value } @@>
                 | None -> <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
             // We need to use the combination strategy to generate overloads for variables in the Run/AsyncRun methods.
             // The strategy follows the same principle with ProvidedRecord constructor overloads,
@@ -403,16 +404,16 @@ module internal ProvidedOperation =
                                   HttpHeaders = context.HttpHeaders
                                   OperationName = Option.ofObj operationName
                                   Query = actualQuery
-                                  Variables = %%variables }
+                                  Variables = %%variables
+                                  JsonSerializerOptions = context.JsonSerializerOptions }
                             let response =
                                 if shouldUseMultipartRequest
                                 then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
                                 else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
                             let responseString = response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-                            let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse responseString)
                             // If the user does not provide a context, we should dispose the default one after running the query
                             if isDefaultContext then (context :> IDisposable).Dispose()
-                            OperationResultBase(response, responseJson, %%operationFieldsExpr, operationTypeName) @@>
+                            new OperationResultBase(response, responseString, %%operationFieldsExpr, operationTypeName) @@>
                     let methodParameters = overloadParameters |> List.map (fun struct (name, _, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
                     let methodDef = ProvidedMethod("Run", methodParameters, operationResultDef, invoker)
                     methodDef.AddXmlDoc("Executes the operation on the server and fetch its results.")
@@ -449,7 +450,8 @@ module internal ProvidedOperation =
                                   HttpHeaders = context.HttpHeaders
                                   OperationName = Option.ofObj operationName
                                   Query = actualQuery
-                                  Variables = %%variables }
+                                  Variables = %%variables
+                                  JsonSerializerOptions = context.JsonSerializerOptions }
                             async {
                                 let! ct = Async.CancellationToken
                                 let! response =
@@ -457,17 +459,16 @@ module internal ProvidedOperation =
                                     then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync ct context.Connection request |> Async.AwaitTask)
                                     else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync ct context.Connection request |> Async.AwaitTask)
                                 let! responseString = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-                                let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse responseString)
                                 // If the user does not provide a context, we should dispose the default one after running the query
                                 if isDefaultContext then (context :> IDisposable).Dispose()
-                                return OperationResultBase(response, responseJson, %%operationFieldsExpr, operationTypeName)
+                                return new OperationResultBase(response, responseString, %%operationFieldsExpr, operationTypeName)
                             } @@>
                     let methodParameters = overloadParameters |> List.map (fun struct (name, _, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
                     let methodDef = ProvidedMethod("AsyncRun", methodParameters, TypeMapping.makeAsync operationResultDef, invoker)
                     methodDef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
                     upcast methodDef)
             let parseResultDef =
-                let invoker (args : Expr list) = <@@ OperationResultBase(%%args.[1], JsonValue.Parse %%args.[2], %%operationFieldsExpr, operationTypeName) @@>
+                let invoker (args : Expr list) = <@@ new OperationResultBase(%%args.[1], %%args.[2], %%operationFieldsExpr, operationTypeName) @@>
                 let parameters = [
                     ProvidedParameter("rawResponse", typeof<HttpResponseMessage>)
                     ProvidedParameter("responseJson", typeof<string>)
@@ -753,7 +754,8 @@ module internal Provider =
                                     | _ -> ProvidedParameter("serverUrl", typeof<string>)
                                 let httpHeaders = ProvidedParameter("httpHeaders", typeof<seq<string * string>>, optionalValue = null)
                                 let connectionFactory = ProvidedParameter("connectionFactory", typeof<unit -> GraphQLClientConnection>, optionalValue = null)
-                                [serverUrl; httpHeaders; connectionFactory]
+                                let jsonSerializerOptions = ProvidedParameter("jsonSerializerOptions", typeof<JsonSerializerOptions>, optionalValue = null)
+                                [serverUrl; httpHeaders; connectionFactory; jsonSerializerOptions]
                             let defaultHttpHeadersExpr =
                                 let names = httpHeaders |> Seq.map fst |> Array.ofSeq
                                 let values = httpHeaders |> Seq.map snd |> Array.ofSeq
@@ -768,7 +770,11 @@ module internal Provider =
                                         match %%args.[2] : unit -> GraphQLClientConnection with
                                         | argHeaders when obj.Equals(argHeaders, null) -> fun () -> new GraphQLClientConnection()
                                         | argHeaders -> argHeaders
-                                    { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders; Connection = connectionFactory() } @@>
+                                    let jsonOptions =
+                                        match %%args.[3] : JsonSerializerOptions with
+                                        | null -> Serialization.defaultSerializerOptions.Value
+                                        | opts -> opts
+                                    { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders; Connection = connectionFactory(); JsonSerializerOptions = jsonOptions } @@>
                             ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
                         let operationMethodDef =
                             let staticParams =
