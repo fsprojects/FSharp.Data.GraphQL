@@ -290,3 +290,92 @@ let ``Closing the connection cancels a running subscription`` () : Task = task {
     do! closeFromClient session
     session.Socket.ServerCloseStatus |> equals (ValueSome WebSocketCloseStatus.NormalClosure)
 }
+
+let private errorsOf (payload : JsonElement) = payload.GetProperty("errors").EnumerateArray () |> List.ofSeq
+
+let private pathOf (error : JsonElement) =
+    error.GetProperty("path").EnumerateArray ()
+    |> Seq.map _.GetString()
+    |> List.ofSeq
+
+let private messageOf (error : JsonElement) = error.GetProperty("message").GetString ()
+
+[<Fact>]
+let ``An unexpected exception of a resolver reaches a WebSocket client as a generic error at its path`` () : Task = task {
+    let session = start ()
+    use _ = session.Scope
+    do! initialize session
+    subscribe session "1" """{ hero(id: "1000") { name unexpectedFailure } }"""
+    let! messages = receiveUntilTerminal session "1"
+    messages |> List.map typeOf |> equals [ "next"; "complete" ]
+    let next = List.head messages
+    Assert.DoesNotContain (TestSchema.SecretDetail, next.RootElement.GetRawText ())
+    let error = errorsOf (payloadOf next) |> single
+    messageOf error |> equals ErrorMasking.UnexpectedErrorMessage
+    pathOf error |> equals [ "hero"; "unexpectedFailure" ]
+    do! closeFromClient session
+}
+
+[<Fact>]
+let ``An unexpected exception of a resolver keeps its message over WebSocket when masking is disabled`` () : Task = task {
+    let session = startConnection (fun options -> { options with MaskUnexpectedErrors = false })
+    use _ = session.Scope
+    do! initialize session
+    subscribe session "1" """{ hero(id: "1000") { name unexpectedFailure } }"""
+    let! messages = receiveUntilTerminal session "1"
+    let error = errorsOf (payloadOf (List.head messages)) |> single
+    messageOf error |> equals TestSchema.SecretDetail
+    pathOf error |> equals [ "hero"; "unexpectedFailure" ]
+    do! closeFromClient session
+}
+
+[<Fact>]
+let ``An unexpected exception of a deferred field reaches a WebSocket client as a generic error at its path in the incremental payload`` () : Task = task {
+    let session = start ()
+    use _ = session.Scope
+    do! initialize session
+    // The field is resolved inside the deferred object, so its failure is delivered with the deferred payload; a
+    // deferred field's own resolver runs before the field is deferred, putting its failure in the initial payload
+    subscribe session "1" """{ hero(id: "1000") @defer { name unexpectedFailure } }"""
+    let! messages = receiveUntilTerminal session "1"
+    let delivered =
+        messages
+        |> List.filter (fun message -> typeOf message = "next")
+        |> List.map payloadOf
+        |> List.tryFind (hasProperty "incremental")
+        |> Option.defaultWith (fun () ->
+            let received = messages |> List.map _.RootElement.GetRawText() |> String.concat "\n"
+            failwith $"Expected a payload with an incremental entry, but received:\n{received}")
+    Assert.DoesNotContain (TestSchema.SecretDetail, delivered.GetRawText ())
+    let error = errorsOf (delivered.GetProperty("incremental")[0]) |> single
+    messageOf error |> equals ErrorMasking.UnexpectedErrorMessage
+    pathOf error |> equals [ "hero"; "unexpectedFailure" ]
+    do! closeFromClient session
+}
+
+[<Fact>]
+let ``A GraphQL error a resolver raises on purpose keeps its message over WebSocket`` () : Task = task {
+    let session = start ()
+    use _ = session.Scope
+    do! initialize session
+    subscribe session "1" """{ hero(id: "1000") { name deliberateFailure } }"""
+    let! messages = receiveUntilTerminal session "1"
+    let error = errorsOf (payloadOf (List.head messages)) |> single
+    messageOf error |> equals TestSchema.DeliberateFailureMessage
+    pathOf error |> equals [ "hero"; "deliberateFailure" ]
+    do! closeFromClient session
+}
+
+[<Fact>]
+let ``A request error caused by an unexpected exception reaches a WebSocket client as a generic error`` () : Task = task {
+    let session = startConnection (fun options -> { options with SchemaExecutor = TestSchema.requestFailureExecutor })
+    use _ = session.Scope
+    do! initialize session
+    subscribe session "1" """{ hero(id: "1000") { name } }"""
+    let! messages = receiveUntilTerminal session "1"
+    let error = List.exactlyOne messages
+    typeOf error |> equals "error"
+    Assert.DoesNotContain (TestSchema.SecretDetail, error.RootElement.GetRawText ())
+    (payloadOf error).EnumerateArray () |> single |> messageOf |> equals ErrorMasking.UnexpectedErrorMessage
+    do! closeFromClient session
+}

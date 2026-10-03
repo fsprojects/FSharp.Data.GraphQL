@@ -1,6 +1,6 @@
 /// <summary>
-/// Maps the failures of a subscription's source, and request errors, to the problem details a client is allowed to see: a GraphQL-facing error keeps
-/// its message, anything else is replaced by a generic one so that backend exception messages never leak over the wire.
+/// Maps the failures of a subscription's source to the problem details a client is allowed to see: a GraphQL-facing error keeps
+/// its message, anything else is replaced by a generic one while errors are masked, so that backend exception messages never leak over the wire.
 /// </summary>
 module internal FSharp.Data.GraphQL.Server.AspNetCore.ObservableErrorHandling
 
@@ -9,6 +9,7 @@ open System.Text.Json.Serialization
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Shared
+open FSharp.Data.GraphQL.Server.AspNetCore.ErrorMasking
 
 [<Literal>]
 let UnexpectedObservableErrorMessage = "Unexpected error during subscription"
@@ -26,13 +27,14 @@ let private deduplicationKey (problem : GQLProblemDetails) =
     struct (problem.Message, problem.Path, problem.Locations, extensions)
 
 /// The problem details to report for a failure of a subscription's source, flattening aggregates and
-/// deduplicating repeated errors.
-let rec problemDetailsOfObservableError (ex : exn) =
+/// deduplicating repeated errors. An exception that is not GraphQL-facing keeps its message only when
+/// maskUnexpectedErrors is false; the caller logs it either way, so the problem details do not carry it.
+let rec problemDetailsOfObservableError (maskUnexpectedErrors : bool) (ex : exn) =
     match ex with
     | :? AggregateException as aggregate ->
         let problemDetails =
             aggregate.Flatten().InnerExceptions
-            |> Seq.collect problemDetailsOfObservableError
+            |> Seq.collect (problemDetailsOfObservableError maskUnexpectedErrors)
             |> Seq.distinctBy deduplicationKey
             |> Seq.toList
 
@@ -42,16 +44,5 @@ let rec problemDetailsOfObservableError (ex : exn) =
     | _ ->
         match box ex with
         | :? IGQLError as error -> [ GQLProblemDetails.OfError error ]
-        | _ -> [ GQLProblemDetails.Create UnexpectedObservableErrorMessage ]
-
-/// A request error as reported to the client: unchanged when it is a GraphQL-facing error, replaced by the
-/// generic message when it wraps a backend exception.
-let sanitizeRequestError (problemDetails : GQLProblemDetails) =
-    match
-        problemDetails.Exception
-        |> ValueOption.map box
-        |> ValueOption.toObj
-    with
-    | :? IGQLError -> problemDetails
-    | :? exn -> GQLProblemDetails.Create UnexpectedObservableErrorMessage
-    | _ -> problemDetails
+        | _ when maskUnexpectedErrors && not (isGraphQLFacingException ex) -> [ GQLProblemDetails.Create UnexpectedObservableErrorMessage ]
+        | _ -> [ GQLProblemDetails.Create ex.Message ]

@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Text
 open System.Text.Json
+open System.Text.Json.Serialization
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
@@ -47,16 +48,18 @@ type private SentinelHandler
 let private requestBody (query : string) = JsonSerializer.Serialize {| query = query |}
 
 /// Builds a handler of the given type wired through the real `AddGraphQL` DI registration (the same path
-/// a hosted app uses), backed by an `HttpContext` with the given method and JSON body. Returns it both as
-/// the base type (to prove `HandleAsync` dispatches virtually) and downcast to the concrete type (to
-/// assert on what it recorded), plus the DI scope to dispose once the test is done with it.
-let private createHandler<'Handler when 'Handler :> GraphQLRequestHandler<Root> and 'Handler : not struct>
+/// a hosted app uses), with the options adjusted by `configure`, backed by an `HttpContext` with the given
+/// method and JSON body. Returns it both as the base type (to prove `HandleAsync` dispatches virtually) and
+/// downcast to the concrete type (to assert on what it recorded), plus the DI scope to dispose once the test
+/// is done with it.
+let private createConfiguredHandler<'Handler when 'Handler :> GraphQLRequestHandler<Root> and 'Handler : not struct>
+    (configure : GraphQLOptions<Root> -> GraphQLOptions<Root>)
     (method : string)
     (body : string voption)
     : GraphQLRequestHandler<Root> * 'Handler * IDisposable =
     let services = ServiceCollection ()
     services.AddLogging () |> ignore
-    services.AddGraphQL<Root, 'Handler>(TestSchema.executor, (fun _ -> { RequestId = "test" }))
+    services.AddGraphQL<Root, 'Handler>(TestSchema.executor, (fun _ -> { RequestId = "test" }), Func<_, _> configure)
     |> ignore
     let scope = services.BuildServiceProvider().CreateScope()
     let serviceProvider = scope.ServiceProvider
@@ -78,6 +81,13 @@ let private createHandler<'Handler when 'Handler :> GraphQLRequestHandler<Root> 
 
     let handler = serviceProvider.GetRequiredService<GraphQLRequestHandler<Root>>()
     handler, (handler :?> 'Handler), (scope :> IDisposable)
+
+/// As createConfiguredHandler, with the options AddGraphQL produces by default
+let private createHandler<'Handler when 'Handler :> GraphQLRequestHandler<Root> and 'Handler : not struct>
+    (method : string)
+    (body : string voption)
+    =
+    createConfiguredHandler<'Handler> id method body
 
 let private assertOkResponse (outcome : Result<IResult, IResult>) =
     match outcome with
@@ -141,4 +151,62 @@ let ``Overridden HandleAsync is used when the handler is resolved as GraphQLRequ
         let ok = Assert.IsType<Microsoft.AspNetCore.Http.HttpResults.Ok<string>> iresult
         Assert.Equal ("sentinel", ok.Value)
     | Error iresult -> fail $"Expected HandleAsync to succeed, but it returned an error result: %A{iresult}"
+}
+
+/// Executes the operation through the default handler with the options adjusted by configure, returning the response
+/// and the JSON an HTTP client receives for it
+let private executeOverHttp (configure : GraphQLOptions<Root> -> GraphQLOptions<Root>) (query : string) : Task<struct (GQLResponse * string)> = task {
+    let handler, _, scope =
+        createConfiguredHandler<DefaultGraphQLRequestHandler<Root>> configure HttpMethods.Post (ValueSome (requestBody query))
+    use _ = scope
+
+    match! handler.HandleAsync () with
+    | Ok iresult ->
+        let response = (Assert.IsType<Microsoft.AspNetCore.Http.HttpResults.Ok<GQLResponse>> iresult).Value
+        return struct (response, JsonSerializer.Serialize (response, Json.getSerializerOptions Seq.empty))
+    | Error iresult -> return failwith $"Expected HandleAsync to succeed, but it returned an error result: %A{iresult}"
+}
+
+let private errorsOf (response : GQLResponse) =
+    match response.Errors with
+    | Include errors -> errors
+    | Skip -> failwith $"Expected the response to carry errors, but it has none: %A{response}"
+
+[<Fact>]
+let ``An unexpected exception of a resolver reaches an HTTP client as a generic error at its path`` () : Task = task {
+    let! struct (response, json) = executeOverHttp id """{ hero(id: "1000") { name unexpectedFailure } }"""
+
+    Assert.DoesNotContain (TestSchema.SecretDetail, json)
+    let error = errorsOf response |> single
+    Assert.Equal (ErrorMasking.UnexpectedErrorMessage, error.Message)
+    error.Path |> equals (Include [ box "hero"; box "unexpectedFailure" ])
+}
+
+[<Fact>]
+let ``An unexpected exception of a resolver keeps its message over HTTP when masking is disabled`` () : Task = task {
+    let! struct (response, _) =
+        executeOverHttp (fun options -> { options with MaskUnexpectedErrors = false }) """{ hero(id: "1000") { name unexpectedFailure } }"""
+
+    let error = errorsOf response |> single
+    Assert.Equal (TestSchema.SecretDetail, error.Message)
+    error.Path |> equals (Include [ box "hero"; box "unexpectedFailure" ])
+}
+
+[<Fact>]
+let ``A GraphQL error a resolver raises on purpose keeps its message over HTTP`` () : Task = task {
+    let! struct (response, _) = executeOverHttp id """{ hero(id: "1000") { name deliberateFailure } }"""
+
+    let error = errorsOf response |> single
+    Assert.Equal (TestSchema.DeliberateFailureMessage, error.Message)
+    error.Path |> equals (Include [ box "hero"; box "deliberateFailure" ])
+}
+
+[<Fact>]
+let ``A request error caused by an unexpected exception reaches an HTTP client as a generic error, as over WebSocket`` () : Task = task {
+    let! struct (response, json) =
+        executeOverHttp (fun options -> { options with SchemaExecutor = TestSchema.requestFailureExecutor }) """{ hero(id: "1000") { name } }"""
+
+    Assert.DoesNotContain (TestSchema.SecretDetail, json)
+    Assert.True (response.Data.IsSkip, $"A request error must not carry data, but got %A{response.Data}")
+    Assert.Equal (ErrorMasking.UnexpectedErrorMessage, (errorsOf response |> single).Message)
 }

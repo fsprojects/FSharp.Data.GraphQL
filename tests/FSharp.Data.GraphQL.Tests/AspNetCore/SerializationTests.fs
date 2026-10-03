@@ -4,11 +4,13 @@ open System
 open System.Collections.Generic
 open System.Text.Json
 open System.Text.Json.Serialization
+open Microsoft.Extensions.Logging.Abstractions
 
 open Xunit
 
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Shared
+open FSharp.Data.GraphQL.Server.AspNetCore.ErrorMasking
 open FSharp.Data.GraphQL.Server.AspNetCore.ObservableErrorHandling
 open FSharp.Data.GraphQL.Shared.WebSockets
 
@@ -328,15 +330,21 @@ let ``Serializes a pong message with its payload`` () =
 
 [<Fact>]
 let ``Observable error details sanitize non-GraphQL exception messages`` () =
-    let actual = problemDetailsOfObservableError (Exception "sensitive backend failure")
+    let actual = problemDetailsOfObservableError true (Exception "sensitive backend failure")
     let error = Assert.Single actual
     Assert.Equal (UnexpectedObservableErrorMessage, error.Message)
+
+[<Fact>]
+let ``Observable error details keep non-GraphQL exception messages when masking is disabled`` () =
+    let actual = problemDetailsOfObservableError false (Exception "backend failure shown in development")
+    let error = Assert.Single actual
+    Assert.Equal ("backend failure shown in development", error.Message)
 
 [<Fact>]
 let ``Observable error details preserve GraphQL-facing messages inside aggregates`` () =
     let actual =
         AggregateException [| Exception "sensitive backend failure"; GQLMessageException "Visible to client" |]
-        |> problemDetailsOfObservableError
+        |> problemDetailsOfObservableError true
         |> List.map _.Message
 
     Assert.Contains (UnexpectedObservableErrorMessage, actual)
@@ -345,7 +353,7 @@ let ``Observable error details preserve GraphQL-facing messages inside aggregate
 
 [<Fact>]
 let ``Observable error details fall back to the generic message for empty aggregates`` () =
-    let actual = problemDetailsOfObservableError (AggregateException ())
+    let actual = problemDetailsOfObservableError true (AggregateException ())
     let error = Assert.Single actual
     Assert.Equal (UnexpectedObservableErrorMessage, error.Message)
 
@@ -356,19 +364,44 @@ let ``Observable error details do not duplicate repeated aggregate errors`` () =
             GQLMessageException ("Visible to client", Dictionary<string, obj>(dict [ "a", box 1; "b", box 2 ])) :> exn
             GQLMessageException ("Visible to client", Dictionary<string, obj>(dict [ "b", box 2; "a", box 1 ])) :> exn
         |]
-        |> problemDetailsOfObservableError
+        |> problemDetailsOfObservableError true
 
     let error = Assert.Single actual
     Assert.Equal ("Visible to client", error.Message)
 
 [<Fact>]
-let ``Request error sanitization replaces backend exception messages`` () =
-    let actual =
-        sanitizeRequestError (GQLProblemDetails.Create ("sensitive backend failure", Exception "sensitive backend failure"))
-    Assert.Equal (UnexpectedObservableErrorMessage, actual.Message)
+let ``Masking replaces the message of an error caused by a backend exception and keeps its path, locations and kind only`` () =
+    let original : GQLProblemDetails = {
+        Message = "sensitive backend failure"
+        Exception = ValueSome (InvalidOperationException "sensitive backend failure")
+        Path = Include [ box "hero"; box "secret" ]
+        Locations = Include [ { Line = 1; Column = 3 } ]
+        Extensions = Include (readOnlyDict [ CustomErrorFields.Kind, box ErrorKind.Execution; "connectionString", box "Password=secret" ])
+    }
+
+    let masked = maskProblemDetails NullLogger.Instance original
+
+    Assert.Equal (UnexpectedErrorMessage, masked.Message)
+    Assert.Equal (original.Path, masked.Path)
+    Assert.Equal (original.Locations, masked.Locations)
+    Assert.True (masked.Exception.IsValueNone, "A masked error must not carry the exception it masks")
+    let extensions = masked.Extensions |> Skippable.toValueOption |> wantValueSome
+    Assert.Equal (box ErrorKind.Execution, extensions[CustomErrorFields.Kind])
+    Assert.False (extensions.ContainsKey "connectionString", $"A masked error must keep only the kind extension, but has %A{extensions}")
 
 [<Fact>]
-let ``Request error sanitization preserves GraphQL-facing errors`` () =
+let ``Masking keeps an error caused by a GraphQL-facing exception`` () =
     let expected = GQLProblemDetails.OfError (GQLMessageException "Visible to client")
-    let actual = sanitizeRequestError expected
+    let actual = maskProblemDetails NullLogger.Instance expected
     Assert.Equal (expected, actual)
+
+[<Fact>]
+let ``Masking keeps an error caused by an aggregate only when every exception in it is GraphQL-facing`` () =
+    let ofAggregate (innerExceptions : exn list) =
+        let aggregate = AggregateException innerExceptions
+        GQLProblemDetails.Create (aggregate.Message, aggregate)
+
+    let deliberate = ofAggregate [ GQLMessageException "Visible to client" ]
+    Assert.Equal (deliberate, maskProblemDetails NullLogger.Instance deliberate)
+    let mixed = ofAggregate [ GQLMessageException "Visible to client"; InvalidOperationException "sensitive backend failure" ]
+    Assert.Equal (UnexpectedErrorMessage, (maskProblemDetails NullLogger.Instance mixed).Message)

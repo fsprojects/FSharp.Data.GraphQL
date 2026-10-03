@@ -27,7 +27,8 @@ type private Harness<'T> (source : IObservable<'T>, payloads : ISubscriptionPayl
     let outbound = Channel.CreateUnbounded<OutboundMessage> ()
     let inbox = Channel.CreateUnbounded<ConnectionEvent> ()
     let cancellation = new CancellationTokenSource ()
-    let worker = SubscriptionWorker<'T> (subscriptionId, generation, source, payloads, outbound.Writer, inbox.Writer, NullLogger.Instance)
+    let worker =
+        SubscriptionWorker<'T> (subscriptionId, generation, source, payloads, outbound.Writer, inbox.Writer, true, NullLogger.Instance)
 
     let drain (reader : ChannelReader<'Event>) =
         let events = ResizeArray<'Event> ()

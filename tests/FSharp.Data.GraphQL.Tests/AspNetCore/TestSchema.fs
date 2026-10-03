@@ -1,5 +1,7 @@
 namespace FSharp.Data.GraphQL.Tests.AspNetCore
 
+open System
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 
@@ -43,6 +45,15 @@ type Character =
     | Droid of Droid
 
 module TestSchema =
+
+    /// The message of the unexpected exception the unexpectedFailure field fails with, which must never reach a client while errors are masked
+    [<Literal>]
+    let SecretDetail = "secret detail"
+
+    /// The message of the GraphQL error the deliberateFailure field reports to the client on purpose
+    [<Literal>]
+    let DeliberateFailureMessage = "The hero keeps this one to themselves"
+
     let humans = [
         {
             Id = "1000"
@@ -164,6 +175,18 @@ module TestSchema =
                     )
                     Define.Field ("appearsIn", ListOf EpisodeType, "Which movies they appear in.", (fun _ (h : Human) -> h.AppearsIn))
                     Define.Field ("homePlanet", Nullable StringType, "The home planet of the human, or null if unknown.", (fun _ h -> h.HomePlanet))
+                    Define.Field (
+                        "unexpectedFailure",
+                        Nullable StringType,
+                        "Fails with an unexpected exception, as a backend failure would.",
+                        fun _ (_ : Human) -> raise (InvalidOperationException SecretDetail) : string option
+                    )
+                    Define.Field (
+                        "deliberateFailure",
+                        Nullable StringType,
+                        "Fails with a GraphQL error raised for the client on purpose.",
+                        fun _ (_ : Human) -> raise (GQLMessageException DeliberateFailureMessage) : string option
+                    )
                 ]
         )
 
@@ -278,3 +301,9 @@ module TestSchema =
     let schema : ISchema<Root> = upcast Schema (Query, Mutation, Subscription, schemaConfig)
 
     let executor = Executor (schema, [])
+
+    /// An executor whose execution middleware throws an unexpected exception, so that every operation is rejected
+    /// with a request error carrying that exception. Its schema has the query root only: compiling the schema
+    /// above for a second executor would register its subscription field a second time in the same provider.
+    let requestFailureExecutor =
+        Executor (Schema<Root> Query, [ ExecutorMiddleware (execute = fun _ _ _ -> raise (InvalidOperationException SecretDetail)) ])

@@ -20,6 +20,7 @@
     <Compile Include="RequestExecutionContext.fs" />
     <Compile Include="GraphQLOptions.fs" />
     <Compile Include="IncrementalDelivery.fs" />
+    <Compile Include="ErrorMasking.fs" />
     <Compile Include="WebSocketErrors.fs" />
     <Compile Include="WebSocketMessaging.fs" />
     <Compile Include="WebSocketTransport.fs" />

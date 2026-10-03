@@ -55,7 +55,8 @@ type internal GraphQLWebSocketConnection<'Root>
     let inbox = Channel.CreateUnbounded<ConnectionEvent>(channelOptions ())
     let outbound = Channel.CreateUnbounded<OutboundMessage>(channelOptions ())
     let reader = WebSocketMessageReader (socket, options.SerializerOptions, options.ReadBufferSize, logger)
-    let sender = WebSocketMessageSender (socket, options.SerializerOptions, gracefulCloseTimeout, logger)
+    let sender =
+        WebSocketMessageSender (socket, options.SerializerOptions, gracefulCloseTimeout, options.MaskUnexpectedErrors, logger)
 
     // Owned by the control loop alone: the running workers by generation, and the id each client-visible
     // subscription currently maps to. A generation outlives its id's registration when the client completes the
@@ -84,7 +85,7 @@ type internal GraphQLWebSocketConnection<'Root>
         nextGeneration <- nextGeneration + 1
         let cancellation = CancellationTokenSource.CreateLinkedTokenSource connectionToken
         let worker =
-            SubscriptionWorker<'T>(id, generation, source, payloads, outbound.Writer, inbox.Writer, logger)
+            SubscriptionWorker<'T>(id, generation, source, payloads, outbound.Writer, inbox.Writer, options.MaskUnexpectedErrors, logger)
         active[id] <- generation
         // Registered in the same synchronous stretch as the start, so a worker that ends synchronously only queues
         // its end: the control loop processes it after this registration
@@ -120,13 +121,14 @@ type internal GraphQLWebSocketConnection<'Root>
                     logger.LogWarning ("Request errors:\n{errors}", problemDetails)
                     // The request was rejected before execution, so it is not a result: the protocol requires it to be
                     // sent as the terminal Error message instead of a Next followed by Complete, or a client would
-                    // read it as a successful result with null data
-                    send (ServerError (id, problemDetails |> List.map sanitizeRequestError))
+                    // read it as a successful result with null data. The sender masks the errors that unexpected exceptions
+                    // caused, as it does those of every other message
+                    send (ServerError (id, problemDetails))
                 | Deferred (data, errors, events) -> startWorker id events (DeferredPayloads (logger, data, errors))
                 | Stream stream -> startWorker id stream (StreamPayloads logger)
             with ex ->
                 logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
-                send (ServerError (id, [ GQLProblemDetails.Create UnexpectedObservableErrorMessage ]))
+                send (ServerError (id, problemDetailsOfObservableError options.MaskUnexpectedErrors ex))
             return true
     }
 
