@@ -99,6 +99,10 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         | Success -> ()
         | ValidationError errors -> raise (GQLMessageException (System.String.Join("\n", errors)))
 
+    // Read once, after the compile middlewares above have run: documents are validated against this instance, and the
+    // validation cache identifies the schema by it instead of hashing the whole introspected schema on every request
+    let introspectedSchema = schema.Introspected
+
     let eval (executionPlan: ExecutionPlan, data: 'Root voption, variables: ImmutableDictionary<string, JsonElement>, getInputContext : InputExecutionContextProvider): Async<GQLExecutionResult> =
         let documentId = executionPlan.DocumentId
         let prepareOutput res =
@@ -159,9 +163,9 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                             ErrorKind.Validation
                         )]
                 do!
-                    let schemaId = schema.Introspected.GetHashCode()
-                    let key = { DocumentId = documentId; SchemaId = schemaId }
-                    let producer = fun () -> Validation.Ast.validateDocument schema.Introspected ast
+                    // The document itself is the key, not its documentId: that is a hash code, which another document can share
+                    let key = ValidationResultKey (introspectedSchema, ast)
+                    let producer = fun () -> Validation.Ast.validateDocument introspectedSchema ast
                     validationCache.GetOrAdd producer key
                 let planningCtx =
                     { Schema = schema
