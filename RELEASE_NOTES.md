@@ -326,4 +326,5 @@
 * Fixed `graphql-transport-ws` throwing while serializing an `error` message or a `pong` carrying a payload, since neither was written under the `payload` property name `Utf8JsonWriter` requires
 * Fixed validation of an inline fragment without a type condition (`... { … }`), which used to fail with an exception instead of applying to the parent type
 * Fixed the GraphQL client provider building `Operation<...>` again for every file that uses the same operation, which added another operation type of the same name to `Operations` each time
+* Fixed `Helpers.unwrap` throwing for an array of options, which it took for an option
 * Removed the internal `Observable.withCompletionMarker`
