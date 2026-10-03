@@ -3,6 +3,7 @@
 
 namespace FSharp.Data.GraphQL.Server.Relay
 
+open System.Globalization
 open System.Runtime.CompilerServices
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
@@ -241,25 +242,58 @@ module Cursor =
     let Prefix = "arrayconnection"
 
     /// <summary>
+    /// Tries to decode a cursor string to an integer offset.
+    /// </summary>
+    /// <param name="cursor">The cursor string to decode (expected to be a Global ID).</param>
+    /// <returns>
+    /// The decoded offset, or <c>ValueNone</c> if the cursor is malformed: it is not a Global ID with the
+    /// <see cref="Prefix"/> type name, or its local ID is not a non-negative <see cref="T:System.Int32"/>
+    /// written in ASCII decimal digits only, without a sign, whitespace or separators.
+    /// </returns>
+    /// <remarks>
+    /// The cursor usually comes from the client, so this function never throws on malformed input.
+    /// A resolver can report <c>ValueNone</c> to the client as a GraphQL error by raising
+    /// <see cref="T:FSharp.Data.GraphQL.GQLMessageException"/>.
+    /// </remarks>
+    /// <seealso cref="toOffset"/>
+    /// <seealso cref="ofOffset"/>
+    let tryToOffset (cursor : string) : int voption =
+        match cursor with
+        | GlobalId (Prefix, id) ->
+            // NumberStyles.None accepts ASCII digits only, so neither a negative offset, which would index
+            // before the start of the data, nor whitespace or culture-specific signs and separators get through
+            match System.Int32.TryParse (id, NumberStyles.None, CultureInfo.InvariantCulture) with
+            | true, offset -> ValueSome offset
+            | false, _ -> ValueNone
+        | _ -> ValueNone
+
+    /// <summary>
     /// Decodes a cursor string to an integer offset.
     /// </summary>
     /// <param name="defaultValue">The value to return if decoding fails.</param>
     /// <param name="cursor">The cursor string to decode (expected to be a Global ID).</param>
-    /// <returns>The decoded offset, or <paramref name="defaultValue"/> if parsing fails.</returns>
-    let toOffset defaultValue cursor =
-        match cursor with
-        | GlobalId (Prefix, id) ->
-            match System.Int32.TryParse id with
-            | true, num -> num
-            | false, _ -> defaultValue
-        | _ -> defaultValue
+    /// <returns>
+    /// The decoded offset, or <paramref name="defaultValue"/> if the cursor is malformed,
+    /// as <see cref="tryToOffset"/> defines it.
+    /// </returns>
+    /// <remarks>
+    /// The cursor usually comes from the client, so this function never throws on malformed input.
+    /// Use <see cref="tryToOffset"/> to tell a malformed cursor apart from one holding the default value.
+    /// </remarks>
+    /// <seealso cref="tryToOffset"/>
+    /// <seealso cref="ofOffset"/>
+    let toOffset defaultValue cursor = cursor |> tryToOffset |> ValueOption.defaultValue defaultValue
 
     /// <summary>
     /// Encodes an integer offset as a cursor string using the Global ID format.
     /// </summary>
-    /// <param name="offset">The zero-based array offset to encode.</param>
+    /// <param name="offset">
+    /// The zero-based array offset to encode. <see cref="tryToOffset"/> reads back only non-negative offsets.
+    /// </param>
     /// <returns>An opaque cursor string suitable for use in Relay pagination.</returns>
-    let ofOffset offset = toGlobalId Prefix (offset.ToString ())
+    let ofOffset offset =
+        // `string` formats with the invariant culture, so the cursor does not depend on the culture of the server
+        toGlobalId Prefix (string offset)
 
 module Edge =
 

@@ -6,6 +6,8 @@ module FSharp.Data.GraphQL.Tests.Relay.NodeTests
 #nowarn "40"
 
 open System
+open System.Collections.Immutable
+open System.Text.Json
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
@@ -136,3 +138,61 @@ let ``Node with global ID gets correct type`` () =
         """{ node(id: "Y2FyOjI=") { id, __typename } }"""
         (NameValueLookup.ofList [ "id", upcast "Y2FyOjI="; "__typename", upcast "Car" ])
         None
+
+// A global ID comes from the client, so whatever it sends must produce "no value", never an exception
+[<Theory>]
+[<InlineData("", "an empty string")>]
+[<InlineData(" ", "only a space")>]
+[<InlineData("\t\r\n", "only whitespace characters")>]
+[<InlineData("%%%%", "characters outside the base64 alphabet")>]
+[<InlineData("cGVyc29uOjE", "a length that is not a multiple of four")>]
+[<InlineData("cGVyc29uOjE==", "excess padding")>]
+[<InlineData("====", "nothing but padding")>]
+[<InlineData("=cGVyc29uOjE", "padding in front")>]
+[<InlineData("Привіт==", "non-ASCII characters")>]
+[<InlineData("cGVyc29uOjE＝", "a full-width padding character")>]
+[<InlineData("cGVyc29u", "no separator between the type name and the local ID")>]
+[<InlineData("/zox", "bytes that are not UTF-8")>]
+let ``fromGlobalId returns no value for a malformed global ID`` (id : string, reason : string) =
+    match fromGlobalId id with
+    | ValueNone -> ()
+    | ValueSome (typeName, localId) ->
+        fail $"Expected no value for a global ID with {reason} ('{id}'), but it was read as type '{typeName}' and local ID '{localId}'"
+
+[<Theory>]
+[<InlineData("person", "1")>]
+[<InlineData("Персона", "ідентифікатор")>]
+[<InlineData("car", "🚗")>]
+[<InlineData("person", "local:ID:with:separators")>]
+[<InlineData("person", " 1 ")>]
+[<InlineData("person", "")>]
+let ``fromGlobalId reads back the type name and local ID toGlobalId wrote`` (typeName : string, localId : string) =
+    let globalId = toGlobalId typeName localId
+    match fromGlobalId globalId with
+    | ValueSome (actualTypeName, actualLocalId) ->
+        Assert.True (
+            String.Equals (typeName, actualTypeName, StringComparison.Ordinal)
+            && String.Equals (localId, actualLocalId, StringComparison.Ordinal),
+            $"Expected the global ID '{globalId}' to be read as type '{typeName}' and local ID '{localId}', but it was read as type '{actualTypeName}' and local ID '{actualLocalId}'"
+        )
+    | ValueNone -> fail $"Expected the global ID '{globalId}' to be read as type '{typeName}' and local ID '{localId}', but it was read as no value"
+
+[<Theory>]
+[<InlineData("", "an empty string")>]
+[<InlineData(" ", "only a space")>]
+[<InlineData("%%%%", "characters outside the base64 alphabet")>]
+[<InlineData("cGVyc29uOjE", "a length that is not a multiple of four")>]
+[<InlineData("Привіт==", "non-ASCII characters")>]
+[<InlineData("cGVyc29u", "no separator between the type name and the local ID")>]
+[<InlineData("/zox", "bytes that are not UTF-8")>]
+// person:4, well-formed but naming no person
+[<InlineData("cGVyc29uOjQ=", "a local ID that matches no object")>]
+let ``Node field returns null without errors for a malformed or unknown global ID`` (id : string, reason : string) =
+    // The ID goes through a variable, so that any string reaches the resolver unchanged by GraphQL string escaping
+    let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("id", JsonSerializer.SerializeToElement id)
+    let result =
+        Executor(schema).AsyncExecute ("query ($id: ID!) { node(id: $id) { id } }", getMockInputContext, variables = variables)
+        |> sync
+    ensureDirect result <| fun data errors ->
+        Assert.True (List.isEmpty errors, $"Expected no errors for a global ID with {reason} ('{id}'), but got %A{errors}")
+        data |> equals (upcast NameValueLookup.ofList [ "node", null ])
