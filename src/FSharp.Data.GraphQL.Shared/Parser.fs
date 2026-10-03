@@ -5,6 +5,7 @@
 module FSharp.Data.GraphQL.Parser
 
 open System
+open System.Globalization
 open FParsec
 open FSharp.Data.GraphQL.Ast
 open FsToolkit.ErrorHandling
@@ -132,7 +133,13 @@ module internal Internal =
 
     // 2.9.1 IntValue
     //   IntegerPart
-    let integerValue = integerPart |>> int64
+    let integerValue =
+        // A conversion that throws would escape tryParse as an unhandled exception
+        integerPart
+        >>= fun text ->
+            match Int64.TryParse (text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture) with
+            | true, value -> preturn value
+            | false, _ -> fail $"The integer %s{text} is out of the range of 64-bit integers."
 
 
     // 2.9.2 FloatValue
@@ -231,10 +238,13 @@ module internal Internal =
     let inputType, inputTypeRef = createParserForwardedToRef ()
     let namedType = name |>> NamedType <?> "NamedType"
     let listType = betweenChars '[' ']' inputType |>> ListType <?> "ListType"
-    let nonNullType =
-        (listType <|> namedType) .>> pchar '!' |>> NonNullType
-        <?> "NonNullType"
-    inputTypeRef.Value <- choice [ attempt nonNullType; namedType; listType ]
+    // Parses the type once and then looks for '!': trying a non-null type first and backtracking to a nullable one
+    // parsed every nested list type twice, which took exponential time in the nesting depth
+    inputTypeRef.Value <-
+        pipe2 (listType <|> namedType) (opt (pchar '!')) (fun inputType nonNull ->
+            match nonNull with
+            | Some _ -> NonNullType inputType
+            | None -> inputType)
 
 
     // 2.4 Selection Sets
@@ -369,14 +379,111 @@ module internal Internal =
         |>> (fun definitions -> { Document.Definitions = definitions })
 
 
-/// Parses a GraphQL Document. Throws exception on invalid formats.
-let parse query =
-    match run documents query with
-    | Success (result, _, _) -> result
-    | Failure (errorMsg, _, _) -> raise (System.FormatException (errorMsg))
+/// <summary>
+/// The line and column of the first brace, bracket or parenthesis nested deeper than <paramref name="maxDepth"/>,
+/// skipping comments, strings and block strings.
+/// </summary>
+/// <remarks>
+/// The parser recurses once per nesting level, so a deeply nested document overflows the stack, which terminates the process.
+/// This linear scan rejects such a document before it is parsed. Lines and columns are 1-based, columns count UTF-16 code units,
+/// and <c>\r\n</c>, <c>\r</c> and <c>\n</c> each end a line.
+/// </remarks>
+let internal tryFindNestingViolation (maxDepth : int) (query : string) : struct (int * int) voption =
+    let length = query.Length
+    let isBlockStringQuote index =
+        index + 2 < length
+        && query[index] = '"'
+        && query[index + 1] = '"'
+        && query[index + 2] = '"'
+    let mutable depth = 0
+    let mutable line = 1
+    let mutable lineStart = 0
+    let mutable index = 0
+    let mutable violation = ValueNone
+    while violation.IsNone && index < length do
+        match query[index] with
+        | '#' ->
+            // A comment runs to the end of the line, which the next iteration counts
+            while index < length && query[index] <> '\n' && query[index] <> '\r' do
+                index <- index + 1
+        | '"' when isBlockStringQuote index ->
+            index <- index + 3
+            let mutable closed = false
+            while not closed && index < length do
+                match query[index] with
+                | '\\' when isBlockStringQuote (index + 1) -> index <- index + 4
+                | '"' when isBlockStringQuote index ->
+                    index <- index + 3
+                    closed <- true
+                | '\r' ->
+                    if index + 1 < length && query[index + 1] = '\n' then
+                        index <- index + 1
+                    index <- index + 1
+                    line <- line + 1
+                    lineStart <- index
+                | '\n' ->
+                    index <- index + 1
+                    line <- line + 1
+                    lineStart <- index
+                | _ -> index <- index + 1
+        | '"' ->
+            index <- index + 1
+            let mutable closed = false
+            while not closed && index < length do
+                match query[index] with
+                | '\\' -> index <- index + 2
+                | '"' ->
+                    index <- index + 1
+                    closed <- true
+                // A string cannot span lines: the next iteration counts the line terminator
+                | '\n'
+                | '\r' -> closed <- true
+                | _ -> index <- index + 1
+        | '{'
+        | '['
+        | '(' ->
+            depth <- depth + 1
+            if depth > maxDepth then
+                violation <- ValueSome (struct (line, index - lineStart + 1))
+            index <- index + 1
+        | '}'
+        | ']'
+        | ')' ->
+            if depth > 0 then
+                depth <- depth - 1
+            index <- index + 1
+        | '\r' ->
+            if index + 1 < length && query[index + 1] = '\n' then
+                index <- index + 1
+            index <- index + 1
+            line <- line + 1
+            lineStart <- index
+        | '\n' ->
+            index <- index + 1
+            line <- line + 1
+            lineStart <- index
+        | _ -> index <- index + 1
+    violation
 
-/// Parses a GraphQL Document. Throws exception on invalid formats.
+/// Formats the nesting violation the way FParsec formats a syntax error
+let private nestingErrorMessage (struct (line : int, column : int)) =
+    $"Error in Ln: %i{line} Col: %i{column}\nThe document is nested deeper than %i{DocumentLimitsDefaults.MaxNestingDepth} braces, brackets and parentheses."
+
+/// <summary>Parses a GraphQL Document. Throws exception on invalid formats.</summary>
+/// <exception cref="T:System.FormatException">The document is not valid GraphQL or is nested too deeply.</exception>
+let parse query =
+    match tryFindNestingViolation DocumentLimitsDefaults.MaxNestingDepth query with
+    | ValueSome position -> raise (FormatException (nestingErrorMessage position))
+    | ValueNone ->
+        match run documents query with
+        | Success (result, _, _) -> result
+        | Failure (errorMsg, _, _) -> raise (FormatException (errorMsg))
+
+/// Parses a GraphQL Document, returning the error message when the document is not valid GraphQL or is nested too deeply.
 let tryParse query =
-    match run documents query with
-    | Success (result, _, _) -> Result.Ok result
-    | Failure (errorMsg, _, _) -> Result.Error errorMsg
+    match tryFindNestingViolation DocumentLimitsDefaults.MaxNestingDepth query with
+    | ValueSome position -> Result.Error (nestingErrorMessage position)
+    | ValueNone ->
+        match run documents query with
+        | Success (result, _, _) -> Result.Ok result
+        | Failure (errorMsg, _, _) -> Result.Error errorMsg
