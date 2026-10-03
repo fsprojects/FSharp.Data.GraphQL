@@ -7,7 +7,6 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
-open FSharp.Data.GraphQL.Helpers
 open FSharp.Control.Reactive
 open System.Collections.Generic
 open System.Reactive.Linq
@@ -227,14 +226,10 @@ type Schema<'Root> (query: ObjectDef<'Root>, [<Struct>] ?mutation: ObjectDef<'Ro
         | _ -> failwithf "Unexpected value of typedef: %O" typedef
 
     let introspectInput (namedTypes: Map<string, IntrospectionTypeRef>) (inputDef: InputFieldDef) : IntrospectionInputVal =
-        // We need this so a default value that is an option is not printed as "Some"
-        let unwrap =
-            function
-            | ObjectOption x -> x
-            | x -> x
+        // The spec requires a GraphQL literal, which clients parse while building the schema from introspection
         let defaultValue =
             inputDef.DefaultValue
-            |> ValueOption.map (fun value -> JsonSerializer.Serialize(unwrap value, schemaConfig.JsonOptions))
+            |> ValueOption.bind (ValueLiterals.tryPrint schemaConfig.JsonOptions inputDef.TypeDef)
         { Name = inputDef.Name
           Description = inputDef.Description
           Type = introspectTypeRef (ValueOption.isSome inputDef.DefaultValue) namedTypes inputDef.TypeDef

@@ -326,5 +326,6 @@
 * Fixed `graphql-transport-ws` throwing while serializing an `error` message or a `pong` carrying a payload, since neither was written under the `payload` property name `Utf8JsonWriter` requires
 * Fixed validation of an inline fragment without a type condition (`... { … }`), which used to fail with an exception instead of applying to the parent type
 * Fixed the GraphQL client provider building `Operation<...>` again for every file that uses the same operation, which added another operation type of the same name to `Operations` each time
+* Fixed introspection reporting the `defaultValue` of an argument or an input object field serialized to JSON instead of as a GraphQL literal, which broke clients that build a schema from introspection, such as graphql-js `buildClientSchema`: an enum value is now reported as its GraphQL name, an input object with unquoted field names, a list with every item printed by its type, and a scalar value as its output coercion serializes it. A default value that has no GraphQL literal, such as a value outside of its enum or a `NaN` float, is no longer reported, while its input stays nullable
 * Fixed `Helpers.unwrap` throwing for an array of options, which it took for an option
 * Removed the internal `Observable.withCompletionMarker`
