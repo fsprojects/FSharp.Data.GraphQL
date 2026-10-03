@@ -104,6 +104,7 @@
     <Compile Include="AspNetCore/SubscriptionWorkerTests.fs" />
     <Compile Include="AspNetCore/WebSocketConnectionTests.fs" />
     <Compile Include="TaskSeqFieldTests.fs" />
+    <Compile Include="ValidationDoSTests.fs" />
     <Compile Include="AssemblyInfo.fs" />
   </ItemGroup>
 

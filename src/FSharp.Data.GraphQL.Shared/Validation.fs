@@ -3,6 +3,7 @@
 
 namespace FSharp.Data.GraphQL.Validation
 
+open System
 open System.Collections.Generic
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
@@ -444,9 +445,214 @@ module Ast =
             | FragmentDefinition x when x.Name.IsSome -> ValueSome x
             | _ -> ValueNone)
 
+    /// The named fragments of the document by name. As in fragment spread resolution, the first definition of a name wins.
+    let private getFragmentsByName (fragmentDefinitions : FragmentDefinition list) =
+        let fragments = Dictionary<string, FragmentDefinition> (StringComparer.Ordinal)
+        for fragment in fragmentDefinitions do
+            if not (fragments.ContainsKey fragment.Name.Value) then
+                fragments.Add (fragment.Name.Value, fragment)
+        fragments
+
+    /// The size of a selection set before its fragment spreads are inlined.
+    [<Struct>]
+    type private SelectionSetShape = {
+        /// The number of fields, inline fragments and fragment spreads, nested ones included.
+        Selections : int64
+        /// The deepest nesting level; the selection set itself is level 1, and each field selection set, inline fragment and fragment spread adds one.
+        Depth : int
+        /// The fragment spreads with the level of the selection set that contains each of them.
+        Spreads : struct (string * int)[]
+    }
+
+    // Iterative, so a deeply nested document cannot overflow the stack here
+    let private getSelectionSetShape (root : Selection list) =
+        let mutable selections = 0L
+        let mutable depth = 0
+        let spreads = ResizeArray<struct (string * int)> ()
+        let pending = Stack<struct (Selection list * int)> ()
+        pending.Push (struct (root, 1))
+        while pending.Count > 0 do
+            let struct (selectionSet, level) = pending.Pop ()
+            if not selectionSet.IsEmpty && level > depth then
+                depth <- level
+            for selection in selectionSet do
+                selections <- selections + 1L
+                match selection with
+                | Field field when not field.SelectionSet.IsEmpty -> pending.Push (struct (field.SelectionSet, level + 1))
+                | Field _ -> ()
+                | InlineFragment fragment -> pending.Push (struct (fragment.SelectionSet, level + 1))
+                | FragmentSpread spread -> spreads.Add (struct (spread.Name, level))
+        { Selections = selections; Depth = depth; Spreads = spreads.ToArray () }
+
+    let private getFragmentShapes (fragments : Dictionary<string, FragmentDefinition>) =
+        let shapes = Dictionary<string, SelectionSetShape> (fragments.Count, StringComparer.Ordinal)
+        for KeyValue (name, fragment) in fragments do
+            shapes.Add (name, getSelectionSetShape fragment.SelectionSet)
+        shapes
+
+    /// <summary>
+    /// The names of the fragments that are part of a fragment spread cycle, including fragments that spread themselves.
+    /// </summary>
+    /// <remarks>
+    /// Iterative Tarjan's strongly connected components algorithm, linear in the number of fragment spreads.
+    /// </remarks>
+    let private findCyclicFragments (shapes : Dictionary<string, SelectionSetShape>) =
+        let targets = Dictionary<string, string[]> (shapes.Count, StringComparer.Ordinal)
+        for KeyValue (name, shape) in shapes do
+            targets.Add (
+                name,
+                shape.Spreads
+                |> Seq.map (fun struct (target, _) -> target)
+                |> Seq.filter shapes.ContainsKey
+                |> Seq.distinct
+                |> Seq.toArray
+            )
+        let indexes = Dictionary<string, int> (shapes.Count, StringComparer.Ordinal)
+        let lowLinks = Dictionary<string, int> (shapes.Count, StringComparer.Ordinal)
+        let onStack = HashSet<string> (StringComparer.Ordinal)
+        let componentStack = Stack<string> ()
+        let cyclic = HashSet<string> (StringComparer.Ordinal)
+        let mutable nextIndex = 0
+        let visit (name : string) =
+            indexes.Add (name, nextIndex)
+            lowLinks.Add (name, nextIndex)
+            nextIndex <- nextIndex + 1
+            componentStack.Push name
+            onStack.Add name |> ignore
+        for root in shapes.Keys do
+            if not (indexes.ContainsKey root) then
+                // Each entry is a fragment and the position of the next spread target to explore
+                let work = Stack<struct (string * int)> ()
+                visit root
+                work.Push (struct (root, 0))
+                while work.Count > 0 do
+                    let struct (name, position) = work.Pop ()
+                    let nameTargets = targets[name]
+                    if position < nameTargets.Length then
+                        work.Push (struct (name, position + 1))
+                        let target = nameTargets[position]
+                        if not (indexes.ContainsKey target) then
+                            visit target
+                            work.Push (struct (target, 0))
+                        elif onStack.Contains target then
+                            lowLinks[name] <- min (lowLinks[name]) (indexes[target])
+                    else
+                        if work.Count > 0 then
+                            let struct (parent, _) = work.Peek ()
+                            lowLinks[parent] <- min (lowLinks[parent]) (lowLinks[name])
+                        if lowLinks[name] = indexes[name] then
+                            // The fragment is the root of a strongly connected component: pop the whole component
+                            let componentNames = ResizeArray<string> ()
+                            let mutable isRoot = false
+                            while not isRoot do
+                                let componentName = componentStack.Pop ()
+                                onStack.Remove componentName |> ignore
+                                componentNames.Add componentName
+                                isRoot <- String.Equals (componentName, name, StringComparison.Ordinal)
+                            if componentNames.Count > 1 || Array.contains name nameTargets then
+                                for componentName in componentNames do
+                                    cyclic.Add componentName |> ignore
+        cyclic
+
+    /// <summary>
+    /// The named fragments whose spreads are inlined while the document is validated: all of them except the ones that form a cycle.
+    /// </summary>
+    /// <remarks>
+    /// Following the spreads of a cycle inlines every simple path through it, which grows factorially with the size of the cycle.
+    /// The cycles themselves are reported by <see cref="validateFragmentsMustNotFormCycles"/>.
+    /// </remarks>
+    let private getInlinableFragmentDefinitions (fragmentDefinitions : FragmentDefinition list) =
+        let cyclic =
+            fragmentDefinitions
+            |> getFragmentsByName
+            |> getFragmentShapes
+            |> findCyclicFragments
+        if cyclic.Count = 0 then
+            fragmentDefinitions
+        else
+            fragmentDefinitions
+            |> List.filter (fun fragment -> not (cyclic.Contains fragment.Name.Value))
+
+    /// <summary>
+    /// The number of selections and the nesting depth that validating the document inlines, saturated at <paramref name="selectionCap"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every operation and fragment definition is counted with its fragment spreads inlined, as
+    /// <see cref="getValidationContext"/> builds them. Spreads of fragments that form a cycle are not inlined.
+    /// </para>
+    /// <para>
+    /// The count of each fragment is computed once (as in Apollo Server's <c>RecursiveSelectionsLimit</c> rule),
+    /// and the traversal is iterative, so neither an exponential fragment bomb nor a long chain of fragments can stall
+    /// or overflow it.
+    /// </para>
+    /// </remarks>
+    let internal measureDocument (selectionCap : int64) (ast : Document) : struct (int64 * int) =
+        let shapes =
+            getFragmentDefinitions ast
+            |> getFragmentsByName
+            |> getFragmentShapes
+        let cyclic = findCyclicFragments shapes
+        let isInlined name = shapes.ContainsKey name && not (cyclic.Contains name)
+        let inlined = Dictionary<string, struct (int64 * int)> (shapes.Count, StringComparer.Ordinal)
+        // Requires the inlined size of every inlined spread target to be known already
+        let inlineSpreads (shape : SelectionSetShape) =
+            let mutable selections = shape.Selections
+            let mutable depth = shape.Depth
+            for spread in shape.Spreads do
+                let struct (target, level) = spread
+                if isInlined target then
+                    let struct (targetSelections, targetDepth) = inlined[target]
+                    selections <- min selectionCap (selections + targetSelections)
+                    depth <- max depth (level + targetDepth)
+            struct (selections, depth)
+        let pushMissingTargets (pending : Stack<string>) (shape : SelectionSetShape) =
+            let mutable pushed = false
+            for spread in shape.Spreads do
+                let struct (target, _) = spread
+                if isInlined target && not (inlined.ContainsKey target) then
+                    pending.Push target
+                    pushed <- true
+            pushed
+        let measure (shape : SelectionSetShape) =
+            // Post-order over the spread targets, which form no cycle, so this terminates
+            let pending = Stack<string> ()
+            pushMissingTargets pending shape |> ignore
+            while pending.Count > 0 do
+                let name = pending.Peek ()
+                if inlined.ContainsKey name then
+                    pending.Pop () |> ignore
+                else
+                    let nameShape = shapes[name]
+                    if not (pushMissingTargets pending nameShape) then
+                        pending.Pop () |> ignore
+                        inlined.Add (name, inlineSpreads nameShape)
+            inlineSpreads shape
+        let mutable selections = 0L
+        let mutable depth = 0
+        for definition in ast.Definitions do
+            let struct (definitionSelections, definitionDepth) = measure (getSelectionSetShape definition.SelectionSet)
+            selections <- min selectionCap (selections + definitionSelections)
+            depth <- max depth definitionDepth
+        struct (selections, depth)
+
+    /// <summary>
+    /// Rejects a document whose validation would inline more selections or nest deeper than allowed,
+    /// before any validation context is built for it.
+    /// </summary>
+    let internal checkDocumentLimits (maxRecursiveSelections : int) (maxNestingDepth : int) (ast : Document) =
+        let struct (selections, depth) = measureDocument (int64 maxRecursiveSelections + 1L) ast
+        if selections > int64 maxRecursiveSelections then
+            AstError.AsResult $"The document recursively requests too many selections (more than %i{maxRecursiveSelections})."
+        elif depth > maxNestingDepth then
+            AstError.AsResult $"The document is nested too deeply once fragment spreads are inlined (more than %i{maxNestingDepth} levels)."
+        else
+            Success
+
     /// Prepare a ValidationContext for the given Document and SchemaInfo to make validation operations easier.
     let internal getValidationContext (schemaInfo : SchemaInfo) (ast : Document) =
         let fragmentDefinitions = getFragmentDefinitions ast
+        let inlinableFragmentDefinitions = getInlinableFragmentDefinitions fragmentDefinitions
         let fragmentInfos =
             fragmentDefinitions
             |> List.vchoose (fun def -> voption {
@@ -454,7 +660,7 @@ module Ast =
                 let! fragType = schemaInfo.TryGetTypeByName typeCondition
                 let fragCtx = {
                     Schema = schemaInfo
-                    FragmentDefinitions = fragmentDefinitions
+                    FragmentDefinitions = inlinableFragmentDefinitions
                     ParentType = fragType
                     FragmentType = ValueSome (Spread (def.Name.Value, def.Directives, fragType))
                     Path = [ def.Name.Value ]
@@ -469,7 +675,7 @@ module Ast =
                 let path = def.Name |> ValueOption.map box |> ValueOption.toList
                 let opCtx = {
                     Schema = schemaInfo
-                    FragmentDefinitions = fragmentDefinitions
+                    FragmentDefinitions = inlinableFragmentDefinitions
                     ParentType = parentType
                     FragmentType = ValueNone
                     Path = path
@@ -506,21 +712,27 @@ module Ast =
                 "An anonymous operation must be the only operation in a document. This document has at least one anonymous operation and more than one operation."
 
     let internal validateSubscriptionSingleRootField (ctx : ValidationContext) =
-        let fragmentDefinitions = getFragmentDefinitions ctx.Document
-        let rec getFieldNames (selectionSet : Selection list) =
-            ([], selectionSet)
-            ||> List.fold (fun acc ->
-                function
-                | Field field -> field.AliasOrName :: acc
-                | InlineFragment frag -> List.append (getFieldNames frag.SelectionSet) acc
-                | FragmentSpread spread ->
-                    fragmentDefinitions
-                    |> List.vtryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
-                    |> ValueOption.unwrap acc (fun frag -> getFieldNames frag.SelectionSet))
+        let fragments =
+            getFragmentDefinitions ctx.Document
+            |> getFragmentsByName
         ctx.Document.Definitions
         |> ValidationResult.collect (function
             | OperationDefinition def when def.OperationType = Subscription ->
-                let fieldNames = getFieldNames def.SelectionSet
+                // As in CollectFields, each fragment is collected once per operation,
+                // which also stops on fragment spread cycles
+                let visitedFragments = HashSet<string> (StringComparer.Ordinal)
+                let rec getFieldNames (names : string list) (selectionSet : Selection list) =
+                    (names, selectionSet)
+                    ||> List.fold (fun acc ->
+                        function
+                        | Field field -> field.AliasOrName :: acc
+                        | InlineFragment frag -> getFieldNames acc frag.SelectionSet
+                        | FragmentSpread spread when visitedFragments.Add spread.Name ->
+                            match fragments.TryGetValue spread.Name with
+                            | true, frag -> getFieldNames acc frag.SelectionSet
+                            | false, _ -> acc
+                        | FragmentSpread _ -> acc)
+                let fieldNames = getFieldNames [] def.SelectionSet
                 if fieldNames.Length <= 1 then
                     Success
                 else
@@ -899,47 +1111,22 @@ module Ast =
                 odef.SelectionSet
                 |> ValidationResult.collect (fragmentSpreadTargetDefinedInSelection fragmentDefinitionNames path))
 
-    let rec private checkFragmentMustNotHaveCycles
-        (fragmentDefinitions : FragmentDefinition list)
-        (visited : string list)
-        (fragName : string)
-        (fragSelectionSet : Selection list)
-        =
-        let visitCount =
-            visited
-            |> Seq.filter (fun x -> x = fragName)
-            |> Seq.length
-        if visitCount > 1 then
-            AstError.AsResult $"Fragment '%s{fragName}' is making a cyclic reference."
-        else
-            fragSelectionSet
-            |> ValidationResult.collect (checkFragmentsMustNotHaveCyclesInSelection fragmentDefinitions (fragName :: visited))
-
-    and private checkFragmentsMustNotHaveCyclesInSelection (fragmentDefinitions : FragmentDefinition list) (visited : string list) =
-        function
-        | Field field ->
-            field.SelectionSet
-            |> ValidationResult.collect (checkFragmentsMustNotHaveCyclesInSelection fragmentDefinitions visited)
-        | InlineFragment inlineFrag ->
-            inlineFrag.SelectionSet
-            |> ValidationResult.collect (checkFragmentsMustNotHaveCyclesInSelection fragmentDefinitions visited)
-        | FragmentSpread spread ->
-            match
-                fragmentDefinitions
-                |> List.vtryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name)
-            with
-            | ValueSome frag -> checkFragmentMustNotHaveCycles fragmentDefinitions visited spread.Name frag.SelectionSet
-            | ValueNone -> Success
-
+    /// Reports, in definition order, every fragment that is part of a fragment spread cycle, including fragments that spread themselves.
     let internal validateFragmentsMustNotFormCycles (ctx : ValidationContext) =
-        let fragmentDefinitions =
-            ctx.FragmentDefinitions
-            |> List.map (fun frag -> frag.Definition)
-        let fragNamesAndSelections =
+        let fragmentDefinitions = getFragmentDefinitions ctx.Document
+        let cyclic =
             fragmentDefinitions
-            |> List.vchoose (fun frag -> frag.Name |> ValueOption.map (fun n -> n, frag.SelectionSet))
-        fragNamesAndSelections
-        |> ValidationResult.collect (fun (name, selectionSet) -> checkFragmentMustNotHaveCycles fragmentDefinitions [] name selectionSet)
+            |> getFragmentsByName
+            |> getFragmentShapes
+            |> findCyclicFragments
+        let reported = HashSet<string> (StringComparer.Ordinal)
+        fragmentDefinitions
+        |> ValidationResult.collect (fun fragment ->
+            let name = fragment.Name.Value
+            if cyclic.Contains name && reported.Add name then
+                AstError.AsResult $"Fragment '%s{name}' is making a cyclic reference."
+            else
+                Success)
 
     let private checkFragmentSpreadIsPossibleInSelection (path : FieldPath, parentType : IntrospectionType, fragmentType : IntrospectionType) =
         if not (typesAreApplicable (parentType, fragmentType)) then
@@ -1402,63 +1589,48 @@ module Ast =
                 | _ -> false)
         go (args |> List.map _.Value)
 
-    let rec private variableIsUsedInFragmentSpread
-        (name : string)
-        (fragmentDefinitions : FragmentDefinition list)
-        (visitedFragments : string list)
-        (spread : FragmentSpread)
-        =
-        if List.contains spread.Name visitedFragments then
-            false
-        else
-            let usedInSpread =
-                match
-                    fragmentDefinitions
-                    |> List.vtryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
-                with
-                | ValueSome frag ->
-                    let usedInSelection =
-                        frag.SelectionSet
-                        |> List.exists (variableIsUsedInSelection name fragmentDefinitions (spread.Name :: visitedFragments))
-                    usedInSelection
-                    || (frag.Directives
-                        |> List.exists (fun directive -> argumentsContains name directive.Arguments))
-                | ValueNone -> false
-            usedInSpread
-            || (spread.Directives
-                |> List.exists (fun directive -> argumentsContains name directive.Arguments))
-
-    and private variableIsUsedInSelection (name : string) (fragmentDefinitions : FragmentDefinition list) (visitedFragments : string list) =
-        function
-        | Field field ->
-            if argumentsContains name field.Arguments then
-                true
-            else
-                let usedInSelection =
-                    field.SelectionSet
-                    |> List.exists (variableIsUsedInSelection name fragmentDefinitions visitedFragments)
-                usedInSelection
-                || (field.Directives
-                    |> List.exists (fun directive -> argumentsContains name directive.Arguments))
-        | InlineFragment frag ->
-            let usedInSelection =
-                frag.SelectionSet
-                |> List.exists (variableIsUsedInSelection name fragmentDefinitions visitedFragments)
-            usedInSelection
-            || (frag.Directives
-                |> List.exists (fun directive -> argumentsContains name directive.Arguments))
-        | FragmentSpread spread -> variableIsUsedInFragmentSpread name fragmentDefinitions visitedFragments spread
+    /// <summary>
+    /// Whether the variable is used in the selection set, following its fragment spreads.
+    /// </summary>
+    /// <remarks>
+    /// Each fragment is searched once: a fragment that has already been searched without finding the variable cannot contain it.
+    /// Searching each fragment once per path instead grows exponentially with nested spreads and factorially with spread cycles.
+    /// </remarks>
+    let private variableIsUsed (name : string) (fragments : Dictionary<string, FragmentDefinition>) (selectionSet : Selection list) =
+        let searchedFragments = HashSet<string> (StringComparer.Ordinal)
+        let usedInDirectives (directives : Directive list) =
+            directives
+            |> List.exists (fun directive -> argumentsContains name directive.Arguments)
+        let rec usedInSelection =
+            function
+            | Field field ->
+                argumentsContains name field.Arguments
+                || List.exists usedInSelection field.SelectionSet
+                || usedInDirectives field.Directives
+            | InlineFragment frag ->
+                List.exists usedInSelection frag.SelectionSet
+                || usedInDirectives frag.Directives
+            | FragmentSpread spread ->
+                let usedInFragment () =
+                    searchedFragments.Add spread.Name
+                    && (match fragments.TryGetValue spread.Name with
+                        | true, frag ->
+                            List.exists usedInSelection frag.SelectionSet
+                            || usedInDirectives frag.Directives
+                        | false, _ -> false)
+                usedInFragment () || usedInDirectives spread.Directives
+        List.exists usedInSelection selectionSet
 
     let internal validateAllVariablesUsed (ctx : ValidationContext) =
-        let fragmentDefinitions = getFragmentDefinitions ctx.Document
+        let fragments =
+            getFragmentDefinitions ctx.Document
+            |> getFragmentsByName
         ctx.Document.Definitions
         |> ValidationResult.collect (function
             | OperationDefinition def ->
                 def.VariableDefinitions
                 |> ValidationResult.collect (fun varDef ->
-                    let isUsed =
-                        def.SelectionSet
-                        |> List.exists (variableIsUsedInSelection varDef.VariableName fragmentDefinitions [])
+                    let isUsed = variableIsUsed varDef.VariableName fragments def.SelectionSet
                     match def.Name, isUsed with
                     | _, true -> Success
                     | ValueSome operationName, _ ->
@@ -1681,7 +1853,9 @@ module Ast =
     /// (<see href="https://github.com/graphql/graphql-spec/pull/1110">Defer And Stream Directives Are Used On Valid Operations</see>).
     /// </summary>
     let internal validateDeferStreamDirectivesOnValidOperations (ctx : ValidationContext) =
-        let fragmentDefinitions = getFragmentDefinitions ctx.Document
+        let fragmentDefinitions =
+            getFragmentDefinitions ctx.Document
+            |> getInlinableFragmentDefinitions
         ctx.Document.Definitions
         |> ValidationResult.collect (function
             | OperationDefinition def when def.OperationType = Subscription ->
@@ -1699,7 +1873,9 @@ module Ast =
     /// (<see href="https://github.com/graphql/graphql-spec/pull/1110">Defer And Stream Directives Are Used On Valid Root Field</see>).
     /// </summary>
     let internal validateDeferStreamDirectivesOnRootFields (ctx : ValidationContext) =
-        let fragmentDefinitions = getFragmentDefinitions ctx.Document
+        let fragmentDefinitions =
+            getFragmentDefinitions ctx.Document
+            |> getInlinableFragmentDefinitions
         let mutationTypeName =
             ctx.Schema.MutationType
             |> ValueOption.map _.Name
@@ -1722,7 +1898,9 @@ module Ast =
     /// (<see href="https://github.com/graphql/graphql-spec/pull/1110">Defer And Stream Directive Labels Are Unique</see>).
     /// </summary>
     let internal validateDeferStreamDirectiveLabels (ctx : ValidationContext) =
-        let fragmentDefinitions = getFragmentDefinitions ctx.Document
+        let fragmentDefinitions =
+            getFragmentDefinitions ctx.Document
+            |> getInlinableFragmentDefinitions
         let labelOf (directive : Directive) =
             directive.Arguments
             |> List.vtryFind (fun argument -> argument.Name = "label")
@@ -1786,9 +1964,51 @@ module Ast =
         validateVariableUsagesAllowed
     ]
 
+    /// <summary>
+    /// Runs all validations against the document, unless the document exceeds the size limits,
+    /// and stops once more than <paramref name="maxErrors"/> errors are found.
+    /// </summary>
+    /// <remarks>
+    /// Like graphql-js, the result then holds the first <paramref name="maxErrors"/> errors followed by an error saying
+    /// that validation was aborted.
+    /// </remarks>
+    let internal validateDocumentWithLimits
+        (maxRecursiveSelections : int)
+        (maxNestingDepth : int)
+        (maxErrors : int)
+        (schema : IntrospectionSchema)
+        (ast : Document)
+        =
+        match checkDocumentLimits maxRecursiveSelections maxNestingDepth ast with
+        | ValidationError _ as limitExceeded -> limitExceeded
+        | Success ->
+            let schemaInfo = SchemaInfo.FromIntrospectionSchema (schema)
+            let context = getValidationContext schemaInfo ast
+            let errors = ResizeArray<GQLProblemDetails> ()
+            let mutable failed = false
+            let mutable validations = allValidations
+            while not validations.IsEmpty && errors.Count <= maxErrors do
+                match validations.Head context with
+                | Success -> ()
+                | ValidationError validationErrors ->
+                    failed <- true
+                    errors.AddRange validationErrors
+                validations <- validations.Tail
+            if not failed then
+                Success
+            elif errors.Count > maxErrors then
+                ValidationError [
+                    yield! Seq.take maxErrors errors
+                    AstError.Create "Too many validation errors, error limit reached. Validation aborted."
+                ]
+            else
+                ValidationError (List.ofSeq errors)
+
     /// Run all available Ast validations against the given Document and IntrospectionSchema
     let validateDocument (schema : IntrospectionSchema) (ast : Document) =
-        let schemaInfo = SchemaInfo.FromIntrospectionSchema (schema)
-        let context = getValidationContext schemaInfo ast
-        allValidations
-        |> ValidationResult.collect (fun validate -> validate context)
+        validateDocumentWithLimits
+            DocumentLimitsDefaults.MaxRecursiveSelections
+            DocumentLimitsDefaults.MaxNestingDepth
+            DocumentLimitsDefaults.MaxValidationErrors
+            schema
+            ast
