@@ -232,10 +232,14 @@ module Helpers =
         | null -> null
         | value ->
             let t = value.GetType()
-            if t.FullName.StartsWith ReflectionHelper.OptionTypeName then
-                t.GetProperty("Value").GetValue (value, [||])
-            elif t.FullName.StartsWith ReflectionHelper.ValueOptionTypeName then
-                if value = Activator.CreateInstance t then null
-                else
-                    t.GetProperty("Value").GetValue (value, [||])
-            else value
+            // The generic type definition is compared, because the full name of an array of options
+            // starts with the full name of the option type too
+            if not t.IsGenericType then value
+            else
+                match t.GetGenericTypeDefinition().FullName with
+                | ReflectionHelper.OptionTypeName -> t.GetProperty("Value").GetValue (value, [||])
+                | ReflectionHelper.ValueOptionTypeName ->
+                    if value = Activator.CreateInstance t then null
+                    else
+                        t.GetProperty("Value").GetValue (value, [||])
+                | _ -> value

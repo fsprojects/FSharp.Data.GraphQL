@@ -178,6 +178,123 @@ let ``Input field must be marked as nullable when its type is nullable and have 
         empty errors
         data |> equals (upcast expected)
 
+[<RequireQualifiedAccess>]
+type DesiredAttendanceMode =
+    | Local
+    | Remote
+    /// Not a value of the GraphQL enum
+    | Hybrid
+
+type InputAttendee = { UserId : string; AttendanceMode : DesiredAttendanceMode }
+
+let private desiredAttendanceModeType =
+    Define.Enum<DesiredAttendanceMode> (
+        "DesiredAttendanceMode",
+        [ Define.EnumValue ("LOCAL", DesiredAttendanceMode.Local); Define.EnumValue ("REMOTE", DesiredAttendanceMode.Remote) ]
+    )
+
+let private inputAttendeeType =
+    Define.InputObject<InputAttendee> (
+        "InputAttendee",
+        [
+            Define.Input ("userId", StringType)
+            Define.Input ("attendanceMode", desiredAttendanceModeType, defaultValue = DesiredAttendanceMode.Local)
+        ]
+    )
+
+[<Fact>]
+let ``Default values must be reported as GraphQL literals`` () =
+    let root =
+        Define.Object (
+            "Query",
+            [
+                Define.Field (
+                    "attend",
+                    StringType,
+                    "",
+                    [
+                        Define.Input ("attendee", inputAttendeeType, defaultValue = { UserId = "1"; AttendanceMode = DesiredAttendanceMode.Remote })
+                        Define.Input ("modes", ListOf desiredAttendanceModeType, defaultValue = [ DesiredAttendanceMode.Local; DesiredAttendanceMode.Remote ])
+                        Define.Input ("comment", StringType, defaultValue = "Say \"hi\"\n")
+                    ],
+                    fun _ _ -> ""
+                )
+            ]
+        )
+    // The JSON options of the default schema config serialize a union case as {"Case":"Local"}, which is not a GraphQL literal
+    let schema = Schema (root)
+    let query = """{
+      query: __type(name: "Query") { fields { args { name defaultValue } } }
+      attendee: __type(name: "InputAttendee") { inputFields { name defaultValue } }
+    }"""
+    let inputValue (name : string) (defaultValue : string) = NameValueLookup.ofList [ "name", upcast name; "defaultValue", upcast defaultValue ]
+    let expected =
+        NameValueLookup.ofList [
+            "query",
+            upcast NameValueLookup.ofList [
+                "fields",
+                upcast [
+                    NameValueLookup.ofList [
+                        "args",
+                        upcast [
+                            inputValue "attendee" "{userId: \"1\", attendanceMode: REMOTE}"
+                            inputValue "modes" "[LOCAL, REMOTE]"
+                            inputValue "comment" "\"Say \\\"hi\\\"\\n\""
+                        ]
+                    ]
+                ]
+            ]
+            "attendee",
+            upcast NameValueLookup.ofList [
+                "inputFields", upcast [ inputValue "userId" null; inputValue "attendanceMode" "LOCAL" ]
+            ]
+        ]
+    let result = sync <| Executor(schema).AsyncExecute (query, getMockInputContext)
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+
+[<Fact>]
+let ``Default value without a GraphQL literal must not be reported, but its input must stay nullable`` () =
+    let root =
+        Define.Object (
+            "Query",
+            [
+                Define.Field (
+                    "onlyField",
+                    StringType,
+                    "The only field",
+                    [ Define.Input ("in", desiredAttendanceModeType, defaultValue = DesiredAttendanceMode.Hybrid) ],
+                    fun _ _ -> "Only value"
+                )
+            ]
+        )
+    let schema = Schema (root)
+    let result = sync <| Executor(schema).AsyncExecute (inputFieldQuery, getMockInputContext)
+    let expected =
+        NameValueLookup.ofList [
+            "__type",
+            upcast NameValueLookup.ofList [
+                "fields",
+                upcast [
+                    NameValueLookup.ofList [
+                        "name", upcast "onlyField"
+                        "args",
+                        upcast [
+                            NameValueLookup.ofList [
+                                "name", upcast "in"
+                                "type", upcast NameValueLookup.ofList [ "kind", upcast "ENUM"; "name", upcast "DesiredAttendanceMode" ]
+                                "defaultValue", null
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+
 [<Fact>]
 let ``Introspection schema must be serializable back and forth using json`` () =
     let root = Define.Object("Query", [ Define.Field("onlyField", StringType) ])
