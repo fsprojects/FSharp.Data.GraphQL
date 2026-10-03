@@ -337,3 +337,10 @@
 * **Breaking Change** `Parser.parse` and `Parser.tryParse` now reject a document whose braces, brackets and parentheses, outside of strings and comments, are nested deeper than `DocumentLimitsDefaults.MaxNestingDepth` (128), with a syntax error giving the line and column of the first one too deep. Deeper documents used to overflow the stack, which terminated the process
 * Fixed parsing time growing exponentially with the nesting of list types in variable definitions: a 100-deep `[[…Int…]]` never finished parsing
 * Fixed `Parser.tryParse` throwing `OverflowException`, and so an HTTP server answering with an unhandled exception, for an integer out of the range of 64-bit integers; it is now a syntax error
+* **Breaking Change** `SelectionInfoContext.FragmentDefinitions` was replaced by `Fragments`, the fragment definitions that validation inlines, by name
+* Fixed query planning time growing exponentially with the nesting of fields under an interface or a union, with the number of its possible types as the base: the selection set of a field is now planned once for each type it can return instead of once for each possible type of every abstract field above it
+* Fixed query planning time growing quadratically with the number of fields, fragment spreads and deferred fragments of a selection set
+* Fixed the field selection merging rule taking exponential time on nested fields that share a response name. Like graphql-js, it now compares each pair of fields once, and so reports each conflict once, and it stops after `DocumentLimitsDefaults.MaxValidationErrors` errors
+* Fixed the unused variable rule searching the document once for every variable
+* Fixed validation time growing quadratically with the number of operations and of fragment spreads
+* Fixed the operation name uniqueness rule counting a fragment with the same name as an operation

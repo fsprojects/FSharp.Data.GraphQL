@@ -106,6 +106,7 @@
     <Compile Include="TaskSeqFieldTests.fs" />
     <Compile Include="ValidationDoSTests.fs" />
     <Compile Include="ParserLimitsTests.fs" />
+    <Compile Include="PlanningDoSTests.fs" />
     <Compile Include="AssemblyInfo.fs" />
   </ItemGroup>
 

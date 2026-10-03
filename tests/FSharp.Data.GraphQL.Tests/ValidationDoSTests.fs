@@ -405,3 +405,119 @@ let ``Executor rejects a document with two hundred thousand fields`` () =
         errors
         |> List.map _.Message
         |> equals [ tooManySelections DocumentLimitsDefaults.MaxRecursiveSelections ]
+
+[<Fact>]
+let ``Unused variable rule completes quickly for many variables and values`` () =
+    // Searching the whole document once per variable takes twenty thousand passes over a hundred thousand values
+    let variables = [ for i in 0..19_999 -> $"$v%i{i}: Int" ] |> String.concat " "
+    let values = [ for i in 0..99_999 -> string i ] |> String.concat ", "
+    let context = getContext $"query Q(%s{variables}) {{ a(list: [%s{values}]) }}"
+    let errors = runIsolated (fun () -> validateAllVariablesUsed context |> errorMessages)
+    errors |> List.length |> equals 20_000
+    errors
+    |> List.head
+    |> equals "A variable '$v0' is not used in operation 'Q'. Every variable must be used."
+
+[<Fact>]
+let ``Unused variable rule finds variables in nested values and fragments`` () =
+    let actual =
+        getContext
+            """query Q($inList: Int, $inObject: Int, $inFragment: Int, $unused: Int) {
+  a(list: [1, [$inList]], object: { nested: { value: $inObject } })
+  ...F
+}
+fragment F on Query { b(value: $inFragment) ...F }"""
+        |> validateAllVariablesUsed
+    actual
+    |> errorMessages
+    |> equals [ "A variable '$unused' is not used in operation 'Q'. Every variable must be used." ]
+
+[<Fact>]
+let ``Validation of many operations completes quickly`` () =
+    // Counting every operation name against all definitions is quadratic in the number of operations
+    let document = StringBuilder ()
+    for i in 0..23_999 do
+        document.AppendLine $"query Q%i{i} {{ a }}" |> ignore
+    let actual = runIsolated (fun () -> validate (document.ToString ()))
+    actual |> equals Success
+
+[<Fact>]
+let ``Operation name uniqueness ignores a fragment with the same name`` () =
+    let actual = validate "query A { ...A } fragment A on Query { a }"
+    actual |> equals Success
+
+[<Fact>]
+let ``Operation name uniqueness reports each duplicated name once in definition order`` () =
+    let actual =
+        getContext "query B { a } query A { a } query B { b } query A { c } query B { d }"
+        |> validateOperationNameUniqueness
+    actual
+    |> errorMessages
+    |> equals [
+        "Operation 'B' has 3 definitions. Each operation name must be unique."
+        "Operation 'A' has 2 definitions. Each operation name must be unique."
+    ]
+
+/// Two fields with the same response name at every level, each selecting the subtree one level shallower, down to the leaves
+let rec private sameNameTree (depth : int) (leaf : bool -> string) (isLeft : bool) =
+    if depth = 0 then
+        leaf isLeft
+    else
+        $"field {{ %s{sameNameTree (depth - 1) leaf true} }} field {{ %s{sameNameTree (depth - 1) leaf false} }}"
+
+[<Fact>]
+let ``Field merging of nested fields with the same response name completes quickly`` () =
+    // Merging the selections of both fields and comparing them again reaches the same pairs exponentially often
+    let tree = sameNameTree 13 (fun _ -> "hello") true
+    let document = $"{{ %s{tree} }}"
+    let actual = runIsolated (fun () -> validate document)
+    actual |> equals Success
+
+[<Fact>]
+let ``Field merging conflicts in nested fields are capped`` () =
+    let leaf isLeft = if isLeft then "x: hello" else "x: a"
+    let tree = sameNameTree 13 leaf true
+    let document = $"{{ %s{tree} }}"
+    let errors = runIsolated (fun () -> validate document |> errorMessages)
+    errors
+    |> List.length
+    |> equals (DocumentLimitsDefaults.MaxValidationErrors + 1)
+    errors
+    |> List.head
+    |> equals
+        "Field name or alias 'x' is referring to fields 'hello' and 'a', but they are different fields in the scope of the parent type."
+
+[<Fact>]
+let ``Validation of many fragment spreads completes quickly`` () =
+    // Searching all fragment definitions for every spread is quadratic in the number of fragments
+    let document = StringBuilder ()
+    document.Append "{" |> ignore
+    for i in 0..7_999 do
+        document.Append $" ...F%i{i}" |> ignore
+    document.AppendLine " }" |> ignore
+    for i in 0..7_999 do
+        document.AppendLine $"fragment F%i{i} on Query {{ a }}" |> ignore
+    let actual = runIsolated (fun () -> validate (document.ToString ()))
+    actual |> equals Success
+
+[<Fact>]
+let ``Longest fragment cycle in a subscription with a variable is rejected without overflowing the stack`` () =
+    // The longest cycle the selection limit lets through: the rules that follow fragment spreads, such as the
+    // subscription root field rule and the unused variable rule, must not recurse once per fragment of the cycle
+    let length = 24_000
+    let document = StringBuilder ()
+    document.AppendLine "subscription S($v: Int) { ...F0 }" |> ignore
+    for i in 0 .. length - 1 do
+        let next = (i + 1) % length
+        let selections = if i = length / 2 then $"ping(v: $v) ...F%i{next}" else $"...F%i{next}"
+        document.AppendLine $"fragment F%i{i} on Subscription {{ %s{selections} }}"
+        |> ignore
+    let errors =
+        runIsolated (fun () ->
+            Parser.parse (document.ToString ())
+            |> validateDocument AstValidationTests.schema.Introspected
+            |> errorMessages)
+    errors |> contains (cyclicReference "F0") |> ignore
+    errors
+    |> List.length
+    |> equals (DocumentLimitsDefaults.MaxValidationErrors + 1)
