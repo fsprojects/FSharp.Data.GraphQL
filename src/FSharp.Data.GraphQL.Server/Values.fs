@@ -70,6 +70,38 @@ let normalizeOptional (outputType : Type) value =
         else
             value
 
+/// Creates the function that builds a collection of the type of a GraphQL list from its coerced items.
+/// A type that no collection can be built for gets an F# list, as every type but an array did before.
+let private createListCollection (listType : Type) (itemType : Type) : obj list -> obj =
+    match ReflectionHelper.tryCreateCollectionFactory listType with
+    | ValueSome create -> create
+    | ValueNone ->
+        let cons, nil = ReflectionHelper.listOfType itemType
+        fun items -> List.foldBack cons items nil
+
+/// Creates the function that copies the collection a GraphQL list field builds into the collection type
+/// of the constructor parameter that the field is bound to, when the parameter has another collection type.
+let private createCollectionConverter (fieldType : Type) (parameterType : Type) : obj -> obj =
+    let targetType =
+        let valueType =
+            if ReflectionHelper.isSkippableType parameterType then
+                parameterType.GenericTypeArguments[0]
+            else
+                parameterType
+        ReflectionHelper.unwrapOptions valueType
+    if targetType.IsAssignableFrom (ReflectionHelper.unwrapOptions fieldType) then
+        id
+    else
+        match ReflectionHelper.tryCreateCollectionFactory targetType with
+        | ValueNone -> id
+        | ValueSome create ->
+            fun value ->
+                match value with
+                | null -> null
+                | value when targetType.IsInstanceOfType value -> value
+                | :? System.Collections.IEnumerable as items -> create (items |> Seq.cast<obj> |> Seq.toList)
+                | value -> value
+
 /// Tries to convert type defined in AST into one of the type defs known in schema.
 let inline tryConvertAst schema ast =
     let rec convert isNullable (schema : ISchema) (ast : InputType) : TypeDef voption =
@@ -139,7 +171,7 @@ let rec internal compileByType
                                     else
                                         inputDef.Type, param.ParameterType
                                 if ReflectionHelper.isAssignableWithUnwrap inputType paramType then
-                                    allParameters.Add (struct (ValueSome field, param))
+                                    allParameters.Add (struct (ValueSome field, param, createCollectionConverter inputType paramType))
                                 else
                                     let expectedType = inputDef.Type.ToString ()
                                     let actualType = paramType.ToString ()
@@ -150,7 +182,7 @@ let rec internal compileByType
                                 ReflectionHelper.isParameterSkippable param
                                 || ReflectionHelper.isParameterOptional param
                             then
-                                allParameters.Add <| struct (ValueNone, param)
+                                allParameters.Add <| struct (ValueNone, param, id)
                             else
                                 missingParameters.Add param.Name |> ignore
                         allParameters)
@@ -228,7 +260,7 @@ let rec internal compileByType
             | ObjectValue props -> result {
                 let argResults =
                     parametersMap
-                    |> Seq.map (fun struct (field, param) ->
+                    |> Seq.map (fun struct (field, param, convertCollection) ->
                         match field with
                         | ValueSome field -> result {
                             match Map.tryFind field.Name props with
@@ -249,9 +281,9 @@ let rec internal compileByType
                                         return Activator.CreateInstance param.ParameterType
                                     else
                                         let ``include``, _ = ReflectionHelper.ofSkippable param.ParameterType
-                                        return normalizeOptional innerType value |> ``include``
+                                        return normalizeOptional innerType (convertCollection value) |> ``include``
                                 else
-                                    return normalizeOptional param.ParameterType value
+                                    return normalizeOptional param.ParameterType (convertCollection value)
                           }
                         | ValueNone -> Ok <| wrapOptionalNone param.ParameterType typeof<obj>)
                     |> Seq.toList
@@ -274,7 +306,7 @@ let rec internal compileByType
 
                         let argResults =
                             parametersMap
-                            |> Seq.map (fun struct (field, param) -> result {
+                            |> Seq.map (fun struct (field, param, convertCollection) -> result {
                                 match field with
                                 | ValueSome field when field.IsSkippable && not (objectFields.ContainsKey field.Name) ->
                                     return (Activator.CreateInstance param.ParameterType)
@@ -290,11 +322,11 @@ let rec internal compileByType
                                         then
                                             return Activator.CreateInstance param.ParameterType
                                         else
-                                            let normalizedValue = normalizeOptional innerType value
+                                            let normalizedValue = normalizeOptional innerType (convertCollection value)
                                             let ``include``, _ = ReflectionHelper.ofSkippable param.ParameterType
                                             return ``include`` normalizedValue
                                     else
-                                        return normalizeOptional param.ParameterType value
+                                        return normalizeOptional param.ParameterType (convertCollection value)
                                 | ValueNone -> return wrapOptionalNone param.ParameterType typeof<obj>
                             })
                             |> Seq.toList
@@ -337,10 +369,9 @@ let rec internal compileByType
             inputObjDef.ExecuteInput <- inner
         | _ -> ()
 
-        let isArray = inputDef.Type.IsArray
+        let createCollection = createListCollection inputDef.Type innerDef.Type
         // TODO: Improve creation of inner
         let inner index = compileByType ((box index) :: inputObjectPath) inputSource (innerDef, innerDef) getInputContext
-        let cons, nil = ReflectionHelper.listOfType innerDef.Type
 
         fun getInputContext value variables ->
             match value with
@@ -355,22 +386,29 @@ let rec internal compileByType
                     |> Seq.map (normalizeOptional innerDef.Type)
                     |> Seq.toList
 
-                if isArray then
-                    return ReflectionHelper.arrayOfList innerDef.Type mappedValues
-                else
-                    return List.foldBack cons mappedValues nil
+                return createCollection mappedValues
               }
-            | VariableName variableName -> Ok variables[variableName]
+            | VariableName variableName ->
+                // The variable is coerced by its own type, so its list gets the collection type of this one
+                match variables[variableName] with
+                | null -> Ok null
+                | value when inputDef.Type.IsInstanceOfType value -> Ok value
+                | :? System.Collections.IEnumerable as items ->
+                    items
+                    |> Seq.cast<obj>
+                    |> Seq.map (normalizeOptional innerDef.Type)
+                    |> Seq.toList
+                    |> createCollection
+                    |> Ok
+                | value -> Ok value
             | _ -> result {
                 // try to construct a list from single element
                 let! single = inner 0 getInputContext value variables
 
                 if single = null then
                     return null
-                else if isArray then
-                    return ReflectionHelper.arrayOfList innerDef.Type [ single ]
                 else
-                    return cons single nil
+                    return createCollection [ single ]
               }
 
     | Nullable (Input innerDef) ->
@@ -517,7 +555,7 @@ let rec internal coerceVariableValue (ctx : CoerceVariableContext, inputContext 
             }
             coerceVariableValue(ctx', inputContext)
     | List (Input innerDef) ->
-        let cons, nil = ReflectionHelper.listOfType innerDef.Type
+        let createCollection = createListCollection ctx.TypeDef.Type innerDef.Type
 
         match ctx.Input with
         | _ when ctx.Input.ValueKind = JsonValueKind.Null && ctx.IsNullable -> Ok null
@@ -574,11 +612,7 @@ let rec internal coerceVariableValue (ctx : CoerceVariableContext, inputContext 
                             return [ single ]
                     }
 
-            let isArray = ctx.TypeDef.Type.IsArray
-            if isArray then
-                return ReflectionHelper.arrayOfList innerDef.Type items
-            else
-                return List.foldBack cons items nil
+            return createCollection items
           }
     | InputObject objDef ->
         coerceVariableInputObject ({

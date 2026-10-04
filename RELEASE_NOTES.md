@@ -329,4 +329,6 @@
 * Fixed the GraphQL client provider building `Operation<...>` again for every file that uses the same operation, which added another operation type of the same name to `Operations` each time
 * Changed the checks for options, value options, skippable values and F# lists in input coercion, execution and the `ObjectListFilter` middleware to compare types instead of the culture-sensitive prefixes of their full names: a check takes about a nanosecond instead of hundreds
 * Fixed `Helpers.unwrap` and `Helpers.objectOptionCast` throwing `NullReferenceException` for an array of options, which they took for an option
+* Added support of more collection types for GraphQL input lists: an argument or an input object field gets the collection type of its list definition, and an input object constructor parameter of another collection type gets the items copied into it. Supported are arrays, F# lists and sets, `ResizeArray`, `HashSet`, the immutable collections, interfaces such as `IReadOnlyList<T>`, `IList<T>` and `ISet<T>`, and any type with a constructor that takes an `IEnumerable<T>` or with a collection initializer
+* Fixed a list argument given through a variable getting the F# list the variable was coerced to instead of the collection type of its definition, such as an array
 * Removed the internal `Observable.withCompletionMarker`

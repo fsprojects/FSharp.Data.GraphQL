@@ -8,6 +8,7 @@ open System.Reflection
 open FSharp.Reflection
 open System.Collections.Generic
 open System.Linq
+open System.Runtime.CompilerServices
 open FSharp.Data.GraphQL.Types
 open FSharp.Quotations
 
@@ -137,7 +138,6 @@ module internal Gen =
 module internal ReflectionHelper =
 
     let private genericEnumerableTypeDefinition = typedefof<IEnumerable<_>>
-    let private enumerableType = typeof<System.Collections.IEnumerable>
 
     let rec isTypeOptional (t: Type) =
         ReflectionHelper.isOptionType t
@@ -156,29 +156,112 @@ module internal ReflectionHelper =
             ty.GetGenericArguments().[0]
         else ty
 
+    /// <summary>
+    /// The type of the items of a collection type: the element type of an array, or the type argument
+    /// of the <see cref="T:System.Collections.Generic.IEnumerable`1"/> it is or implements.
+    /// A string is a sequence of characters, but not a collection a GraphQL list builds.
+    /// </summary>
+    let tryGetItemType (collectionType : Type) : Type voption =
+        if collectionType.IsArray then
+            ValueSome (collectionType.GetElementType ())
+        elif Type.(=) (collectionType, typeof<string>) then
+            ValueNone
+        elif ReflectionHelper.isConstructedFrom genericEnumerableTypeDefinition collectionType then
+            ValueSome collectionType.GenericTypeArguments[0]
+        else
+            collectionType.GetInterfaces ()
+            |> Array.vtryFind (ReflectionHelper.isConstructedFrom genericEnumerableTypeDefinition)
+            |> ValueOption.map (fun enumerableType -> enumerableType.GenericTypeArguments[0])
+
+    /// Builds a collection through the <c>CreateRange</c> method of the builder type that the
+    /// <see cref="T:System.Runtime.CompilerServices.CollectionBuilderAttribute"/> of the collection type names,
+    /// as the immutable collections have. The method the attribute names takes a <see cref="T:System.ReadOnlySpan`1"/>,
+    /// which reflection cannot pass.
+    let private tryCollectionBuilderFactory (collectionType : Type) (itemType : Type) (items : obj list -> obj) =
+        match collectionType.GetCustomAttribute<CollectionBuilderAttribute> () with
+        | null -> ValueNone
+        | attribute ->
+            attribute.BuilderType.GetMethods (BindingFlags.Public ||| BindingFlags.Static)
+            |> Array.vtryFind (fun method ->
+                String.Equals (method.Name, "CreateRange", StringComparison.Ordinal)
+                && method.IsGenericMethodDefinition
+                && method.GetGenericArguments().Length = 1
+                && (let parameters = method.GetParameters ()
+                    parameters.Length = 1
+                    && ReflectionHelper.isConstructedFrom genericEnumerableTypeDefinition parameters[0].ParameterType))
+            |> ValueOption.map (fun method -> method.MakeGenericMethod itemType)
+            |> ValueOption.filter (fun method -> collectionType.IsAssignableFrom method.ReturnType)
+            |> ValueOption.map (fun method -> fun values -> method.Invoke (null, [| items values |]))
+
+    /// Builds a collection through its public constructor that takes the items as an <see cref="T:System.Collections.Generic.IEnumerable`1"/>.
+    let private tryEnumerableConstructorFactory (collectionType : Type) (itemType : Type) (items : obj list -> obj) =
+        match collectionType.GetConstructor [| genericEnumerableTypeDefinition.MakeGenericType itemType |] with
+        | null -> ValueNone
+        | constructor -> ValueSome (fun values -> constructor.Invoke [| items values |])
+
+    /// Builds a collection the way a collection initializer does: through its public parameterless constructor and
+    /// an <c>Add</c> method for every item. An <c>Add</c> that returns the collection type, as an immutable collection's does,
+    /// leaves the collection unchanged, so only one that returns nothing or a <see cref="T:System.Boolean"/> counts.
+    let private tryCollectionInitializerFactory (collectionType : Type) (itemType : Type) =
+        match collectionType.GetConstructor Type.EmptyTypes, collectionType.GetMethod ("Add", [| itemType |]) with
+        | null, _
+        | _, null -> ValueNone
+        | _, add when not (Type.(=) (add.ReturnType, typeof<Void>) || Type.(=) (add.ReturnType, typeof<bool>)) -> ValueNone
+        | constructor, add ->
+            ValueSome (fun (values : obj list) ->
+                let collection = constructor.Invoke [||]
+                for value in values do
+                    add.Invoke (collection, [| value |]) |> ignore
+                collection)
+
+    /// <summary>
+    /// Creates the function that builds a collection of the type from the coerced items of a GraphQL list.
+    /// </summary>
+    /// <remarks>
+    /// It supports, in this order: arrays; the types an F# list is assignable to, such as
+    /// <see cref="T:System.Collections.Generic.IReadOnlyList`1"/>, which get an F# list; interfaces that
+    /// <see cref="T:System.Collections.Generic.List`1"/> or <see cref="T:System.Collections.Generic.HashSet`1"/> implement,
+    /// such as <see cref="T:System.Collections.Generic.IList`1"/> or <see cref="T:System.Collections.Generic.ISet`1"/>,
+    /// which get one of them; types with a collection builder, such as the immutable collections; types with a constructor
+    /// that takes an <see cref="T:System.Collections.Generic.IEnumerable`1"/>, such as F# sets; and types with
+    /// a collection initializer.
+    /// </remarks>
+    let tryCreateCollectionFactory (collectionType : Type) : (obj list -> obj) voption =
+        match tryGetItemType collectionType with
+        | ValueNone -> ValueNone
+        | ValueSome itemType ->
+            let toArray (values : obj list) = ReflectionHelper.arrayOfList itemType values
+            if collectionType.IsArray then
+                ValueSome toArray
+            elif collectionType.IsAssignableFrom (typedefof<_ list>.MakeGenericType itemType) then
+                let cons, nil = ReflectionHelper.listOfType itemType
+                ValueSome (fun values -> List.foldBack cons values nil)
+            else
+                let concreteType =
+                    if collectionType.IsInterface || collectionType.IsAbstract then
+                        [ typedefof<List<_>>; typedefof<HashSet<_>> ]
+                        |> List.map _.MakeGenericType(itemType)
+                        |> List.tryFind collectionType.IsAssignableFrom
+                        |> Option.defaultValue null
+                    else
+                        collectionType
+                match concreteType with
+                | null -> ValueNone
+                | concreteType ->
+                    tryCollectionBuilderFactory concreteType itemType toArray
+                    |> ValueOption.orElseWith (fun () -> tryEnumerableConstructorFactory concreteType itemType toArray)
+                    |> ValueOption.orElseWith (fun () -> tryCollectionInitializerFactory concreteType itemType)
+
     let rec isAssignableWithUnwrap (from: Type) (``to``: Type) =
 
+        // A GraphQL list builds a collection of its own type, which input coercion then copies into
+        // a constructor parameter of another collection type that it can build
         let checkCollections (from: Type) (``to``: Type) =
-            if
-                // TODO: Implement support of other types of collections using collection initializers
-                // An array is not among them: input coercion builds an array only for a GraphQL list
-                // whose type is an array, which is assignable without unwrapping
-                ReflectionHelper.isListType ``to``
-                && (from.IsGenericType
-                    && from.GenericTypeArguments[0].IsAssignableTo(``to``.GenericTypeArguments[0])
-                    && from.GetInterfaces()
-                       |> Array.exists (
-                        fun i -> ReflectionHelper.isConstructedFrom genericEnumerableTypeDefinition i
-                                    || Type.(=) (i, enumerableType)
-                       )
-                    )
-
-            then
-                let fromType = from.GetGenericArguments()[0]
-                let toType = ``to``.GetGenericArguments()[0]
-                fromType.IsAssignableTo toType
-            else
-                false
+            match tryGetItemType from, tryGetItemType ``to`` with
+            | ValueSome fromItemType, ValueSome toItemType ->
+                fromItemType.IsAssignableTo toItemType
+                && (tryCreateCollectionFactory ``to``).IsSome
+            | _ -> false
 
         let actualFrom = unwrapOptions from
         let actualTo =
