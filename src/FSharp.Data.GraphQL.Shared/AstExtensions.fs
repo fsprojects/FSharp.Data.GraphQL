@@ -77,6 +77,27 @@ and AstFieldInfo =
         | TypeField info -> info.Fields
         | FragmentField info -> info.Fields
 
+/// Appends a GraphQL string value holding the text. Like graphql-js, it escapes the quote, the backslash and
+/// the control characters; it escapes the line and paragraph separators too, because the parser of this library
+/// does not accept them unescaped in a string.
+let internal appendStringValue (builder : StringBuilder) (text : string) =
+    builder.Append ('"') |> ignore
+    for character in text do
+        match character with
+        | '"' -> builder.Append ("\\\"") |> ignore
+        | '\\' -> builder.Append ("\\\\") |> ignore
+        | '\b' -> builder.Append ("\\b") |> ignore
+        | '\f' -> builder.Append ("\\f") |> ignore
+        | '\n' -> builder.Append ("\\n") |> ignore
+        | '\r' -> builder.Append ("\\r") |> ignore
+        | '\t' -> builder.Append ("\\t") |> ignore
+        // The line and paragraph separators are compared by code, as Fantomas writes their char literals out unescaped
+        | character when Char.IsControl character || int character = 0x2028 || int character = 0x2029 ->
+            builder.Append ("\\u") |> ignore
+            builder.Append ((int character).ToString ("X4", CultureInfo.InvariantCulture)) |> ignore
+        | character -> builder.Append (character) |> ignore
+    builder.Append ('"') |> ignore
+
 type internal PaddedStringBuilder () =
     let sb = StringBuilder ()
     let mutable padCount = 0
@@ -86,6 +107,7 @@ type internal PaddedStringBuilder () =
         sb.AppendLine().Append ("".PadLeft (padCount, ' '))
         |> ignore
     member _.Append (str : string) = sb.Append (str) |> ignore
+    member _.AppendStringValue (text : string) = appendStringValue sb text
     override _.ToString () = sb.ToString ()
 
 /// Specify voptions when printing an Ast.Document to a query string.
@@ -104,7 +126,6 @@ type Document with
     /// <param name="options">Specify custom printing voptions for the query string.</param>
     member x.ToQueryString ([<Optional; DefaultParameterValue (QueryStringPrintingOptions.None)>] options : QueryStringPrintingOptions) =
         let sb = PaddedStringBuilder ()
-        let withQuotes (s : string) = "\"" + s + "\""
         let rec printValue x =
             let printObjectValue (name, value) =
                 sb.Append (name)
@@ -127,7 +148,7 @@ type Document with
             | IntValue x -> sb.Append (x.ToString (CultureInfo.InvariantCulture))
             | FloatValue x -> sb.Append (x.ToString (CultureInfo.InvariantCulture))
             | BooleanValue x -> sb.Append (if x then "true" else "false")
-            | StringValue x -> sb.Append (withQuotes x)
+            | StringValue x -> sb.AppendStringValue (x)
             | EnumValue x -> sb.Append (x)
             | NullValue -> sb.Append ("null")
             | ListValue x -> printCompound "[]" printValue x

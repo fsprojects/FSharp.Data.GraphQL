@@ -49,6 +49,13 @@ let ``Can print a query with variables`` () =
 }"""
 
 [<Fact>]
+let ``Can print a query with characters to escape in a string argument`` () =
+    printAndAssert
+        """query q {
+  hero(name: "\"quoted\" \\ \n \t \u0001")
+}"""
+
+[<Fact>]
 let ``Can parse a query with an object input in the internal method`` () =
     printAndAssert
         """mutation q($id: String!, $name: String!) {
