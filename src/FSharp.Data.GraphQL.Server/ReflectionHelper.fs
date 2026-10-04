@@ -136,28 +136,23 @@ module internal Gen =
 
 module internal ReflectionHelper =
 
-    let [<Literal>] OptionTypeName = "Microsoft.FSharp.Core.FSharpOption`1"
-    let [<Literal>] ValueOptionTypeName = "Microsoft.FSharp.Core.FSharpValueOption`1"
-    let [<Literal>] SkippableTypeName = "System.Text.Json.Serialization.Skippable`1"
-    let [<Literal>] ListTypeName = "Microsoft.FSharp.Collections.FSharpList`1"
-    let [<Literal>] ArrayTypeName = "System.Array`1"
-    let [<Literal>] IEnumerableTypeName = "System.Collections.IEnumerable"
-    let [<Literal>] IEnumerableGenericTypeName = "System.Collections.Generic.IEnumerable`1"
+    let private genericEnumerableTypeDefinition = typedefof<IEnumerable<_>>
+    let private enumerableType = typeof<System.Collections.IEnumerable>
 
     let rec isTypeOptional (t: Type) =
-        t.FullName.StartsWith OptionTypeName
-        || t.FullName.StartsWith ValueOptionTypeName
-        || (t.FullName.StartsWith SkippableTypeName && isTypeOptional (t.GetGenericArguments().[0]))
+        ReflectionHelper.isOptionType t
+        || ReflectionHelper.isValueOptionType t
+        || (ReflectionHelper.isSkippableType t && isTypeOptional (t.GetGenericArguments().[0]))
 
     let isParameterOptional (p: ParameterInfo) =
         p.IsOptional || isTypeOptional p.ParameterType
 
     let isPrameterMandatory = not << isParameterOptional
 
-    let isParameterSkippable (p: ParameterInfo) = p.ParameterType.FullName.StartsWith SkippableTypeName
+    let isParameterSkippable (p: ParameterInfo) = ReflectionHelper.isSkippableType p.ParameterType
 
     let unwrapOptions (ty : Type) =
-        if ty.FullName.StartsWith OptionTypeName || ty.FullName.StartsWith ValueOptionTypeName then
+        if ReflectionHelper.isOptionType ty || ReflectionHelper.isValueOptionType ty then
             ty.GetGenericArguments().[0]
         else ty
 
@@ -166,13 +161,15 @@ module internal ReflectionHelper =
         let checkCollections (from: Type) (``to``: Type) =
             if
                 // TODO: Implement support of other types of collections using collection initializers
-                (``to``.FullName.StartsWith ListTypeName || ``to``.FullName.StartsWith ArrayTypeName)
+                // An array is not among them: input coercion builds an array only for a GraphQL list
+                // whose type is an array, which is assignable without unwrapping
+                ReflectionHelper.isListType ``to``
                 && (from.IsGenericType
                     && from.GenericTypeArguments[0].IsAssignableTo(``to``.GenericTypeArguments[0])
                     && from.GetInterfaces()
                        |> Array.exists (
-                        fun i -> i.FullName.StartsWith IEnumerableGenericTypeName
-                                    || i.FullName = IEnumerableTypeName
+                        fun i -> ReflectionHelper.isConstructedFrom genericEnumerableTypeDefinition i
+                                    || Type.(=) (i, enumerableType)
                        )
                     )
 
@@ -183,16 +180,11 @@ module internal ReflectionHelper =
             else
                 false
 
-        let actualFrom =
-            if from.FullName.StartsWith OptionTypeName ||
-               from.FullName.StartsWith ValueOptionTypeName
-            then
-                from.GetGenericArguments()[0]
-            else from
+        let actualFrom = unwrapOptions from
         let actualTo =
-            if ``to``.FullName.StartsWith OptionTypeName ||
-               ``to``.FullName.StartsWith ValueOptionTypeName ||
-               ``to``.FullName.StartsWith SkippableTypeName
+            if ReflectionHelper.isOptionType ``to`` ||
+               ReflectionHelper.isValueOptionType ``to`` ||
+               ReflectionHelper.isSkippableType ``to``
             then
                 ``to``.GetGenericArguments()[0]
             else ``to``

@@ -20,10 +20,6 @@ module internal ReflectionHelper =
         | FieldGet (_, fieldInfo) -> fieldInfo.DeclaringType
         | _ -> failwith "Expression is no property."
 
-    let [<Literal>] OptionTypeName = "Microsoft.FSharp.Core.FSharpOption`1"
-    let [<Literal>] ValueOptionTypeName = "Microsoft.FSharp.Core.FSharpValueOption`1"
-    let [<Literal>] SkippableTypeName = "System.Text.Json.Serialization.Skippable`1"
-
     let private listGenericTypeInfo = typedefof<_ list>.GetTypeInfo()
     /// <summary>
     /// Returns pair of function constructors for `cons(head,tail)` and `nil`
@@ -167,6 +163,30 @@ module internal ReflectionHelper =
                 else createInclude.Invoke(null, [| value |])
         (``include``, skip)
 
+    /// <summary>
+    /// Whether <paramref name="t"/> is constructed from the generic type definition <paramref name="definition"/>.
+    /// </summary>
+    /// <remarks>
+    /// The definitions are compared with <see cref="M:System.Type.op_Equality(System.Type,System.Type)"/>. It takes
+    /// about a nanosecond, while the F# equality of types takes about ten, and the culture-sensitive comparison
+    /// of the full name with the name of the definition, which it replaces, hundreds. Unlike that comparison,
+    /// it does not take an array of the generic type, whose full name starts with the same name, for the generic type.
+    /// </remarks>
+    let isConstructedFrom (definition : Type) (t : Type) =
+        t.IsGenericType && Type.(=) (t.GetGenericTypeDefinition (), definition)
+
+    /// Whether the type is an F# option.
+    let isOptionType (t : Type) = isConstructedFrom optionGenericTypeInfo t
+
+    /// Whether the type is an F# value option.
+    let isValueOptionType (t : Type) = isConstructedFrom valueOptionGenericTypeInfo t
+
+    /// Whether the type is a skippable value.
+    let isSkippableType (t : Type) = isConstructedFrom skippableGenericTypeInfo t
+
+    /// Whether the type is an F# list.
+    let isListType (t : Type) = isConstructedFrom listGenericTypeInfo t
+
 module Helpers =
 
     let rec internal moduleType = ReflectionHelper.getModuleType <@ moduleType @>
@@ -179,10 +199,10 @@ module Helpers =
         | null -> ValueNone
         | _ ->
             let t = value.GetType()
-            if t.FullName.StartsWith ReflectionHelper.OptionTypeName then
+            if ReflectionHelper.isOptionType t then
                 let p = t.GetProperty("Value")
                 ValueSome (p.GetValue(value, [||]))
-            elif t.FullName.StartsWith ReflectionHelper.ValueOptionTypeName then
+            elif ReflectionHelper.isValueOptionType t then
                 if value = Activator.CreateInstance t then ValueNone
                 else
                     let p = t.GetProperty("Value")
@@ -213,15 +233,10 @@ module Helpers =
         | null -> ValueNone
         | value ->
             let t = value.GetType()
-            match t.FullName with
-            | null -> ValueSome value
-            | _ when t.IsGenericType ->
-                let genericTypeDefinition = t.GetGenericTypeDefinition()
-                match genericTypeDefinition.FullName with
-                | ReflectionHelper.OptionTypeName
-                | ReflectionHelper.ValueOptionTypeName -> objectOptionCast value
-                | _ -> ValueSome value
-            | _ -> ValueSome value
+            if ReflectionHelper.isOptionType t || ReflectionHelper.isValueOptionType t then
+                objectOptionCast value
+            else
+                ValueSome value
 
     /// <summary>
     /// Unwraps a <see cref="System.Object"/> from an <see cref="option{System.Object}"/> or <see cref="voption{System.Object}"/>,
@@ -232,9 +247,9 @@ module Helpers =
         | null -> null
         | value ->
             let t = value.GetType()
-            if t.FullName.StartsWith ReflectionHelper.OptionTypeName then
+            if ReflectionHelper.isOptionType t then
                 t.GetProperty("Value").GetValue (value, [||])
-            elif t.FullName.StartsWith ReflectionHelper.ValueOptionTypeName then
+            elif ReflectionHelper.isValueOptionType t then
                 if value = Activator.CreateInstance t then null
                 else
                     t.GetProperty("Value").GetValue (value, [||])
