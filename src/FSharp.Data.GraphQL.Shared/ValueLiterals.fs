@@ -14,34 +14,9 @@ open System.Reflection
 open System.Text
 open System.Text.Json
 open FSharp.Reflection
+open FSharp.Data.GraphQL.Ast.Extensions
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
-
-/// Appends a GraphQL string value holding the text. Like graphql-js, it escapes the quote, the backslash and
-/// the control characters; it escapes the line and paragraph separators too, because the parser of this library
-/// does not accept them unescaped in a string.
-let private appendString (builder : StringBuilder) (text : string) =
-    builder.Append ('"') |> ignore
-    for character in text do
-        match character with
-        | '"' -> builder.Append ("\\\"") |> ignore
-        | '\\' -> builder.Append ("\\\\") |> ignore
-        | '\b' -> builder.Append ("\\b") |> ignore
-        | '\f' -> builder.Append ("\\f") |> ignore
-        | '\n' -> builder.Append ("\\n") |> ignore
-        | '\r' -> builder.Append ("\\r") |> ignore
-        | '\t' -> builder.Append ("\\t") |> ignore
-        // The line and paragraph separators are compared by code, as Fantomas writes their char literals out unescaped
-        | character when
-            Char.IsControl character
-            || int character = 0x2028
-            || int character = 0x2029
-            ->
-            builder.Append ("\\u") |> ignore
-            builder.Append ((int character).ToString("X4", CultureInfo.InvariantCulture))
-            |> ignore
-        | character -> builder.Append (character) |> ignore
-    builder.Append ('"') |> ignore
 
 /// Whether the text is a GraphQL name, /[_A-Za-z][_0-9A-Za-z]*/, which can name an input object field.
 let private isName (text : string) =
@@ -88,7 +63,7 @@ let rec private tryAppendJson (builder : StringBuilder) (element : JsonElement) 
     | JsonValueKind.String ->
         match element.GetString () with
         | null -> builder.Append ("null") |> ignore
-        | text -> appendString builder text
+        | text -> appendStringValue builder text
         true
     | JsonValueKind.Array ->
         builder.Append ('[') |> ignore
@@ -122,10 +97,10 @@ let private tryAppendSerialized (jsonOptions : JsonSerializerOptions) (builder :
         builder.Append (if value then "true" else "false") |> ignore
         true
     | :? string as value ->
-        appendString builder value
+        appendStringValue builder value
         true
     | :? char as value ->
-        appendString builder (string value)
+        appendStringValue builder (string value)
         true
     | :? sbyte
     | :? byte
