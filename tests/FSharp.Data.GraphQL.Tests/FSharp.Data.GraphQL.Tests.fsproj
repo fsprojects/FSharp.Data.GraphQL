@@ -105,6 +105,7 @@
     <Compile Include="AspNetCore/WebSocketConnectionTests.fs" />
     <Compile Include="TaskSeqFieldTests.fs" />
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Helpers and Extensions\ReflectionHelperTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

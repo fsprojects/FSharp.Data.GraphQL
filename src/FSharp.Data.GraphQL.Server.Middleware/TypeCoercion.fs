@@ -25,16 +25,12 @@ module TypeCoercion =
     /// If <paramref name="t"/> is <c>voption</c>, <c>option</c>, or <c>Skippable</c>, returns the inner type; otherwise <see langword="ValueNone"/>.
     /// </summary>
     let tryUnwrapOption (t : Type) : Type voption =
-        if t.IsGenericType then
-            let fullName = t.GetGenericTypeDefinition().FullName
-            if
-                fullName.StartsWith ReflectionHelper.ValueOptionTypeName
-                || fullName.StartsWith ReflectionHelper.OptionTypeName
-                || fullName.StartsWith ReflectionHelper.SkippableTypeName
-            then
-                ValueSome (t.GetGenericArguments().[0])
-            else
-                ValueNone
+        if
+            ReflectionHelper.isValueOptionType t
+            || ReflectionHelper.isOptionType t
+            || ReflectionHelper.isSkippableType t
+        then
+            ValueSome (t.GetGenericArguments().[0])
         else
             ValueNone
 
