@@ -53,15 +53,8 @@
   </ItemGroup>
   <ItemGroup Label="Test platform">
     <PackageReference Update="BenchmarkDotNet" Version="0.15.*" />
-    <PackageReference Update="BenchmarkDotNet.Annotations" Version="0.*" />
     <PackageReference Update="Microsoft.Testing.Extensions.CodeCoverage" Version="18.*" />
-    <PackageReference Update="xunit.analyzers" Version="2.*" />
     <PackageReference Update="xunit.v3" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.v3.assert" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.v3.core" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.v3.extensibility.core" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.v3.runner.console" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.v3.runner.utility" Version="$(XUnitVersion)" />
   </ItemGroup>
   <ItemGroup Label="Tests and Samples">
     <PackageReference Update="Azure.Core" Version="1.*" />

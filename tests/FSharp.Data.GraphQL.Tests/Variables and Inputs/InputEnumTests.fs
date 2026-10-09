@@ -15,12 +15,6 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Shared
 
-let stringifyArg name (ctx : ResolveFieldContext) () =
-    let arg = ctx.TryArg name |> ValueOption.toObj
-    JsonSerializer.Serialize (arg, serializerOptions)
-
-let stringifyInput = stringifyArg "input"
-
 type EnumTestType =
     | Foo
     | Bar
