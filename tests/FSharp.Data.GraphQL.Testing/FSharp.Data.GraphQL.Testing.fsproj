@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DotNetVersion)</TargetFramework>
+    <IsTestProject>false</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <Description>Shared MSTest helpers of the FSharp.Data.GraphQL test projects: F# assertions, test categories, culture scope and test discovery guard</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Categories.fs" />
+    <Compile Include="TestCategories.fs" />
+    <Compile Include="Formatting.fs" />
+    <Compile Include="Assert.fs" />
+    <Compile Include="CultureScope.fs" />
+    <Compile Include="TestDiscoveryGuard.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The framework only: the test projects bring the adapter and the platform extensions -->
+    <PackageReference Include="MSTest.TestFramework" />
+  </ItemGroup>
+
+</Project>

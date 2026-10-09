@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DotNetVersion)</TargetFramework>
+    <IsTestProject>false</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+
+    <!--
+      MSTest only discovers the tests of the test application's own assembly. Keeping these samples in a referenced library
+      lets the TestDiscoveryGuard tests inspect them without MSTest seeing them: the samples MSTest rejects (UTA001, UTA007)
+      would otherwise fail discovery of the whole self-test run, and the ones it skips would fail the guard's check of it.
+    -->
+    <Description>Deliberately broken MSTest tests the TestDiscoveryGuard tests inspect</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Samples.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MSTest.TestFramework" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DotNetVersion)</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <EnableMSTestRunner>true</EnableMSTestRunner>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Parallelism is configured here, not by [<assembly: Parallelize>] -->
+    <Content Include="testconfig.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Failures.fs" />
+    <Compile Include="AssertTests.fs" />
+    <Compile Include="AssertResolutionTests.fs" />
+    <Compile Include="TestCategoriesTests.fs" />
+    <Compile Include="CultureScopeTests.fs" />
+    <Compile Include="TestDiscoveryGuardTests.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+    <PackageReference Include="MSTest.TestAdapter" />
+    <PackageReference Include="MSTest.TestFramework" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FSharp.Data.GraphQL.Testing\FSharp.Data.GraphQL.Testing.fsproj" />
+    <ProjectReference Include="..\FSharp.Data.GraphQL.Testing.Tests.DiscoverySamples\FSharp.Data.GraphQL.Testing.Tests.DiscoverySamples.fsproj" />
+  </ItemGroup>
+
+</Project>

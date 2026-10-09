@@ -107,7 +107,15 @@ let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
 
 let [<Literal>] TestResultsDirectory = "test-results"
 
-let runTests (project : string) (resultsFileName : string) (filter : string voption) =
+/// Which Microsoft.Testing.Platform extension writes the TRX report of a test application
+[<Struct>]
+type TrxReport =
+    /// xUnit.net v3 writes it itself: --report-xunit-trx
+    | XUnitTrx
+    /// Microsoft.Testing.Extensions.TrxReport, which the MSTest projects reference: --report-trx
+    | PlatformTrx
+
+let runTests (project : string) (report : TrxReport) (resultsFileName : string) (filter : string voption) =
     let resultsFilePath = TestResultsDirectory </> resultsFileName
     // A stale results file from a previous run must not hide a run that produced none
     // (checked first, because File.Delete throws when the results directory does not exist yet)
@@ -115,7 +123,7 @@ let runTests (project : string) (resultsFileName : string) (filter : string vopt
         File.Delete resultsFilePath
 
     // global.json runs `dotnet test` on Microsoft.Testing.Platform, which takes the project only through `--project`
-    // and leaves the TRX report to the xUnit.net test application. DotNet.test cannot produce that command line:
+    // and leaves the TRX report to an extension of the test application. DotNet.test cannot produce that command line:
     // it passes the project positionally after its other options and asks for the report through the VSTest `--logger`
     let args = [
         "--project"
@@ -132,8 +140,13 @@ let runTests (project : string) (resultsFileName : string) (filter : string vopt
         if embedAll then
             "-p:DebugType=embedded"
             "-p:EmbedAllSources=true"
-        "--report-xunit-trx"
-        "--report-xunit-trx-filename"
+        match report with
+        | XUnitTrx ->
+            "--report-xunit-trx"
+            "--report-xunit-trx-filename"
+        | PlatformTrx ->
+            "--report-trx"
+            "--report-trx-filename"
         resultsFileName
         match filter with
         | ValueSome filter ->
@@ -144,6 +157,11 @@ let runTests (project : string) (resultsFileName : string) (filter : string vopt
 
     let result =
         DotNet.exec (fun options -> options.WithRedirectOutput true |> DotNetCli.setVersion) "test" (Args.toWindowsCommandLine args)
+
+    // https://aka.ms/testingplatform/exitcodes: 8 means the test application ran and found no test to run,
+    // for example because a filter matched nothing or MSTest skipped every test it could not discover
+    if result.ExitCode = 8 then
+        failwith $"'dotnet test {project}' ran no tests (Microsoft.Testing.Platform exit code 8)"
 
     if not result.OK then
         failwith $"'dotnet test {project}' failed with exit code %i{result.ExitCode}"
@@ -198,6 +216,7 @@ let [<Literal>] UpdateIntrospectionFileTarget = "UpdateIntrospectionFile"
 Target.create UpdateIntrospectionFileTarget <| fun _ ->
     runTests
         integrationTestsProjectPath
+        XUnitTrx
         "FSharp.Data.GraphQL.IntegrationTests.IntrospectionUpdate.trx"
         (ValueSome "FullyQualifiedName~IntrospectionUpdateTests")
 
@@ -206,6 +225,7 @@ let [<Literal>] RunIntegrationTestsTarget = "RunIntegrationTests"
 Target.create RunIntegrationTestsTarget <| fun _ ->
     runTests
         integrationTestsProjectPath
+        XUnitTrx
         "FSharp.Data.GraphQL.IntegrationTests.trx"
         (ValueSome "FullyQualifiedName!~IntrospectionUpdateTests")
 
@@ -214,9 +234,15 @@ let unitTestsProjectPath =
     </> "FSharp.Data.GraphQL.Tests"
     </> "FSharp.Data.GraphQL.Tests.fsproj"
 
+let testingLibraryTestsProjectPath =
+    "tests"
+    </> "FSharp.Data.GraphQL.Testing.Tests"
+    </> "FSharp.Data.GraphQL.Testing.Tests.fsproj"
+
 let [<Literal>] RunUnitTestsTarget = "RunUnitTests"
 Target.create RunUnitTestsTarget <| fun _ ->
-    runTests unitTestsProjectPath "FSharp.Data.GraphQL.Tests.trx" ValueNone
+    runTests unitTestsProjectPath XUnitTrx "FSharp.Data.GraphQL.Tests.trx" ValueNone
+    runTests testingLibraryTestsProjectPath PlatformTrx "FSharp.Data.GraphQL.Testing.Tests.trx" ValueNone
 
 let prepareDocGen () =
     Shell.rm "docs/release-notes.md"

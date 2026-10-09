@@ -1,0 +1,9 @@
+{
+  "mstest": {
+    "parallelism": {
+      "enabled": true,
+      "scope": "method",
+      "workers": 0
+    }
+  }
+}

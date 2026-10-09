@@ -7,6 +7,9 @@
     <FSharpCoreVersion>10.1.401</FSharpCoreVersion>
     <FsToolkitVersion>5.*</FsToolkitVersion>
     <XUnitVersion>4.*</XUnitVersion>
+    <MSTestVersion>4.5.1</MSTestVersion>
+    <!-- The Microsoft.Testing.Platform version MSTest.TestAdapter $(MSTestVersion) is built on; its extensions must match it -->
+    <MicrosoftTestingPlatformVersion>2.5.1</MicrosoftTestingPlatformVersion>
     <FAKEVersion>6.*</FAKEVersion>
   </PropertyGroup>
   <ItemGroup Label="Common">
@@ -54,6 +57,10 @@
   <ItemGroup Label="Test platform">
     <PackageReference Update="BenchmarkDotNet" Version="0.15.*" />
     <PackageReference Update="Microsoft.Testing.Extensions.CodeCoverage" Version="18.*" />
+    <PackageReference Update="Microsoft.Testing.Extensions.TrxReport" Version="$(MicrosoftTestingPlatformVersion)" />
+    <!-- Not the MSTest metapackage: it brings Microsoft.NET.Test.Sdk (VSTest), which MSTest on Microsoft.Testing.Platform does not need -->
+    <PackageReference Update="MSTest.TestAdapter" Version="$(MSTestVersion)" />
+    <PackageReference Update="MSTest.TestFramework" Version="$(MSTestVersion)" />
     <PackageReference Update="xunit.v3" Version="$(XUnitVersion)" />
   </ItemGroup>
   <ItemGroup Label="Tests and Samples">
