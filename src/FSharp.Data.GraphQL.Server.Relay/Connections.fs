@@ -3,6 +3,7 @@
 
 namespace FSharp.Data.GraphQL.Server.Relay
 
+open System
 open System.Globalization
 open System.Runtime.CompilerServices
 open FSharp.Data.GraphQL.Types
@@ -263,7 +264,7 @@ module Cursor =
         // whitespace or culture-specific signs and separators get through. NumberStyles.None alone is not enough:
         // Int32.TryParse ignores trailing NUL characters
         | GlobalId (Prefix, id) when id.Length > 0 && id |> String.forall (fun c -> c >= '0' && c <= '9') ->
-            match System.Int32.TryParse (id, NumberStyles.None, CultureInfo.InvariantCulture) with
+            match Int32.TryParse (id, NumberStyles.None, CultureInfo.InvariantCulture) with
             | true, offset -> ValueSome offset
             // Too large for an Int32
             | false, _ -> ValueNone

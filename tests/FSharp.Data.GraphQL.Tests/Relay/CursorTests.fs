@@ -115,11 +115,7 @@ let private rejectsCursor (cursor : string) (description : string) =
     match Cursor.tryToOffset cursor with
     | ValueNone -> ()
     | ValueSome offset -> fail $"Expected tryToOffset to return no value for a cursor with {description}, but it read the offset {offset}"
-    let offset = Cursor.toOffset DefaultOffset cursor
-    Assert.True (
-        (offset = DefaultOffset),
-        $"Expected toOffset to return the default offset {DefaultOffset} for a cursor with {description}, but got {offset}"
-    )
+    Assert.Equal (DefaultOffset, Cursor.toOffset DefaultOffset cursor)
 
 // A cursor comes from the client, so whatever it sends must be rejected without an exception
 [<Theory>]

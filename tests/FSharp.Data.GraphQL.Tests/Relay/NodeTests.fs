@@ -170,11 +170,8 @@ let ``fromGlobalId reads back the type name and local ID toGlobalId wrote`` (typ
     let globalId = toGlobalId typeName localId
     match fromGlobalId globalId with
     | ValueSome (actualTypeName, actualLocalId) ->
-        Assert.True (
-            String.Equals (typeName, actualTypeName, StringComparison.Ordinal)
-            && String.Equals (localId, actualLocalId, StringComparison.Ordinal),
-            $"Expected the global ID '{globalId}' to be read as type '{typeName}' and local ID '{localId}', but it was read as type '{actualTypeName}' and local ID '{actualLocalId}'"
-        )
+        Assert.Equal (typeName, actualTypeName)
+        Assert.Equal (localId, actualLocalId)
     | ValueNone -> fail $"Expected the global ID '{globalId}' to be read as type '{typeName}' and local ID '{localId}', but it was read as no value"
 
 [<Theory>]
@@ -194,5 +191,5 @@ let ``Node field returns null without errors for a malformed or unknown global I
         Executor(schema).AsyncExecute ("query ($id: ID!) { node(id: $id) { id } }", getMockInputContext, variables = variables)
         |> sync
     ensureDirect result <| fun data errors ->
-        Assert.True (List.isEmpty errors, $"Expected no errors for a global ID with {reason} ('{id}'), but got %A{errors}")
+        Assert.Empty errors
         data |> equals (upcast NameValueLookup.ofList [ "node", null ])
