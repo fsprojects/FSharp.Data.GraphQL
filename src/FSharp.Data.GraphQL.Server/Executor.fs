@@ -187,9 +187,9 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     /// <summary>
     /// Asynchronously executes a provided execution plan. In case of repetitive queries, execution plan may be preprocessed
-    /// and cached using `documentId` as an identifier.
+    /// and cached, keyed by the document itself rather than by its `documentId`.
     /// Returned value is a readonly dictionary consisting of following top level entries:
-    /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
+    /// 'documentId' (hash code of current document's AST, which different documents can share, so it identifies neither a document nor its ExecutionPlan),
     /// 'data' (GraphQL response matching the structure provided in GraphQL query string), and
     /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>
@@ -202,7 +202,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     /// <summary>
     /// Asynchronously executes parsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
-    /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
+    /// 'documentId' (hash code of current document's AST, which different documents can share, so it identifies neither a document nor its ExecutionPlan),
     /// 'data' (GraphQL response matching the structure provided in GraphQL query string), and
     /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>
@@ -220,7 +220,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     /// <summary>
     /// Asynchronously executes unparsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
-    /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
+    /// 'documentId' (hash code of current document's AST, which different documents can share, so it identifies neither a document nor its ExecutionPlan),
     /// 'data' (GraphQL response matching the structure provided in GraphQL query string), and
     /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>

@@ -5,6 +5,9 @@ open System.Collections
 open System.Collections.Generic
 open System.Threading
 open System.Threading.Tasks
+open Microsoft.Extensions.Caching.Memory
+open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Internal
 open Xunit
 
 open FSharp.Data.GraphQL
@@ -23,6 +26,9 @@ let private intArgumentSchema = createSchema (Define.Input ("x", Nullable IntTyp
 let private introspected (schema : ISchema) = schema.Introspected
 
 let private keyOf (query : string) = ValidationResultKey (introspected intArgumentSchema, parse query)
+
+/// How long a test waits for another thread before it fails
+let private timeout = TimeSpan.FromSeconds 10.0
 
 let private coercionErrorMessage =
     "Argument field or value named 'x' can not be coerced. It does not match a valid literal representation for the type."
@@ -155,7 +161,7 @@ let ``Concurrent requests for one key run the validation once`` () : Task = task
     let producer () =
         Interlocked.Increment runs |> ignore
         firstRunStarted.Set ()
-        release.Wait (TimeSpan.FromSeconds 10.0) |> ignore
+        release.Wait timeout |> ignore
         Success
     let requests =
         Array.init callers (fun _ ->
@@ -165,7 +171,7 @@ let ``Concurrent requests for one key run the validation once`` () : Task = task
                     cache.GetOrAdd producer key),
                 TaskCreationOptions.LongRunning
             ))
-    Assert.True (firstRunStarted.Wait (TimeSpan.FromSeconds 10.0), "No caller started the validation")
+    Assert.True (firstRunStarted.Wait timeout, "No caller started the validation")
     // Give the other callers time to request the key while the first validation is still running; the assertion
     // below holds however late they come, since a late caller finds the cached result
     do! Task.Delay 200
@@ -216,117 +222,154 @@ let ``Validation result cache does not keep documents larger than its size limit
     cache.GetOrAdd producer small |> ignore
     Assert.Equal (3, runs.Value)
 
-/// A cache of strings whose size is their length, on a clock the test sets
-let private createCache (policy : CacheExpirationPolicy) (sizeLimit : int64) (now : TimeSpan ref) =
-    MemoryCache<string, int>(policy, sizeLimit, (fun (key : string) -> int64 key.Length), StringComparer.Ordinal, fun () -> now.Value)
+/// A clock the test sets, which a memory cache counts its expirations by
+type private TestClock () =
+    member val UtcNow = DateTimeOffset (2026, 1, 1, 0, 0, 0, TimeSpan.Zero) with get, set
+    member clock.Advance (time : TimeSpan) = clock.UtcNow <- clock.UtcNow + time
+    interface ISystemClock with
+        member clock.UtcNow = clock.UtcNow
 
-/// Gets the value of the key from the cache; a value produced for the key is the number of times it was produced, so
-/// that 1 means the entry is still the one cached first and 2 that it was produced again
-let private getCounting (cache : MemoryCache<string, int>) (productions : Dictionary<string, int>) (key : string) =
-    cache.GetOrAddResult key (fun () ->
-        let count =
-            match productions.TryGetValue key with
-            | true, count -> count + 1
-            | false, _ -> 1
-        productions[key] <- count
-        count)
+/// A memory cache that counts the lookups made in it, so that a test knows when a request has passed its lookup
+type private CountingMemoryCache (inner : IMemoryCache) =
+    let mutable lookups = 0
 
+    member _.Lookups = Volatile.Read &lookups
 
-[<Fact>]
-let ``Cache hit refreshes the sliding expiration of the entry`` () =
-    let now = ref TimeSpan.Zero
-    let cache = createCache (SlidingExpiration (TimeSpan.FromSeconds 30.0)) Int64.MaxValue now
-    let get = getCounting cache (Dictionary StringComparer.Ordinal)
-    // The first request
-    Assert.Equal (1, get "key")
-    now.Value <- TimeSpan.FromSeconds 20.0
-    // A request 20 s after the first
-    Assert.Equal (1, get "key")
-    // 45 s after the entry was created, but 25 s after it was last used
-    now.Value <- TimeSpan.FromSeconds 45.0
-    cache.RemoveExpired ()
-    // The entry used 25 s ago survives removing the expired entries
-    Assert.Equal (1, cache.Count)
-    // A request 25 s after the last use
-    Assert.Equal (1, get "key")
-    now.Value <- TimeSpan.FromSeconds 76.0
-    // A request 31 s after the last use
-    Assert.Equal (2, get "key")
+    interface IMemoryCache with
+        member _.TryGetValue (key : obj, value : byref<obj>) =
+            Interlocked.Increment &lookups |> ignore
+            inner.TryGetValue (key, &value)
+        member _.CreateEntry key = inner.CreateEntry key
+        member _.Remove key = inner.Remove key
+        member _.Dispose () = inner.Dispose ()
+
+/// Requests the key on a thread of its own, as the validation it runs or waits for blocks until the test releases it
+let private startRequest (cache : IValidationResultCache) (producer : ValidationResultProducer) (key : ValidationResultKey) =
+    Task.Factory.StartNew<ValidationResult<GQLProblemDetails>> ((fun () -> cache.GetOrAdd producer key), TaskCreationOptions.LongRunning)
 
 [<Fact>]
-let ``Cache hit does not extend an absolute expiration`` () =
-    let now = ref TimeSpan.Zero
-    let cache = createCache (AbsoluteExpiration (TimeSpan.FromSeconds 30.0)) Int64.MaxValue now
-    let get = getCounting cache (Dictionary StringComparer.Ordinal)
-    // The first request
-    Assert.Equal (1, get "key")
-    now.Value <- TimeSpan.FromSeconds 20.0
-    // A request 20 s after the first
-    Assert.Equal (1, get "key")
-    now.Value <- TimeSpan.FromSeconds 31.0
-    // A request 31 s after the entry was created
-    Assert.Equal (2, get "key")
+let ``Cache hit refreshes the sliding expiration of a validation result`` () =
+    let clock = TestClock ()
+    use memoryCache = new MemoryCache (MemoryCacheOptions (Clock = clock))
+    let cache = MemoryValidationResultCache (memoryCache, TimeSpan.FromSeconds 30.0) :> IValidationResultCache
+    let key = keyOf "{ f(x: 1) }"
+    let runs = ref 0
+    let producer () =
+        runs.Value <- runs.Value + 1
+        Success
+    cache.GetOrAdd producer key |> ignore
+    clock.Advance (TimeSpan.FromSeconds 20.0)
+    cache.GetOrAdd producer key |> ignore
+    // 40 s after the result was cached, but 20 s after it was last used
+    clock.Advance (TimeSpan.FromSeconds 20.0)
+    cache.GetOrAdd producer key |> ignore
+    Assert.Equal (1, runs.Value)
+    // 31 s after the last use
+    clock.Advance (TimeSpan.FromSeconds 31.0)
+    cache.GetOrAdd producer key |> ignore
+    Assert.Equal (2, runs.Value)
 
 [<Fact>]
-let ``Cache over its size limit evicts the least recently used entries`` () =
-    let now = ref TimeSpan.Zero
-    let cache = createCache NoExpiration 10L now
-    let get = getCounting cache (Dictionary StringComparer.Ordinal)
-    // The first request of aaaa
-    Assert.Equal (1, get "aaaa")
-    now.Value <- TimeSpan.FromSeconds 1.0
-    // The first request of bbbb
-    Assert.Equal (1, get "bbbb")
-    // Using aaaa makes bbbb the least recently used entry
-    now.Value <- TimeSpan.FromSeconds 2.0
-    // The second request of aaaa
-    Assert.Equal (1, get "aaaa")
-    now.Value <- TimeSpan.FromSeconds 3.0
-    // The first request of cccc
-    Assert.Equal (1, get "cccc")
-    // One entry of size 4 is evicted to get under the limit of 10
-    Assert.Equal (8L, cache.Size)
-    // A request of aaaa after the eviction
-    Assert.Equal (1, get "aaaa")
-    // A request of cccc after the eviction
-    Assert.Equal (1, get "cccc")
-    // A request of the evicted bbbb
-    Assert.Equal (2, get "bbbb")
+let ``Validation results declare the size of their documents to a memory cache with a size limit`` () =
+    let first = keyOf "{ f(x: 1) }"
+    let second = keyOf "{ f(x: 2) }"
+    // Room for one of the two documents. With nothing to compact the first one stays, whatever the timing
+    let options =
+        MemoryCacheOptions (SizeLimit = first.DocumentSize + second.DocumentSize - 1L, CompactionPercentage = 0.0)
+    use memoryCache = new MemoryCache (options)
+    let cache = MemoryValidationResultCache (memoryCache) :> IValidationResultCache
+    let runs = ref 0
+    let producer () =
+        runs.Value <- runs.Value + 1
+        Success
+    cache.GetOrAdd producer first |> ignore
+    cache.GetOrAdd producer first |> ignore
+    Assert.Equal (1, runs.Value)
+    cache.GetOrAdd producer second |> ignore
+    cache.GetOrAdd producer second |> ignore
+    // The second document does not fit beside the first, so it is validated on every request
+    Assert.Equal (3, runs.Value)
+    Assert.Equal (1, memoryCache.Count)
 
 [<Fact>]
-let ``Entry larger than the size limit is produced on every request without being cached`` () =
-    let now = ref TimeSpan.Zero
-    let cache = createCache NoExpiration 10L now
-    let get = getCounting cache (Dictionary StringComparer.Ordinal)
-    // The first request of an entry within the limit
-    Assert.Equal (1, get "small")
-    // The first request of an entry over the limit
-    Assert.Equal (1, get "elevenchars")
-    // The second request of an entry over the limit
-    Assert.Equal (2, get "elevenchars")
-    // Only the entry within the limit is cached
-    Assert.Equal (1, cache.Count)
-    // A request of the entry within the limit after the ones over it
-    Assert.Equal (1, get "small")
+let ``Validation that outlasts the sliding expiration is shared and its result is cached from when it finished`` () : Task = task {
+    let clock = TestClock ()
+    use memoryCache = new MemoryCache (MemoryCacheOptions (Clock = clock))
+    let counting = new CountingMemoryCache (memoryCache)
+    let cache = MemoryValidationResultCache (counting, TimeSpan.FromSeconds 30.0) :> IValidationResultCache
+    let key = keyOf "{ f(x: 1) }"
+    let runs = ref 0
+    use started = new ManualResetEventSlim false
+    use release = new ManualResetEventSlim false
+    let producer () =
+        Interlocked.Increment runs |> ignore
+        started.Set ()
+        release.Wait timeout |> ignore
+        Success
+    let first = startRequest cache producer key
+    Assert.True (started.Wait timeout, "The validation did not start")
+    // The validation takes twice the sliding expiration
+    clock.Advance (TimeSpan.FromSeconds 60.0)
+    let second = startRequest cache producer key
+    // The first request looks the key up, and its validation once more as it starts; the third lookup is the second request's
+    Assert.True (SpinWait.SpinUntil ((fun () -> counting.Lookups >= 3), timeout), "The second request did not look the key up")
+    // Lets the second request go on from its lookup to the validation in flight; coming later it finds the cached
+    // result, so the assertions below hold either way
+    do! Task.Delay 200
+    release.Set ()
+    let! _ = Task.WhenAll [| first; second |]
+    Assert.Equal (1, runs.Value)
+    // 20 s after the validation finished, although 80 s after it started
+    clock.Advance (TimeSpan.FromSeconds 20.0)
+    cache.GetOrAdd producer key |> ignore
+    Assert.Equal (1, runs.Value)
+}
 
 [<Fact>]
-let ``Cache evicts while many threads add entries`` () =
-    let now = ref TimeSpan.Zero
-    let cache = createCache NoExpiration 1_000L now
-    let requests =
-        Array.init 8 (fun thread ->
-            Task.Factory.StartNew (
-                (fun () ->
-                    for i in 0..49_999 do
-                        cache.GetOrAddResult $"%d{thread}-%d{i}" (fun () -> i)
-                        |> ignore),
-                TaskCreationOptions.LongRunning
-            ))
-    // Copying the entries to evict while other threads add entries threw before, failing the requests
-    Task.WaitAll requests
-    // A request after the concurrent ones brings the cache back within its limit, whatever they left behind
-    cache.GetOrAddResult "last" (fun () -> 0) |> ignore
-    Assert.InRange (cache.Size, 0L, 1_000L)
+let ``Concurrent requests share one validation whose result cannot be cached`` () : Task = task {
+    let key = keyOf "{ f(x: 1) }"
+    // No room for the document, so its result is never cached
+    use memoryCache = new MemoryCache (MemoryCacheOptions (SizeLimit = key.DocumentSize - 1L, CompactionPercentage = 0.0))
+    let counting = new CountingMemoryCache (memoryCache)
+    let cache = MemoryValidationResultCache (counting) :> IValidationResultCache
+    let callers = 8
+    let runs = ref 0
+    use started = new ManualResetEventSlim false
+    use release = new ManualResetEventSlim false
+    let producer () =
+        Interlocked.Increment runs |> ignore
+        started.Set ()
+        release.Wait timeout |> ignore
+        Success
+    let requests = Array.init callers (fun _ -> startRequest cache producer key)
+    Assert.True (started.Wait timeout, "No request started the validation")
+    // Every request looks the key up once, and the validation once more as it starts
+    Assert.True (SpinWait.SpinUntil ((fun () -> counting.Lookups > callers), timeout), "Not every request looked the key up")
+    // Lets the requests go on from their lookups to the validation in flight before it finishes
+    do! Task.Delay 200
+    release.Set ()
+    let! results = Task.WhenAll requests
+    Assert.All (results, fun result -> Assert.True (result.IsSuccess, $"Expected every request to get the shared result, but got %A{result}"))
+    Assert.Equal (1, runs.Value)
+    Assert.Equal (0, memoryCache.Count)
+}
+
+[<Fact>]
+let ``Executor caches validation results in a keyed memory cache of the service provider`` () =
+    let serviceKey = "GraphQL validation results"
+    let services = ServiceCollection ()
+    services.AddKeyedSingleton<IMemoryCache> (
+        serviceKey,
+        fun _ _ -> new MemoryCache (MemoryCacheOptions (SizeLimit = MemoryValidationResultCache.DefaultSizeLimit)) :> IMemoryCache
+    )
+    |> ignore
+    use provider = services.BuildServiceProvider ()
+    let memoryCache = provider.GetRequiredKeyedService<IMemoryCache> serviceKey
+    let validationCache = MemoryValidationResultCache (memoryCache) :> IValidationResultCache
+    let executor = Executor (intArgumentSchema, [], ValueSome validationCache)
+    executor.CreateExecutionPlan "{ f(x: 1) }"
+    |> ensureAccepted "the document"
+    Assert.Equal (1, (memoryCache :?> MemoryCache).Count)
 
 /// A schema that counts how often its introspected representation is read
 let private countIntrospectedReads (schema : ISchema<unit>) (reads : int ref) = {

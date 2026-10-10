@@ -1,9 +1,12 @@
 namespace FSharp.Data.GraphQL.Validation
 
 open System
+open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Runtime.CompilerServices
 open System.Security.Cryptography
+open System.Threading
+open Microsoft.Extensions.Caching.Memory
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
@@ -294,56 +297,126 @@ type IValidationResultCache =
     abstract GetOrAdd : producer : ValidationResultProducer -> key : ValidationResultKey -> ValidationResult<GQLProblemDetails>
 
 /// <summary>
-/// An in-memory cache of validation results.
+/// A cache of validation results held in an <see cref="IMemoryCache"/>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// An entry expires once it was not used for the sliding expiration. Concurrent requests for a key that is not cached
-/// yet run the validation once and share its result; a validation that throws leaves no entry behind.
+/// An entry expires once it was not used for the sliding expiration, counted from when its validation finished.
+/// Concurrent requests for a key that is not cached share a single validation, whether its result ends up cached or not;
+/// a validation that throws is run again by the next request.
 /// </para>
 /// <para>
-/// The cache holds the documents of its keys, so their total size, the estimated memory of the parsed documents in bytes
-/// (<see cref="ValidationResultKey.DocumentSize"/>), is limited: beyond the limit the least recently used entries are
-/// evicted, and a document larger than the whole limit is validated on every request without being cached. This bounds
-/// the memory clients can make the cache hold by sending distinct documents; the validation results are not counted.
+/// The cache holds the documents of its keys, so every entry declares the estimated memory of its document in bytes
+/// (<see cref="ValidationResultKey.DocumentSize"/>) as its size. A cache created without an <see cref="IMemoryCache"/>
+/// owns one that limits the total of those sizes: an entry that does not fit is not cached, and the least recently used
+/// entries are evicted to make room for the next ones. This bounds the memory clients can make the cache hold by sending
+/// distinct documents; the validation results are not counted.
 /// </para>
 /// <para>
-/// Expired entries are removed while the cache is used, so an idle cache keeps its entries, within the size limit, until
-/// it is used again.
+/// An <see cref="IMemoryCache"/> passed in is used as it is configured, so give it a
+/// <see cref="MemoryCacheOptions.SizeLimit"/> in bytes: without one it grows with every distinct document clients send.
+/// A memory cache with a size limit requires every entry to declare its size, and in the same unit, so pass one that
+/// holds validation results only, such as a keyed service, rather than the cache the rest of the application shares.
 /// </para>
 /// </remarks>
-type MemoryValidationResultCache
-    /// <param name="slidingExpiration">How long an entry stays cached after it was last used.</param>
-    /// <param name="sizeLimit">The maximum total size of the cached documents, in bytes of estimated memory.</param>
-    (slidingExpiration : TimeSpan, sizeLimit : int64) =
+type MemoryValidationResultCache private (cache : IMemoryCache, slidingExpiration : TimeSpan, ownSizeLimit : int64 voption) =
 
-    do
-        if slidingExpiration <= TimeSpan.Zero then
-            raise (ArgumentOutOfRangeException (nameof slidingExpiration, slidingExpiration, "The sliding expiration must be positive."))
+    static let createOwnCache (sizeLimit : int64) : IMemoryCache =
         if sizeLimit <= 0L then
             raise (ArgumentOutOfRangeException (nameof sizeLimit, sizeLimit, "The size limit must be positive."))
+        // Evicting a tenth of the limit at a time, instead of the twentieth of the default, lets more additions pass
+        // before the next compaction of a cache kept full by new documents
+        new MemoryCache (MemoryCacheOptions (SizeLimit = Nullable sizeLimit, CompactionPercentage = 0.1))
 
-    let cache =
-        MemoryCache<ValidationResultKey, ValidationResult<GQLProblemDetails>> (
-            SlidingExpiration slidingExpiration,
-            sizeLimit,
-            (fun key -> key.DocumentSize),
-            EqualityComparer<ValidationResultKey>.Default,
-            CacheClock.create ()
-        )
+    do
+        match cache with
+        | null -> nullArg (nameof cache)
+        | _ -> ()
+        if slidingExpiration <= TimeSpan.Zero then
+            raise (ArgumentOutOfRangeException (nameof slidingExpiration, slidingExpiration, "The sliding expiration must be positive."))
 
-    /// The sliding expiration of a cache created without arguments: 30 seconds.
+    // The validations running now. A memory cache does not run the factory of a key once for concurrent requests, so the
+    // requests for a key share its validation here, and only a finished result is put into the memory cache: a
+    // validation in flight can neither expire nor be evicted, however long it takes and however full the cache is
+    let flights = ConcurrentDictionary<ValidationResultKey, Lazy<ValidationResult<GQLProblemDetails>>> ()
+
+    let tryGet (key : obj) =
+        match cache.TryGetValue key with
+        | true, (:? ValidationResult<GQLProblemDetails> as result) -> ValueSome result
+        | _ -> ValueNone
+
+    let fitsOwnCache (key : ValidationResultKey) =
+        match ownSizeLimit with
+        // A memory cache compacts itself whenever an entry does not fit, and a document larger than the whole limit
+        // never fits, so it is not offered at all: it would evict the other documents on every request
+        | ValueSome sizeLimit -> key.DocumentSize <= sizeLimit
+        | ValueNone -> true
+
+    let store (key : ValidationResultKey) (result : ValidationResult<GQLProblemDetails>) =
+        if fitsOwnCache key then
+            // The entry is added when it is disposed
+            use entry = cache.CreateEntry (box key)
+            entry.SlidingExpiration <- Nullable slidingExpiration
+            entry.Size <- Nullable key.DocumentSize
+            entry.Value <- result
+
+    let validate (producer : ValidationResultProducer) (key : ValidationResultKey) =
+        let flight =
+            Lazy<ValidationResult<GQLProblemDetails>> (
+                (fun () ->
+                    // A flight that finished after this request looked the key up, and before it started its own, has
+                    // stored the result already
+                    match tryGet (box key) with
+                    | ValueSome result -> result
+                    | ValueNone ->
+                        let result = producer ()
+                        store key result
+                        result),
+                LazyThreadSafetyMode.ExecutionAndPublication
+            )
+        let shared = flights.GetOrAdd (key, flight)
+        try
+            shared.Value
+        finally
+            // The request that started the flight ends it, after the result is stored, so that a request finding no
+            // flight finds the result instead. The flight of a validation that threw ends too: the requests sharing it
+            // get its exception, and the next one validates again
+            if obj.ReferenceEquals (shared, flight) then
+                flights.TryRemove key |> ignore
+
+    /// The sliding expiration of a cache created without one: 30 seconds.
     static member DefaultSlidingExpiration = TimeSpan.FromSeconds 30.0
 
     /// The size limit of a cache created without arguments: 16 MiB of estimated memory, a few thousand typical documents.
     static member DefaultSizeLimit = 16L * 1024L * 1024L
 
     /// <summary>
-    /// Creates a cache with the <see cref="MemoryValidationResultCache.DefaultSlidingExpiration"/> and the
-    /// <see cref="MemoryValidationResultCache.DefaultSizeLimit"/>.
+    /// Creates a cache that owns its memory cache, with the <see cref="MemoryValidationResultCache.DefaultSlidingExpiration"/>
+    /// and the <see cref="MemoryValidationResultCache.DefaultSizeLimit"/>.
     /// </summary>
     new () = MemoryValidationResultCache (MemoryValidationResultCache.DefaultSlidingExpiration, MemoryValidationResultCache.DefaultSizeLimit)
 
+    /// <summary>Creates a cache that owns its memory cache.</summary>
+    /// <param name="slidingExpiration">How long an entry stays cached after it was last used.</param>
+    /// <param name="sizeLimit">The maximum total size of the cached documents, in bytes of estimated memory.</param>
+    new (slidingExpiration : TimeSpan, sizeLimit : int64) =
+        MemoryValidationResultCache (createOwnCache sizeLimit, slidingExpiration, ValueSome sizeLimit)
+
+    /// <summary>
+    /// Creates a cache that holds its entries in the given memory cache, with the
+    /// <see cref="MemoryValidationResultCache.DefaultSlidingExpiration"/>.
+    /// </summary>
+    /// <param name="cache">The memory cache to hold the validation results in, which should have a size limit in bytes.</param>
+    new (cache : IMemoryCache) = MemoryValidationResultCache (cache, MemoryValidationResultCache.DefaultSlidingExpiration, ValueNone)
+
+    /// <summary>Creates a cache that holds its entries in the given memory cache.</summary>
+    /// <param name="cache">The memory cache to hold the validation results in, which should have a size limit in bytes.</param>
+    /// <param name="slidingExpiration">How long an entry stays cached after it was last used.</param>
+    new (cache : IMemoryCache, slidingExpiration : TimeSpan) = MemoryValidationResultCache (cache, slidingExpiration, ValueNone)
+
     interface IValidationResultCache with
         /// <inheritdoc />
-        member _.GetOrAdd producer key = cache.GetOrAddResult key producer
+        member _.GetOrAdd producer key =
+            match tryGet (box key) with
+            | ValueSome result -> result
+            | ValueNone -> validate producer key
