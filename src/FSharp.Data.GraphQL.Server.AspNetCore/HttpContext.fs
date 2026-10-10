@@ -54,7 +54,7 @@ module internal RequestBody =
     [<Literal>]
     let private VariablesPathPrefix = "variables."
 
-    /// Cuts a reason that may quote the request body to at most MaxQuotedReasonLength characters
+    /// <summary>Cuts a reason that may quote the request body to at most <see cref="MaxQuotedReasonLength"/> characters</summary>
     let quote (reason : string) =
         if reason.Length <= MaxQuotedReasonLength then
             reason
@@ -86,8 +86,11 @@ module internal RequestBody =
             extensions = extensions
         )
 
+    /// <summary>
     /// The response to the exception a server throws from the body stream with the status code to answer with:
-    /// Kestrel answers a body over MaxRequestBodySize with 413, and a body that ends before its Content-Length with 400
+    /// Kestrel answers a body over <see cref="Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerLimits.MaxRequestBodySize"/>
+    /// with 413, and a body that ends before its Content-Length with 400
+    /// </summary>
     let ofBadHttpRequest (request : HttpRequest) (ex : BadHttpRequestException) : IResult =
         let title =
             if ex.StatusCode = StatusCodes.Status413PayloadTooLarge then
@@ -97,20 +100,49 @@ module internal RequestBody =
         problem request ex.StatusCode title (quote ex.Message)
 
     /// <summary>
-    /// Tells whether the form reader rejected the body because it breaks a <see cref="Microsoft.AspNetCore.Http.Features.FormOptions"/> limit.
+    /// The beginnings of the messages with which the form reader reports a body over a size limit of
+    /// <see cref="Microsoft.AspNetCore.Http.Features.FormOptions"/>; each goes on with the limit and ends with
+    /// <c>" exceeded."</c>.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The form reader reports a broken limit with <see cref="InvalidDataException"/>, the same type it reports a malformed
-    /// body with, so only the message tells them apart. Every limit message of ASP.NET Core reads
-    /// <c>"&lt;what&gt; limit &lt;number&gt; exceeded."</c>; a message of another shape is answered as a malformed body.
+    /// body with, so only the message tells them apart. ASP.NET Core does not localize these messages.
+    /// </para>
+    /// <para>
+    /// Only the limits on the size of the body are listed. The other limit messages are about a malformed request:
+    /// <c>Multipart boundary length limit</c> is on a parameter of the <c>Content-Type</c> header, <c>Line length limit</c>
+    /// is also reported for a delimiter line followed by other text, and <c>Multipart header length limit</c> for a body
+    /// that does not start with its boundary. The messages that quote the body, such as the one of a malformed part
+    /// header, never start with one of these.
+    /// </para>
     /// </remarks>
-    let private isFormLimitExceeded (ex : InvalidDataException) =
-        let message = ex.Message.AsSpan ()
-        message.Contains (" limit ", StringComparison.Ordinal)
-        && message.EndsWith (" exceeded.", StringComparison.Ordinal)
+    let private sizeLimitMessagePrefixes = [|
+        "Multipart body length limit "
+        "Multipart headers length limit "
+        "Multipart headers count limit "
+        "Form value count limit "
+        "Form key length limit "
+        "Form value length limit "
+        "Form key or value length limit "
+    |]
+
+    /// Tells whether the form reader rejected the body because it breaks a size limit of the form options
+    let private isFormSizeLimitExceeded (ex : InvalidDataException) =
+        let message = ex.Message
+        message.EndsWith (" exceeded.", StringComparison.Ordinal)
+        && sizeLimitMessagePrefixes
+           |> Array.exists (fun prefix -> message.StartsWith (prefix, StringComparison.Ordinal))
+
+    /// <summary>
+    /// The message of the exception the buffer of a request body throws once the body grows over
+    /// <see cref="Microsoft.AspNetCore.Http.Features.FormOptions.BufferBodyLengthLimit"/>
+    /// </summary>
+    [<Literal>]
+    let private BufferLimitExceededMessage = "Buffer limit exceeded."
 
     /// Reads the form of a multipart or URL-encoded request, answering a body the form reader cannot parse
-    /// with 400 and a body over a server or form limit with 413
+    /// with 400 and a body over a server or form size limit with 413
     let readFormAsync (cancellationToken : CancellationToken) (request : HttpRequest) : Task<Result<IFormCollection, IResult>> = task {
         try
             let! form = request.ReadFormAsync cancellationToken
@@ -118,9 +150,11 @@ module internal RequestBody =
         with
         // BadHttpRequestException derives from IOException, so it must be matched first
         | :? BadHttpRequestException as ex -> return Error (ofBadHttpRequest request ex)
-        | :? InvalidDataException as ex when isFormLimitExceeded ex ->
+        | :? InvalidDataException as ex when isFormSizeLimitExceeded ex ->
             return Error (problem request StatusCodes.Status413PayloadTooLarge BodyTooLargeTitle (quote ex.Message))
         | :? InvalidDataException as ex -> return Error (problem request StatusCodes.Status400BadRequest UnreadableBodyTitle (quote ex.Message))
+        | :? IOException as ex when String.Equals (ex.Message, BufferLimitExceededMessage, StringComparison.Ordinal) ->
+            return Error (problem request StatusCodes.Status413PayloadTooLarge BodyTooLargeTitle BufferLimitExceededMessage)
         | :? IOException ->
             // The multipart reader throws IOException when the body ends before the closing boundary,
             // which is also what a boundary the body does not use looks like
@@ -131,6 +165,18 @@ module internal RequestBody =
                         StatusCodes.Status400BadRequest
                         UnreadableBodyTitle
                         "The multipart body ends before its closing boundary, or its parts are not delimited by the boundary its Content-Type declares."
+                )
+        | :? ArgumentOutOfRangeException ->
+            // The multipart reader throws it for a boundary too long for its buffer, which only a
+            // FormOptions.MultipartBoundaryLengthLimit raised above the buffer size lets through; its message repeats
+            // the boundary, so it is not quoted
+            return
+                Error (
+                    problem
+                        request
+                        StatusCodes.Status400BadRequest
+                        UnreadableBodyTitle
+                        "The multipart boundary its Content-Type declares is too long."
                 )
     }
 

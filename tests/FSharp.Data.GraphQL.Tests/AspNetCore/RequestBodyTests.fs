@@ -58,8 +58,10 @@ let private clientStyleParts map = [
 /// What a result wrote into the HTTP response
 type private WrittenResponse = { StatusCode : int; ContentType : string; Body : string }
 
-/// A request body that the server refuses to read, as Kestrel's body stream does once a read
-/// breaks a server limit such as MaxRequestBodySize or the connection ends too early
+/// <summary>
+/// A request body that the server refuses to read, as Kestrel's body stream does once a read breaks a server limit such as
+/// <see cref="Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerLimits.MaxRequestBodySize"/> or the connection ends too early
+/// </summary>
 type private RejectingRequestBody (error : exn) =
     inherit Stream ()
 
@@ -78,7 +80,44 @@ type private RejectingRequestBody (error : exn) =
     override _.SetLength (_ : int64) = raise (NotSupportedException ())
     override _.Write (_ : byte[], _ : int, _ : int) = raise (NotSupportedException ())
 
+/// A request body that can only be read forward, as the body stream of Kestrel, so that the form reader buffers it
+type private ForwardOnlyRequestBody (content : byte array) =
+    inherit Stream ()
+
+    let inner = new MemoryStream (content)
+
+    override _.CanRead = true
+    override _.CanSeek = false
+    override _.CanWrite = false
+    override _.Length = raise (NotSupportedException ())
+
+    override _.Position
+        with get () = raise (NotSupportedException ())
+        and set _ = raise (NotSupportedException ())
+
+    override _.Flush () = ()
+    override _.Read (buffer : byte[], offset : int, count : int) : int = inner.Read (buffer, offset, count)
+    override _.Seek (_ : int64, _ : SeekOrigin) : int64 = raise (NotSupportedException ())
+    override _.SetLength (_ : int64) = raise (NotSupportedException ())
+    override _.Write (_ : byte[], _ : int, _ : int) = raise (NotSupportedException ())
+
 let private bodyStream (body : string) = new MemoryStream (Encoding.UTF8.GetBytes body) :> Stream
+
+/// Writes the result a request is answered with into the response of the request, so that the test can inspect it
+let private writeAsync (ctx : HttpContext) (result : IResult) : Task<WrittenResponse> = task {
+    let responseBody = new MemoryStream ()
+    ctx.Response.Body <- responseBody
+    do! result.ExecuteAsync ctx
+
+    return {
+        StatusCode = ctx.Response.StatusCode
+        ContentType =
+            match ctx.Response.ContentType with
+            | null -> ""
+            | contentType -> contentType
+        Body = Encoding.UTF8.GetString (responseBody.ToArray ())
+    }
+}
 
 /// Sends a POST request with the given body through the default handler and writes the result it
 /// answers with, success or error, into a response the test can inspect.
@@ -107,18 +146,7 @@ let private postAsync (contentType : string) (body : Stream) (configureRequest :
         | Ok result
         | Error result -> result
 
-    let responseBody = new MemoryStream ()
-    ctx.Response.Body <- responseBody
-    do! result.ExecuteAsync ctx
-
-    return {
-        StatusCode = ctx.Response.StatusCode
-        ContentType =
-            match ctx.Response.ContentType with
-            | null -> ""
-            | contentType -> contentType
-        Body = Encoding.UTF8.GetString (responseBody.ToArray ())
-    }
+    return! writeAsync ctx result
 }
 
 let private postTextAsync contentType (body : string) = postAsync contentType (bodyStream body) ignore
@@ -157,7 +185,7 @@ let ``Multipart request that follows the client format is executed`` () : Task =
     let! response = postTextAsync MultipartContentType body
 
     assertStatus StatusCodes.Status200OK response
-    Assert.Contains ("\"1000\"", response.Body)
+    Assert.Contains ("\"1000\"", response.Body, StringComparison.Ordinal)
 }
 
 [<Fact>]
@@ -260,6 +288,85 @@ let ``Multipart request over the form value count limit is answered with 413`` (
     |> assertProblem StatusCodes.Status413PayloadTooLarge "Request body too large"
 }
 
+/// A multipart body of the operations alone, delimited by the given boundary
+let private operationsBodyWith (boundary : string) =
+    $"--%s{boundary}\r\nContent-Disposition: form-data; name=\"operations\"\r\n\r\n%s{ValidOperations}\r\n--%s{boundary}--\r\n"
+
+[<Fact>]
+let ``Multipart request with a boundary over the form boundary length limit is answered with 400`` () : Task = task {
+    // The limit is on a parameter of the Content-Type header, not on the size of the body
+    let boundary = String ('b', 200)
+
+    let! response = postTextAsync $"multipart/form-data; boundary=%s{boundary}" (operationsBodyWith boundary)
+
+    response
+    |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
+}
+
+[<Fact>]
+let ``Multipart request with a boundary longer than the buffer of the form reader is answered with 400`` () : Task = task {
+    // A boundary length limit raised above the buffer of the multipart reader lets through a boundary that the reader
+    // then refuses with an exception repeating the boundary
+    let boundary = String.replicate 300 Marker
+
+    let! response =
+        postAsync $"multipart/form-data; boundary=%s{boundary}" (bodyStream (operationsBodyWith boundary)) (fun ctx ->
+            (ctx :?> DefaultHttpContext).FormOptions <- FormOptions (MultipartBoundaryLengthLimit = 10_000))
+
+    response
+    |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
+    response |> assertDoesNotEcho Marker
+}
+
+[<Fact>]
+let ``Multipart request with text after a delimiter on its line is answered with 400`` () : Task = task {
+    // The form reader limits the rest of a delimiter line to 100 characters, which is no limit on the size of the body
+    let body =
+        String.Concat (formPart "operations" ValidOperations, $"--%s{Boundary}%s{String ('x', 200)}\r\n", closingBoundary)
+
+    let! response = postTextAsync MultipartContentType body
+
+    response
+    |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
+}
+
+[<Fact>]
+let ``Multipart request with a malformed part header reading like a limit message is answered with 400`` () : Task = task {
+    // The form reader quotes a malformed header line, so text of the client must not decide the status code
+    let body =
+        multipartBody [
+            formPart "operations" ValidOperations
+            $"--%s{Boundary}\r\nx limit 1 exceeded.\r\n\r\ncontent\r\n"
+        ]
+
+    let! response = postTextAsync MultipartContentType body
+
+    response
+    |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
+}
+
+[<Fact>]
+let ``Multipart request over the form buffer limit is answered with 413 when bound directly`` () : Task = task {
+    // The request handler buffers a body without a limit before it binds it, so the buffer limit of the form options
+    // only applies when an application binds the body itself
+    let body = multipartBody (clientStyleParts """{"0":["variables.file"]}""")
+    let _, _, ctx, scope =
+        createHandlerFor<DefaultGraphQLRequestHandler<Root>>(fun ctx ->
+            ctx.Request.Method <- HttpMethods.Post
+            ctx.Request.ContentType <- MultipartContentType
+            ctx.Request.Body <- new ForwardOnlyRequestBody (Encoding.UTF8.GetBytes body)
+            (ctx :?> DefaultHttpContext).FormOptions <- FormOptions (BufferBody = true, BufferBodyLengthLimit = 100L))
+    use _ = scope
+
+    match! ctx.TryBindJsonAsync<JsonElement> "{}" with
+    | Ok _ -> fail "Expected the body over the buffer limit not to be bound, but it was"
+    | Error result ->
+        let! response = writeAsync ctx result
+        response
+        |> assertProblem StatusCodes.Status413PayloadTooLarge "Request body too large"
+        response |> assertDoesNotEcho Marker
+}
+
 [<Theory>]
 [<InlineData(JsonContentType)>]
 [<InlineData(MultipartContentType)>]
@@ -314,7 +421,7 @@ let ``Multipart request with a malformed part header quotes at most a short exce
     response
     |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
     response |> assertDoesNotEcho longHeaderLine
-    Assert.Contains (Marker, response.Body)
+    Assert.Contains (Marker, response.Body, StringComparison.Ordinal)
 }
 
 [<Theory>]
