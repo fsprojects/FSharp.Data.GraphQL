@@ -387,7 +387,8 @@ let ``Masking replaces the message of an error caused by a backend exception and
     Assert.True (masked.Exception.IsValueNone, "A masked error must not carry the exception it masks")
     let extensions = masked.Extensions |> Skippable.toValueOption |> wantValueSome
     Assert.Equal (box ErrorKind.Execution, extensions[CustomErrorFields.Kind])
-    Assert.False (extensions.ContainsKey "connectionString", $"A masked error must keep only the kind extension, but has %A{extensions}")
+    // A masked error keeps only the kind extension
+    Assert.DoesNotContain ("connectionString", extensions.Keys)
 
 [<Fact>]
 let ``Masking keeps an error caused by a GraphQL-facing exception`` () =

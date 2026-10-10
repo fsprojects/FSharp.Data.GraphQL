@@ -94,7 +94,7 @@ type private MaskedExceptions
     (logger : ILogger) =
     let paths = ResizeArray<string> ()
     let mutable count = 0
-    let mutable first : exn = null
+    let mutable first : exn voption = ValueNone
 
     /// Records the exception masked in the error at the path
     member _.Add (ex : exn, path : obj list Skippable) =
@@ -103,15 +103,17 @@ type private MaskedExceptions
             | Include path -> String.Join<obj> ("/", path)
             | Skip -> "(none)"
         count <- count + 1
-        if isNull first then
-            first <- ex
+        if first.IsValueNone then
+            first <- ValueSome ex
         if paths.Count < MaxLoggedPaths then
             paths.Add path
         logger.LogDebug (ex, "Masked an unexpected error at path '{path}' before sending it to the client", path)
 
     /// Logs the exceptions masked in the response or message, if any
     member _.Log () =
-        if count > 0 then
+        match first with
+        | ValueNone -> ()
+        | ValueSome first ->
             let more = if count > paths.Count then ", ..." else ""
             logger.LogError (
                 first,

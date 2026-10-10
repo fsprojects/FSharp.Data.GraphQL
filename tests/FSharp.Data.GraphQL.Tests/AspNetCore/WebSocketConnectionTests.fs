@@ -1,6 +1,7 @@
 module FSharp.Data.GraphQL.Tests.AspNetCore.WebSocketConnectionTests
 
 open System
+open System.Collections.Concurrent
 open System.Net.WebSockets
 open System.Text
 open System.Text.Json
@@ -14,6 +15,7 @@ open Microsoft.Extensions.Logging.Abstractions
 open Microsoft.Extensions.Options
 open Xunit
 
+open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Server.AspNetCore
 open FSharp.Data.GraphQL.Shared.WebSockets
 
@@ -98,7 +100,7 @@ type private Session = {
 
 /// A logger that keeps the level and the message of every entry, so that a test can count them
 type private RecordingLogger () =
-    let entries = System.Collections.Concurrent.ConcurrentQueue<struct (LogLevel * string)> ()
+    let entries = ConcurrentQueue<struct (LogLevel * string)> ()
 
     member _.Entries = List.ofSeq entries
 
@@ -451,7 +453,7 @@ let ``A GraphQL error of an exception declaring another message for clients reac
 [<Fact>]
 let ``A GraphQL error thrown while an operation starts keeps its message over WebSocket`` () : Task = task {
     let session =
-        startConnection (fun options -> { options with RootFactory = fun _ -> raise (FSharp.Data.GraphQL.GQLMessageException "The root is closed") })
+        startConnection (fun options -> { options with RootFactory = fun _ -> raise (GQLMessageException "The root is closed") })
     use _ = session.Scope
     do! initialize session
     subscribe session "1" """{ hero(id: "1000") { name } }"""
