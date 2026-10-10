@@ -25,6 +25,18 @@ type GraphQLWebSocketMiddleware<'Root>
 
     let options = options.Value
 
+    // Checked when the pipeline is built: checked once a socket is accepted, it would abort every connection without a close code
+    do
+        let maxReceiveMessageSize = options.WebsocketOptions.MaxReceiveMessageSize
+        if maxReceiveMessageSize <= 0 then
+            raise (
+                ArgumentOutOfRangeException (
+                    nameof options.WebsocketOptions.MaxReceiveMessageSize,
+                    maxReceiveMessageSize,
+                    "GraphQLTransportWSOptions.MaxReceiveMessageSize must be positive."
+                )
+            )
+
     /// Runs the WebSocket connection of the request, or rejects a request that is not a WebSocket one.
     member _.InvokeAsync (ctx : HttpContext) : Task =
         if ctx.WebSockets.IsWebSocketRequest then
