@@ -5,6 +5,8 @@ namespace FSharp.Data.GraphQL.Server.Relay
 
 open System
 open System.Reflection
+open System.Text
+open System.Text.Unicode
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 
@@ -24,17 +26,42 @@ module GlobalId =
     /// </summary>
     /// <param name="id">The base64-encoded global ID string.</param>
     /// <returns>
-    /// <c>ValueSome(typeName, localId)</c> if parsing succeeds, or <c>ValueNone</c> if the format is invalid.
+    /// <c>ValueSome(typeName, localId)</c> if parsing succeeds, or <c>ValueNone</c> if the format is invalid:
+    /// the ID is <see langword="null"/> or empty, is not valid base64, does not decode to UTF-8 text,
+    /// or the text has no <c>:</c> separator.
     /// </returns>
     /// <remarks>
-    /// Global IDs follow the format: base64("typeName:localId").
+    /// <para>Global IDs follow the format: base64("typeName:localId").</para>
+    /// <para>
+    /// The ID usually comes from the client, so this function never throws on malformed input.
+    /// The text is split at the first <c>:</c>, so the local ID may contain further separators.
+    /// </para>
     /// </remarks>
     /// <seealso cref="toGlobalId"/>
-    let fromGlobalId id =
-        let decoded = Text.Encoding.UTF8.GetString (Convert.FromBase64String id)
-        match decoded.IndexOf ':' with
-        | -1 -> ValueNone
-        | idx -> ValueSome (decoded.Substring (0, idx), decoded.Substring (idx + 1))
+    let fromGlobalId (id : string) : (string * string) voption =
+        // A null ID can only come from a caller that bypasses the non-nullable signature, such as C# code
+        if String.IsNullOrEmpty id then
+            ValueNone
+        else
+            // Base64 writes every 3 bytes as 4 characters, so the decoded bytes never outnumber three quarters
+            // of the characters; whitespace, which the decoder skips, only makes them fewer
+            let bytes = Array.zeroCreate<byte> (id.Length / 4 * 3)
+            // TryFromBase64String reports malformed input through its result, while FromBase64String throws
+            match Convert.TryFromBase64String (id, bytes.AsSpan ()) with
+            | false, _ -> ValueNone
+            | true, written ->
+                let decoded = ReadOnlySpan<byte> (bytes, 0, written)
+                // toGlobalId always writes valid UTF-8, so other bytes are rejected instead of being decoded
+                // into U+FFFD replacement characters, which would map different IDs to the same text
+                if not (Utf8.IsValid decoded) then
+                    ValueNone
+                else
+                    // ':' is ASCII and UTF-8 never uses ASCII bytes inside a multi-byte sequence,
+                    // so the first ':' byte is the first ':' character
+                    match decoded.IndexOf (byte ':') with
+                    | -1 -> ValueNone
+                    | separator ->
+                        ValueSome (Encoding.UTF8.GetString (decoded.Slice (0, separator)), Encoding.UTF8.GetString (decoded.Slice (separator + 1)))
 
     /// <summary>
     /// Active pattern for matching and deconstructing Relay global IDs.
@@ -126,8 +153,16 @@ module GlobalId =
         /// <typeparam name="Val">The type of the parent/root value.</typeparam>
         /// <returns>A nullable field definition named "node" that accepts an "id" argument.</returns>
         /// <remarks>
+        /// <para>
         /// The Node interface is part of the Relay Global Object Identification specification.
         /// All objects that can be refetched by ID should implement this interface.
+        /// </para>
+        /// <para>
+        /// The resolver receives the ID exactly as the client sent it. Decode it with <see cref="fromGlobalId"/>,
+        /// directly or through the active pattern built on it, which never throws on a malformed ID,
+        /// and return <c>None</c> when it yields no value, so that a malformed ID resolves to
+        /// a <see langword="null"/> node as the Relay specification expects.
+        /// </para>
         /// </remarks>
         /// <seealso cref="NodeAsyncField"/>
         /// <seealso cref="Node"/>
@@ -156,7 +191,13 @@ module GlobalId =
         /// <typeparam name="Val">The type of the parent/root value.</typeparam>
         /// <returns>An async nullable field definition named "node" that accepts an "id" argument.</returns>
         /// <remarks>
-        /// Use this overload when node resolution requires I/O operations (database queries, HTTP calls, etc.).
+        /// <para>Use this overload when node resolution requires I/O operations (database queries, HTTP calls, etc.).</para>
+        /// <para>
+        /// The resolver receives the ID exactly as the client sent it. Decode it with <see cref="fromGlobalId"/>,
+        /// directly or through the active pattern built on it, which never throws on a malformed ID,
+        /// and return <c>None</c> when it yields no value, so that a malformed ID resolves to
+        /// a <see langword="null"/> node as the Relay specification expects.
+        /// </para>
         /// </remarks>
         /// <seealso cref="NodeField"/>
         /// <seealso cref="Node"/>
