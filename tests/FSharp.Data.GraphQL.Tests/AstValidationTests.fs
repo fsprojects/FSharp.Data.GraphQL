@@ -1565,10 +1565,8 @@ fragment Conversion on Mutation {
     match validateWholeDocument query with
     | ValidationError errors ->
         let deferErrors = errors |> List.filter ((=) expected)
-        Assert.True (
-            (deferErrors.Length = 2),
-            $"Expected both the inline fragment and the fragment spread to be rejected with '%s{expected.Message}', but got %A{errors}"
-        )
+        // Both the inline fragment and the fragment spread are rejected
+        Assert.Equal (2, deferErrors.Length)
     | Success -> fail $"Expected the validation error '%s{expected.Message}' but the document was accepted"
 
 [<Fact>]

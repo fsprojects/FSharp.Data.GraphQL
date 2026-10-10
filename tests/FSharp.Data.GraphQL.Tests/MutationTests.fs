@@ -82,10 +82,7 @@ let ``Execute handles mutation execution ordering: evaluates mutations serially`
     | response -> fail $"Expected a 'Direct' GQLResponse but got\n{response}"
     // Each field reads the number back right after setting it, so the data alone cannot tell the order the fields ran
     // in; the number left behind can, since only the field executed last leaves its own
-    Assert.True (
-      (root.NumberHolder.Number = 5),
-      $"Expected the last mutation field to set the number last, leaving 5, but the number is %i{root.NumberHolder.Number}"
-    )
+    Assert.Equal (5, root.NumberHolder.Number)
 
 [<Fact>]
 let ``Execute handles mutation execution ordering: evaluates mutations correctly in the presense of failures`` () =
