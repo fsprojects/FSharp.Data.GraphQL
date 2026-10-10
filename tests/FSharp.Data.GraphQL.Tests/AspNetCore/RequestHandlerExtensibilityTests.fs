@@ -3,6 +3,7 @@ module FSharp.Data.GraphQL.Tests.AspNetCore.RequestHandlerExtensibilityTests
 open System
 open System.IO
 open System.Net.Http
+open System.Net.Mime
 open System.Text
 open System.Text.Json
 open System.Threading
@@ -75,7 +76,7 @@ let private createHandlerFor<'Handler when 'Handler :> GraphQLRequestHandler<Roo
     struct (handler, (handler :?> 'Handler), (ctx :> HttpContext), (scope :> IDisposable))
 
 let private setJsonBody (json : string) (request : HttpRequest) =
-    request.ContentType <- "application/json"
+    request.ContentType <- MediaTypeNames.Application.Json
     let bytes = Encoding.UTF8.GetBytes json
     request.Body <- new MemoryStream (bytes)
     request.ContentLength <- int64 bytes.Length
@@ -211,22 +212,20 @@ let private assertPersistedQueryNotSupported (recorder : RecordingHandler) (ctx 
 
     let! struct (statusCode, responseBody) = executeOutcome ctx outcome
 
-    Assert.True (
-        (statusCode = StatusCodes.Status200OK),
-        $"Expected HTTP 200, as Apollo Server answers an unsupported persisted query, but got HTTP %d{statusCode} with body:\n%s{responseBody}"
-    )
+    // HTTP 200, as Apollo Server answers an unsupported persisted query
+    Assert.Equal (StatusCodes.Status200OK, statusCode)
     use document = JsonDocument.Parse responseBody
     let root = document.RootElement
     // Apollo Client 4 falls back to the full query only for a result without other top-level members than data, errors and
     // extensions, so the answer has the errors alone, as Apollo Server's
     let members = root.EnumerateObject () |> Seq.map _.Name |> List.ofSeq
-    Assert.True ((members = [ "errors" ]), $"Expected the response to have the member 'errors' alone, but got:\n%s{responseBody}")
+    Assert.Equal<string list> ([ "errors" ], members)
     let errors = root |> wantMember "errors" responseBody
     let error = Assert.Single (errors.EnumerateArray ())
-    Assert.Equal ("PersistedQueryNotSupported", (error |> wantMember "message" responseBody).GetString ())
+    Assert.Equal (PersistedQueries.NotSupportedMessage, (error |> wantMember "message" responseBody).GetString ())
     let code = error |> wantMember "extensions" responseBody |> wantMember "code" responseBody
-    Assert.Equal ("PERSISTED_QUERY_NOT_SUPPORTED", code.GetString ())
-    Assert.Equal ("private, no-cache, must-revalidate", ctx.Response.Headers.CacheControl.ToString ())
+    Assert.Equal (PersistedQueries.NotSupportedCode, code.GetString ())
+    Assert.Equal (PersistedQueries.notSupportedCacheControl.ToString (), ctx.Response.Headers.CacheControl.ToString ())
 }
 
 [<Fact>]
@@ -252,7 +251,7 @@ let ``GET with only a persisted query hash is answered with PersistedQueryNotSup
             |> setQueryString [
                 "operationName", persistedQueryName
                 "variables", "{}"
-                "extensions", persistedQueryExtensions
+                PersistedQueries.ExtensionsParameterName, persistedQueryExtensions
             ])
     use _ = scope
 
@@ -301,11 +300,8 @@ let ``Multipart POST operation is executed as before`` () : Task = task {
 
     let! outcome = handler.HandleAsync ()
 
-    Assert.True (
-        (recorder.OperationCalls.Count = 1),
-        $"Expected the operation of a multipart request to be executed once, but ExecuteOperation was called %d{recorder.OperationCalls.Count} time(s); outcome: %A{outcome}"
-    )
-    Assert.Equal (query, recorder.OperationCalls[0].Query)
+    let call = Assert.Single recorder.OperationCalls
+    Assert.Equal (query, call.Query)
     Assert.Equal (0, recorder.IntrospectionCalls.Count)
     assertOkResponse outcome
 }
@@ -319,7 +315,7 @@ let ``GET with both a query and a persisted query hash is answered with Persiste
             |> setQueryString [
                 "query", persistedQueryText
                 "operationName", persistedQueryName
-                "extensions", persistedQueryExtensions
+                PersistedQueries.ExtensionsParameterName, persistedQueryExtensions
             ])
     use _ = scope
 
@@ -349,11 +345,8 @@ let ``POST operation whose extensions do not ask for a persisted query is execut
 
     let! outcome = handler.HandleAsync ()
 
-    Assert.True (
-        (recorder.OperationCalls.Count = 1),
-        $"Expected the operation to be executed once despite extensions %s{extensions}, but ExecuteOperation was called %d{recorder.OperationCalls.Count} time(s)"
-    )
-    Assert.Equal (query, recorder.OperationCalls[0].Query)
+    let call = Assert.Single recorder.OperationCalls
+    Assert.Equal (query, call.Query)
     Assert.Equal (0, recorder.IntrospectionCalls.Count)
     assertOkResponse outcome
 }
@@ -396,16 +389,13 @@ let ``GET whose extensions do not ask for a persisted query is still answered wi
     let struct (handler, recorder, _, scope) =
         createHandlerFor<RecordingHandler> (fun request ->
             request.Method <- HttpMethods.Get
-            request |> setQueryString [ "extensions", extensions ])
+            request |> setQueryString [ PersistedQueries.ExtensionsParameterName, extensions ])
     use _ = scope
 
     let! outcome = handler.HandleAsync ()
 
-    Assert.True (
-        (recorder.IntrospectionCalls.Count = 1),
-        $"Expected the introspection query to be executed once, but ExecuteIntrospectionQuery was called %d{recorder.IntrospectionCalls.Count} time(s)"
-    )
-    Assert.Equal (ValueNone, recorder.IntrospectionCalls[0])
+    let call = Assert.Single recorder.IntrospectionCalls
+    Assert.Equal (ValueNone, call)
     Assert.Equal (0, recorder.OperationCalls.Count)
     assertOkResponse outcome
 }

@@ -69,8 +69,8 @@ module internal PersistedQueries =
     /// The error Apollo Server answers with. Shared by every request, which is safe because both the record and its
     /// immutable extensions dictionary cannot be changed.
     let notSupportedError =
-        let extensions = ImmutableDictionary.CreateRange (StringComparer.Ordinal, [ KeyValuePair ("code", box NotSupportedCode) ])
-        GQLProblemDetails.Create (NotSupportedMessage, extensions :> IReadOnlyDictionary<string, obj>)
+        let extensions = ImmutableDictionary.CreateRange (StringComparer.Ordinal, [ kvpObj "code" NotSupportedCode ])
+        GQLProblemDetails.Create (NotSupportedMessage, extensions)
 
 /// <summary>
 /// Whether the <c>extensions</c> of a request ask for an Apollo automatic persisted query: whether their
