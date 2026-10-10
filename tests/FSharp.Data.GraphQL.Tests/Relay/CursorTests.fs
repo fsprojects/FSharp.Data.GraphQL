@@ -155,6 +155,12 @@ let ``Cursor decoding rejects a cursor that is not base64`` (cursor : string, re
 let ``Cursor decoding rejects a malformed offset`` (payload : string, reason : string) =
     rejectsCursor (toBase64 payload) $"{reason} ('{payload}')"
 
+[<Fact>]
+let ``Cursor decoding rejects an offset followed by NUL characters`` () =
+    // Int32.TryParse ignores trailing NUL characters even with NumberStyles.None; built here rather than in InlineData,
+    // because a NUL in the name of a test case is not valid in the XML of a TRX report
+    rejectsCursor (toBase64 ("arrayconnection:1" + String ('\000', 3))) "trailing NUL characters"
+
 [<Theory>]
 [<InlineData(0)>]
 [<InlineData(1)>]

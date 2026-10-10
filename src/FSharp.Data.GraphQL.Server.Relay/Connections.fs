@@ -259,11 +259,13 @@ module Cursor =
     /// <seealso cref="ofOffset"/>
     let tryToOffset (cursor : string) : int voption =
         match cursor with
-        | GlobalId (Prefix, id) ->
-            // NumberStyles.None accepts ASCII digits only, so neither a negative offset, which would index
-            // before the start of the data, nor whitespace or culture-specific signs and separators get through
+        // Only ASCII digits, so neither a negative offset, which would index before the start of the data, nor
+        // whitespace or culture-specific signs and separators get through. NumberStyles.None alone is not enough:
+        // Int32.TryParse ignores trailing NUL characters
+        | GlobalId (Prefix, id) when id.Length > 0 && id |> String.forall (fun c -> c >= '0' && c <= '9') ->
             match System.Int32.TryParse (id, NumberStyles.None, CultureInfo.InvariantCulture) with
             | true, offset -> ValueSome offset
+            // Too large for an Int32
             | false, _ -> ValueNone
         | _ -> ValueNone
 
