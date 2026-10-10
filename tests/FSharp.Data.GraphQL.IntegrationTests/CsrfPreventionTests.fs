@@ -4,6 +4,7 @@ open System
 open System.Net
 open System.Net.Http
 open System.Net.Http.Headers
+open System.Net.Mime
 open System.Text
 open System.Threading
 open System.Threading.Tasks
@@ -12,7 +13,7 @@ open Xunit
 open FSharp.Data.GraphQL
 
 [<Literal>]
-let private PreflightHeaderName = "GraphQL-Preflight"
+let private ServerUrl = "http://localhost/graphql"
 
 [<Literal>]
 let private UploadMutation = "mutation ($file: File!) { singleUpload(file: $file) { contentAsText } }"
@@ -30,7 +31,7 @@ type private RecordingHandler () =
 
     override _.SendAsync (request : HttpRequestMessage, _ : CancellationToken) =
         let preflightValues =
-            match request.Headers.TryGetValues PreflightHeaderName with
+            match request.Headers.TryGetValues CsrfPreventionHeaders.GraphQLPreflight with
             | true, values -> List.ofSeq values
             | false, _ -> []
         sent.Add (struct (request.Method, preflightValues))
@@ -41,7 +42,7 @@ let private createRecordingConnection () =
     struct (handler, new GraphQLClientConnection (new HttpClient (handler), true))
 
 let private createRequest (query : string) (variables : (string * obj)[]) = {
-    ServerUrl = "http://localhost/graphql"
+    ServerUrl = ServerUrl
     HttpHeaders = Seq.empty
     OperationName = None
     Query = query
@@ -49,16 +50,13 @@ let private createRequest (query : string) (variables : (string * obj)[]) = {
 }
 
 let private createUpload () =
-    new Upload (Encoding.UTF8.GetBytes FileContent, "hello.txt", "hello", "text/plain")
+    new Upload (Encoding.UTF8.GetBytes FileContent, "hello.txt", "hello", MediaTypeNames.Text.Plain)
 
 /// Asserts that the client sent at least one request and that each one carried exactly the expected preflight header value
 let private assertPreflightSent (expectedValue : string) (handler : RecordingHandler) =
     Assert.NotEmpty handler.Sent
-    for struct (method, values) in handler.Sent do
-        Assert.True (
-            (values = [ expectedValue ]),
-            $"Expected the {method} request to carry '{PreflightHeaderName}: {expectedValue}' once, but it carried %A{values}"
-        )
+    for struct (_, values) in handler.Sent do
+        Assert.Equal<string> ([ expectedValue ], values)
 
 [<Fact>]
 let ``The client sends no preflight header with a JSON request`` () : Task = task {
@@ -68,7 +66,7 @@ let ``The client sends no preflight header with a JSON request`` () : Task = tas
     use! _ =
         GraphQLClient.sendRequestAsync CancellationToken.None connection (createRequest "query { hero { name } }" [||])
     let struct (_, values) = Assert.Single handler.Sent
-    Assert.True (values.IsEmpty, $"Expected a JSON request to carry no '{PreflightHeaderName}' header, but it carried %A{values}")
+    Assert.Empty values
 }
 
 [<Fact>]
@@ -86,7 +84,7 @@ let ``The client sends the preflight header with an introspection request`` () :
     let struct (handler, connection) = createRecordingConnection ()
     use _ = connection
     use! _ =
-        GraphQLClient.sendIntrospectionRequestAsync CancellationToken.None connection "http://localhost/graphql" Seq.empty
+        GraphQLClient.sendIntrospectionRequestAsync CancellationToken.None connection ServerUrl Seq.empty
     handler |> assertPreflightSent "1"
 }
 
@@ -96,10 +94,22 @@ let ``The client keeps a preflight header the caller sets itself`` () : Task = t
     use _ = connection
     let request = {
         createRequest "query { hero { name } }" [||] with
-            HttpHeaders = [ PreflightHeaderName, "custom" ]
+            HttpHeaders = [ CsrfPreventionHeaders.GraphQLPreflight, "custom" ]
     }
     use! _ = GraphQLClient.sendRequestAsync CancellationToken.None connection request
     handler |> assertPreflightSent "custom"
+}
+
+[<Fact>]
+let ``The client keeps a preflight header the caller sets itself with an introspection request`` () : Task = task {
+    let struct (handler, connection) = createRecordingConnection ()
+    use _ = connection
+    let headers = [ CsrfPreventionHeaders.GraphQLPreflight, "custom" ]
+    use! _ = GraphQLClient.sendIntrospectionRequestAsync CancellationToken.None connection ServerUrl headers
+    // The GET succeeds, so the client does not fall back to a POST
+    let struct (method, values) = Assert.Single handler.Sent
+    Assert.Equal (HttpMethod.Get, method)
+    Assert.Equal<string> ([ "custom" ], values)
 }
 
 /// A multipart file upload of the GraphQL multipart request specification, built without the GraphQL client
@@ -108,7 +118,7 @@ let private createUploadContent () =
     content.Add (new StringContent ($"""{{"query":"{UploadMutation}","variables":{{"file":"hello"}}}}"""), "operations")
     content.Add (new StringContent ("""{"0":["variables.file"]}"""), "map")
     let file = new ByteArrayContent (Encoding.UTF8.GetBytes FileContent)
-    file.Headers.ContentType <- MediaTypeHeaderValue "text/plain"
+    file.Headers.ContentType <- MediaTypeHeaderValue MediaTypeNames.Text.Plain
     content.Add (file, "hello", "hello.txt")
     content
 
@@ -118,7 +128,7 @@ let ``Server blocks a multipart file upload without a preflight header`` () : Ta
     use content = createUploadContent ()
     use! response = httpClient.PostAsync ("/", content)
     let! body = response.Content.ReadAsStringAsync ()
-    Assert.True ((response.StatusCode = HttpStatusCode.BadRequest), $"Expected 400 Bad Request, but got {response.StatusCode}: {body}")
+    Assert.Equal (HttpStatusCode.BadRequest, response.StatusCode)
     Assert.Contains ("blocked as a potential Cross-Site Request Forgery (CSRF)", body, StringComparison.Ordinal)
 }
 
@@ -127,10 +137,10 @@ let ``Server executes a multipart file upload with a preflight header`` () : Tas
     use httpClient = TestHosts.createIntegrationHttpClient ()
     use content = createUploadContent ()
     use request = new HttpRequestMessage (HttpMethod.Post, "/", Content = content)
-    request.Headers.Add (PreflightHeaderName, "1")
+    request.Headers.Add (CsrfPreventionHeaders.GraphQLPreflight, "1")
     use! response = httpClient.SendAsync request
     let! body = response.Content.ReadAsStringAsync ()
-    Assert.True ((response.StatusCode = HttpStatusCode.OK), $"Expected 200 OK, but got {response.StatusCode}: {body}")
+    Assert.Equal (HttpStatusCode.OK, response.StatusCode)
     Assert.Contains (FileContent, body, StringComparison.Ordinal)
 }
 

@@ -7,6 +7,8 @@ open System.Text.Json
 open System.Threading
 open Xunit
 
+open FSharp.Data.GraphQL
+
 let introspectionFilePath =
     Path.Combine (__SOURCE_DIRECTORY__, "integration-introspection.json")
     |> Path.GetFullPath
@@ -64,7 +66,7 @@ let updateIntrospectionFileAsync ct sourceStream = task {
 /// An HTTP client of the integration server whose GET requests pass its CSRF prevention
 let createPreflightedHttpClient () =
     let httpClient = TestHosts.createIntegrationHttpClient ()
-    httpClient.DefaultRequestHeaders.Add ("GraphQL-Preflight", "1")
+    httpClient.DefaultRequestHeaders.Add (CsrfPreventionHeaders.GraphQLPreflight, "1")
     httpClient
 
 [<Fact>]

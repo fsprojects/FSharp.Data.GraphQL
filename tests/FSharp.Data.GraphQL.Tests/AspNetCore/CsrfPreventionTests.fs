@@ -5,14 +5,17 @@ open System.Collections.Generic
 open System.Collections.Immutable
 open System.IO
 open System.Net.Http
+open System.Net.Mime
 open System.Text
 open System.Text.Json
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Primitives
+open Microsoft.Net.Http.Headers
 open Xunit
 
+open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Server.AspNetCore
 
 [<Literal>]
@@ -97,10 +100,7 @@ let private describe (body : JsonElement) =
 
 /// Asserts that the handler refused to execute the request as a potential cross-site request forgery and returns the error message
 let private assertBlocked (struct (statusCode : int, body : JsonElement)) =
-    Assert.True (
-        (statusCode = StatusCodes.Status400BadRequest),
-        $"Expected the request to be blocked with 400 Bad Request, but it got {statusCode}: {describe body}"
-    )
+    Assert.Equal (StatusCodes.Status400BadRequest, statusCode)
     let hasData, _ = body.TryGetProperty "data"
     Assert.False (hasData, $"Expected a blocked request to produce no data, but got: {describe body}")
     match body.TryGetProperty "errors" with
@@ -109,7 +109,7 @@ let private assertBlocked (struct (statusCode : int, body : JsonElement)) =
         let message = error.GetProperty("message").GetString()
         Assert.Contains ("blocked as a potential Cross-Site Request Forgery (CSRF)", message, StringComparison.Ordinal)
         // The code Apollo Server reports a blocked request with, which clients written for it may match
-        Assert.Equal ("BAD_REQUEST", error.GetProperty("extensions").GetProperty("code").GetString ())
+        Assert.Equal (CsrfPrevention.BlockedRequestCode, error.GetProperty("extensions").GetProperty("code").GetString ())
         message
     | false, _ ->
         fail $"Expected a GraphQL error explaining the block, but the response has no errors: {describe body}"
@@ -117,7 +117,7 @@ let private assertBlocked (struct (statusCode : int, body : JsonElement)) =
 
 /// Asserts that the handler executed the request and the response data carries the given root field
 let private assertExecuted (rootField : string) (struct (statusCode : int, body : JsonElement)) =
-    Assert.True ((statusCode = StatusCodes.Status200OK), $"Expected the request to be executed with 200 OK, but it got {statusCode}: {describe body}")
+    Assert.Equal (StatusCodes.Status200OK, statusCode)
     let hasErrors, _ = body.TryGetProperty "errors"
     Assert.False (hasErrors, $"Expected the request to be executed without errors, but got: {describe body}")
     match body.TryGetProperty "data" with
@@ -134,13 +134,18 @@ let private assertIntrospectionExecuted = assertExecuted "__schema"
 
 /// Every simple Content-Type, in spellings a browser may send, with the encoding of a body the handler reads for it
 let simpleContentTypes : obj array list = [
-    [| box "text/plain"; box "json" |]
-    [| box "text/plain;charset=UTF-8"; box "json" |]
+    [| box MediaTypeNames.Text.Plain; box "json" |]
+    [| box $"{MediaTypeNames.Text.Plain};charset=UTF-8"; box "json" |]
+    // Spelled out, as its case differs from the constant on purpose
     [| box "Text/Plain"; box "json" |]
-    [| box " text/plain ; charset=utf-8"; box "json" |]
-    [| box "application/x-www-form-urlencoded"; box "form" |]
-    [| box "APPLICATION/X-WWW-FORM-URLENCODED; charset=utf-8"; box "form" |]
-    [| box $"multipart/form-data; boundary={Boundary}"; box "multipart" |]
+    [| box $" {MediaTypeNames.Text.Plain} ; charset=utf-8"; box "json" |]
+    [| box MediaTypeNames.Application.FormUrlEncoded; box "form" |]
+    [|
+        box (MediaTypeNames.Application.FormUrlEncoded.ToUpperInvariant () + "; charset=utf-8")
+        box "form"
+    |]
+    [| box $"{MediaTypeNames.Multipart.FormData}; boundary={Boundary}"; box "multipart" |]
+    // Spelled out, as its case differs from the constant on purpose
     [| box $"Multipart/Form-Data; boundary=\"{Boundary}\""; box "multipart" |]
 ]
 
@@ -159,7 +164,7 @@ let ``POST with a content type a browser does not preflight is executed with a p
     task {
         let! body = bodyOf encoding
         let! response =
-            sendWithDefaults HttpMethods.Post (ValueSome contentType) [ "GraphQL-Preflight", "1" ] body
+            sendWithDefaults HttpMethods.Post (ValueSome contentType) [ CsrfPreventionHeaders.GraphQLPreflight,"1" ] body
         assertOperationExecuted response
     }
 
@@ -173,7 +178,7 @@ let ``POST without a content type is blocked without a preflight header`` () : T
 [<Fact>]
 let ``POST without a content type is executed with a preflight header`` () : Task = task {
     let! body = bodyOf "json"
-    let! response = sendWithDefaults HttpMethods.Post ValueNone [ "GraphQL-Preflight", "1" ] body
+    let! response = sendWithDefaults HttpMethods.Post ValueNone [ CsrfPreventionHeaders.GraphQLPreflight,"1" ] body
     assertOperationExecuted response
 }
 
@@ -181,18 +186,19 @@ let ``POST without a content type is executed with a preflight header`` () : Tas
 let ``POST with an empty preflight header is blocked`` () : Task = task {
     let! body = bodyOf "json"
     let! response =
-        sendWithDefaults HttpMethods.Post (ValueSome "text/plain") [ "GraphQL-Preflight", "" ] body
+        sendWithDefaults HttpMethods.Post (ValueSome MediaTypeNames.Text.Plain) [ CsrfPreventionHeaders.GraphQLPreflight,"" ] body
     assertBlocked response |> ignore
 }
 
 [<Theory>]
-[<InlineData("GraphQL-Preflight")>]
+[<InlineData(CsrfPreventionHeaders.GraphQLPreflight)>]
+// Spelled out, as its case differs from the constant on purpose
 [<InlineData("graphql-preflight")>]
-[<InlineData("Apollo-Require-Preflight")>]
-[<InlineData("X-Apollo-Operation-Name")>]
+[<InlineData(CsrfPreventionHeaders.ApolloRequirePreflight)>]
+[<InlineData(CsrfPreventionHeaders.ApolloOperationName)>]
 let ``Each default preflight header lets a request a browser does not preflight through`` (headerName : string) : Task = task {
     let! body = bodyOf "json"
-    let! response = sendWithDefaults HttpMethods.Post (ValueSome "text/plain") [ headerName, "true" ] body
+    let! response = sendWithDefaults HttpMethods.Post (ValueSome MediaTypeNames.Text.Plain) [ headerName, "true" ] body
     assertOperationExecuted response
 }
 
@@ -204,19 +210,20 @@ let ``GET is blocked without a preflight header`` () : Task = task {
 
 [<Fact>]
 let ``GET is executed with a preflight header`` () : Task = task {
-    let! response = sendWithDefaults HttpMethods.Get ValueNone [ "GraphQL-Preflight", "1" ] [||]
+    let! response = sendWithDefaults HttpMethods.Get ValueNone [ CsrfPreventionHeaders.GraphQLPreflight,"1" ] [||]
     assertIntrospectionExecuted response
 }
 
 [<Fact>]
 let ``GET with a content type a browser preflights is executed without a preflight header`` () : Task = task {
-    let! response = sendWithDefaults HttpMethods.Get (ValueSome "application/json") [] [||]
+    let! response = sendWithDefaults HttpMethods.Get (ValueSome MediaTypeNames.Application.Json) [] [||]
     assertIntrospectionExecuted response
 }
 
 [<Theory>]
-[<InlineData("application/json")>]
-[<InlineData("application/json; charset=utf-8")>]
+[<InlineData(MediaTypeNames.Application.Json)>]
+[<InlineData(MediaTypeNames.Application.Json + "; charset=utf-8")>]
+// The media type of the GraphQL over HTTP specification, which nothing names yet
 [<InlineData("application/graphql-response+json")>]
 let ``POST with a content type a browser preflights is executed without a preflight header`` (contentType : string) : Task = task {
     let! body = bodyOf "json"
@@ -227,19 +234,25 @@ let ``POST with a content type a browser preflights is executed without a prefli
 [<Fact>]
 let ``A CORS preflight is not blocked`` () : Task = task {
     // A preflight is an OPTIONS request without the custom headers of the request it asks about, so it must pass
-    let! response = sendWithDefaults HttpMethods.Options ValueNone [ "Access-Control-Request-Method", "POST" ] [||]
+    let! response =
+        sendWithDefaults HttpMethods.Options ValueNone [ HeaderNames.AccessControlRequestMethod, HttpMethods.Post ] [||]
     assertIntrospectionExecuted response
 }
 
+/// The methods a middleware overriding the method from a form field could give a form posted from another site
+let overriddenMethods : obj array list = [
+    [| box HttpMethods.Put |]
+    [| box HttpMethods.Delete |]
+    [| box HttpMethods.Patch |]
+    [| box HttpMethods.Options |]
+]
+
 [<Theory>]
-[<InlineData("PUT")>]
-[<InlineData("DELETE")>]
-[<InlineData("PATCH")>]
-[<InlineData("OPTIONS")>]
+[<MemberData(nameof overriddenMethods)>]
 let ``A request with a content type a browser does not preflight is blocked whatever its method`` (method : string) : Task = task {
     // A middleware overriding the method from a form field turns a form posted from another site into a request with any method
     let! body = bodyOf "form"
-    let! response = sendWithDefaults method (ValueSome "application/x-www-form-urlencoded") [] body
+    let! response = sendWithDefaults method (ValueSome MediaTypeNames.Application.FormUrlEncoded) [] body
     assertBlocked response |> ignore
 }
 
@@ -247,11 +260,14 @@ let ``A request with a content type a browser does not preflight is blocked what
 let ``The error of a blocked request explains how to get through`` () : Task = task {
     let! response = sendWithDefaults HttpMethods.Get ValueNone [] [||]
     let message = assertBlocked response
+    // Both lists are in ordinal order, whatever order the sets they come from enumerate in
     Assert.Equal (
         "This operation has been blocked as a potential Cross-Site Request Forgery (CSRF). "
-        + "Please either specify a 'Content-Type' header with a media type that is not one of "
-        + "application/x-www-form-urlencoded, multipart/form-data, text/plain, or provide a non-empty value "
-        + "for one of the following headers: Apollo-Require-Preflight, GraphQL-Preflight, X-Apollo-Operation-Name.",
+        + $"Please either specify a '{HeaderNames.ContentType}' header with a media type that is not one of "
+        + $"{MediaTypeNames.Application.FormUrlEncoded}, {MediaTypeNames.Multipart.FormData}, {MediaTypeNames.Text.Plain}, "
+        + "or provide a non-empty value for one of the following headers: "
+        + $"{CsrfPreventionHeaders.ApolloRequirePreflight}, {CsrfPreventionHeaders.GraphQLPreflight}, "
+        + $"{CsrfPreventionHeaders.ApolloOperationName}.",
         message
     )
 }
@@ -283,17 +299,17 @@ let ``GET is executed without a preflight header when CSRF prevention is off`` (
 let ``Configured request headers replace the default ones`` () : Task = task {
     let withCustomHeader (options : GraphQLOptions<Root>) = {
         options with
-            CsrfPrevention = ValueSome { RequestHeaders = ImmutableHashSet.Create "X-Requested-With" }
+            CsrfPrevention = ValueSome { RequestHeaders = ImmutableHashSet.Create HeaderNames.XRequestedWith }
     }
     let! body = bodyOf "json"
 
     let! defaultHeaderResponse =
-        send withCustomHeader HttpMethods.Post (ValueSome "text/plain") [ "GraphQL-Preflight", "1" ] body
+        send withCustomHeader HttpMethods.Post (ValueSome MediaTypeNames.Text.Plain) [ CsrfPreventionHeaders.GraphQLPreflight,"1" ] body
     let message = assertBlocked defaultHeaderResponse
-    Assert.EndsWith ("for one of the following headers: X-Requested-With.", message, StringComparison.Ordinal)
+    Assert.EndsWith ($"for one of the following headers: {HeaderNames.XRequestedWith}.", message, StringComparison.Ordinal)
 
     let! customHeaderResponse =
-        send withCustomHeader HttpMethods.Post (ValueSome "text/plain") [ "X-Requested-With", "XMLHttpRequest" ] body
+        send withCustomHeader HttpMethods.Post (ValueSome MediaTypeNames.Text.Plain) [ HeaderNames.XRequestedWith, "XMLHttpRequest" ] body
     assertOperationExecuted customHeaderResponse
 }
 
@@ -306,10 +322,10 @@ let ``No configured request header lets only requests a browser preflights throu
     let! body = bodyOf "json"
 
     let! simpleResponse =
-        send withoutHeaders HttpMethods.Post (ValueSome "text/plain") [ "GraphQL-Preflight", "1" ] body
+        send withoutHeaders HttpMethods.Post (ValueSome MediaTypeNames.Text.Plain) [ CsrfPreventionHeaders.GraphQLPreflight,"1" ] body
     let message = assertBlocked simpleResponse
     Assert.DoesNotContain ("following headers", message, StringComparison.Ordinal)
 
-    let! jsonResponse = send withoutHeaders HttpMethods.Post (ValueSome "application/json") [] body
+    let! jsonResponse = send withoutHeaders HttpMethods.Post (ValueSome MediaTypeNames.Application.Json) [] body
     assertOperationExecuted jsonResponse
 }

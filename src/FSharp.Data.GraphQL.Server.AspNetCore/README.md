@@ -107,8 +107,9 @@ The protection is on by default. Configure it through `GraphQLOptions.CsrfPreven
 services.AddGraphQL<Root> (
     Schema.executor,
     rootFactory,
-    // Accept only GraphQL-Preflight and X-Requested-With
-    configure = fun options -> { options with CsrfPrevention = ValueSome { RequestHeaders = ImmutableHashSet.Create (CsrfPreventionHeaders.GraphQLPreflight, "X-Requested-With") } }
+    // Accept only GraphQL-Preflight and X-Requested-With: CsrfPreventionHeaders comes from FSharp.Data.GraphQL,
+    // HeaderNames from Microsoft.Net.Http.Headers
+    configure = fun options -> { options with CsrfPrevention = ValueSome { RequestHeaders = ImmutableHashSet.Create (CsrfPreventionHeaders.GraphQLPreflight, HeaderNames.XRequestedWith) } }
     // Or turn the protection off
     // configure = fun options -> { options with CsrfPrevention = ValueNone }
 )

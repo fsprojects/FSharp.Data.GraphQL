@@ -43,24 +43,18 @@ module GraphQLClient =
             |> Seq.iter (fun (name, value) -> requestMessage.Headers.Add (name, value))
 
     /// <summary>
-    /// The header that tells the CSRF prevention of a GraphQL server a browser would have preflighted the request.
-    /// Such a server, FSharp.Data.GraphQL.Server.AspNetCore by default, rejects a <c>GET</c> request or a multipart
-    /// file upload without it, since a browser sends those to another site without a CORS preflight.
-    /// </summary>
-    [<Literal>]
-    let private PreflightHeaderName = "GraphQL-Preflight"
-
-    /// <summary>
-    /// Adds the preflight header, unless the caller already set one through its own headers.
+    /// Adds <see cref="CsrfPreventionHeaders.GraphQLPreflight"/>, which tells the CSRF prevention of a GraphQL server a
+    /// browser would have preflighted the request, unless the caller already set one through its own headers.
     /// </summary>
     /// <remarks>
-    /// Only the requests a browser would send without a preflight need it: a <c>GET</c> request and a multipart upload. A
-    /// JSON request, which a browser preflights anyway, is sent without it, so that a client hosted in a browser does not need
+    /// Only the requests a browser would send to another site without a CORS preflight need it: a <c>GET</c> request and a
+    /// multipart upload, which such a server, FSharp.Data.GraphQL.Server.AspNetCore by default, rejects without it. A JSON
+    /// request, which a browser preflights anyway, is sent without it, so that a client hosted in a browser does not need
     /// the CORS policy of every server it calls to allow the header.
     /// </remarks>
     let private addPreflightHeader (requestMessage : HttpRequestMessage) =
-        if not (requestMessage.Headers.Contains PreflightHeaderName) then
-            requestMessage.Headers.Add (PreflightHeaderName, "1")
+        if not (requestMessage.Headers.Contains CsrfPreventionHeaders.GraphQLPreflight) then
+            requestMessage.Headers.Add (CsrfPreventionHeaders.GraphQLPreflight, "1")
 
     let private postAsync ct (invoker : HttpMessageInvoker) (serverUrl : string) (httpHeaders : seq<string * string>) (content : HttpContent) = task {
         use requestMessage = new HttpRequestMessage (HttpMethod.Post, serverUrl)
@@ -73,8 +67,10 @@ module GraphQLClient =
         return! invoker.SendAsync (requestMessage, ct) |> ensureSuccessCode
     }
 
-    let private getAsync ct (invoker : HttpMessageInvoker) (serverUrl : string) = task {
+    let private getAsync ct (invoker : HttpMessageInvoker) (serverUrl : string) (httpHeaders : seq<string * string>) = task {
         use requestMessage = new HttpRequestMessage (HttpMethod.Get, serverUrl)
+        // The caller's headers go first, so that a preflight header among them is kept
+        addHeaders httpHeaders requestMessage
         addPreflightHeader requestMessage
         return! invoker.SendAsync (requestMessage, ct) |> ensureSuccessCode
     }
@@ -107,7 +103,7 @@ module GraphQLClient =
 
     /// Executes an introspection schema request to a GraphQL server asynchronously.
     let sendIntrospectionRequestAsync ct (connection : GraphQLClientConnection) (serverUrl : string) httpHeaders =
-        let sendGet () = getAsync ct connection.Invoker serverUrl
+        let sendGet () = getAsync ct connection.Invoker serverUrl httpHeaders
         let rethrow (exns : exn list) =
             let rec mapper (acc : string) (exns : exn list) =
                 let aggregateMapper (ex : AggregateException) = mapper "" (List.ofSeq ex.InnerExceptions)

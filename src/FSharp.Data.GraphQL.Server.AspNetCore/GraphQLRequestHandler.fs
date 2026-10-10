@@ -4,6 +4,7 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.IO
+open System.Net.Mime
 open System.Text.Json
 open System.Text.Json.Serialization
 open System.Threading.Tasks
@@ -12,6 +13,7 @@ open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Options
 open Microsoft.Extensions.Primitives
+open Microsoft.Net.Http.Headers
 
 open FSharp.Data.GraphQL
 open FsToolkit.ErrorHandling
@@ -23,7 +25,7 @@ open FSharp.Data.GraphQL.Shared
 module private DeferredEventLogging =
 
     /// The path of a deferred event as one string for the log, its segments joined as GraphQL error paths print them
-    let formatPath (path : obj list) = String.Join<obj> ("/", path)
+    let formatPath (path : obj list) = String.Join<obj>("/", path)
 
 /// <summary>
 /// Recognizes the requests a browser sends to another site without a CORS preflight, following the
@@ -38,7 +40,15 @@ module private DeferredEventLogging =
 module internal CsrfPrevention =
 
     /// The media types of a request body that a browser sends to another site without a CORS preflight
-    let private preflightFreeMediaTypes = [| "application/x-www-form-urlencoded"; "multipart/form-data"; "text/plain" |]
+    let private preflightFreeMediaTypes =
+        ImmutableHashSet.CreateRange (
+            StringComparer.OrdinalIgnoreCase,
+            seq {
+                MediaTypeNames.Application.FormUrlEncoded
+                MediaTypeNames.Multipart.FormData
+                MediaTypeNames.Text.Plain
+            }
+        )
 
     /// The extension code of the error of a blocked request, the one Apollo Server reports it with
     [<Literal>]
@@ -51,7 +61,7 @@ module internal CsrfPrevention =
     /// </summary>
     let isCorsPreflight (request : HttpRequest) =
         HttpMethods.IsOptions request.Method
-        && request.Headers.ContainsKey Microsoft.Net.Http.Headers.HeaderNames.AccessControlRequestMethod
+        && request.Headers.ContainsKey HeaderNames.AccessControlRequestMethod
 
     /// <summary>
     /// Whether a browser sends a request with this <c>Content-Type</c> to another site without a CORS preflight: when there
@@ -69,7 +79,7 @@ module internal CsrfPrevention =
                 match MemoryExtensions.IndexOf (span, ';') with
                 | -1 -> span
                 | parametersStart -> span.Slice (0, parametersStart)
-            let mediaType = MemoryExtensions.Trim (mediaType, " \t\r\n".AsSpan ())
+            let mediaType = MemoryExtensions.Trim (mediaType, " \t\r\n".AsSpan())
             let mutable isSimple = false
             for simpleMediaType in preflightFreeMediaTypes do
                 if MemoryExtensions.Equals (mediaType, simpleMediaType.AsSpan (), StringComparison.OrdinalIgnoreCase) then
@@ -84,19 +94,22 @@ module internal CsrfPrevention =
             | true, values -> not (StringValues.IsNullOrEmpty values)
             | false, _ -> false)
 
+    /// The names joined for a message in ordinal order: a hash set enumerates in no particular order, one that differs
+    /// between processes for a case-insensitive comparer, and the message must not change with it
+    let private joinSorted (names : ImmutableHashSet<string>) =
+        String.Join (", ", names |> Seq.sortWith (fun first second -> String.CompareOrdinal (first, second)))
+
+    /// The part of the error message of a blocked request that does not depend on the options
+    let private contentTypeAdvice =
+        $"specify a '{HeaderNames.ContentType}' header with a media type that is not one of {joinSorted preflightFreeMediaTypes}"
+
     /// The error message of a blocked request, modeled on Apollo Server's, telling the client how to get through
     let blockedRequestMessage (headerNames : ImmutableHashSet<string>) =
-        let contentTypeAdvice =
-            $"""specify a 'Content-Type' header with a media type that is not one of {String.Join (", ", preflightFreeMediaTypes)}"""
         let advice =
             if headerNames.IsEmpty then
                 $"Please {contentTypeAdvice}."
             else
-                // A hash set enumerates in no particular order, so the names are sorted to keep the message stable
-                let sortedHeaderNames =
-                    headerNames
-                    |> Seq.sortWith (fun first second -> String.CompareOrdinal (first, second))
-                $"""Please either {contentTypeAdvice}, or provide a non-empty value for one of the following headers: {String.Join (", ", sortedHeaderNames)}."""
+                $"Please either {contentTypeAdvice}, or provide a non-empty value for one of the following headers: {joinSorted headerNames}."
         $"This operation has been blocked as a potential Cross-Site Request Forgery (CSRF). {advice}"
 
 /// Handles GraphQL requests using a provided root schema.
@@ -163,8 +176,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
 
                         if logger.IsEnabled LogLevel.Trace then
                             logger.LogTrace ("GraphQL deferred errors:\n{errors}\nGraphQL deferred data:\n{data}", errors, serializeIndented data)
-                    | DeferredCompleted path ->
-                        logger.LogDebug ("Completed GraphQL deferred field at path: {path}", formatPath path)
+                    | DeferredCompleted path -> logger.LogDebug ("Completed GraphQL deferred field at path: {path}", formatPath path)
                     | DeferredFragmentPending (path, label, fragmentId) ->
                         logger.LogDebug (
                             "Announced GraphQL deferred fragment #{fragmentId} (label: {label}) at path: {path}",
@@ -176,7 +188,11 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
                         logger.LogDebug ("Produced GraphQL deferred fragment #{fragmentId} result for path: {path}", fragmentId, formatPath path)
 
                         if logger.IsEnabled LogLevel.Trace then
-                            logger.LogTrace ("GraphQL deferred fragment errors:\n{errors}\nGraphQL deferred fragment data:\n{data}", errors, serializeIndented (data |> ValueOption.toObj))
+                            logger.LogTrace (
+                                "GraphQL deferred fragment errors:\n{errors}\nGraphQL deferred fragment data:\n{data}",
+                                errors,
+                                serializeIndented (data |> ValueOption.toObj)
+                            )
                     | DeferredFragmentCompleted (path, fragmentId) ->
                         logger.LogDebug ("Completed GraphQL deferred fragment #{fragmentId} at path: {path}", fragmentId, formatPath path))
 
@@ -378,12 +394,9 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
                     request.ContentType
                 )
                 let extensions =
-                    ImmutableDictionary.CreateRange (StringComparer.Ordinal, [ KeyValuePair ("code", box CsrfPrevention.BlockedRequestCode) ])
+                    ImmutableDictionary.CreateRange (StringComparer.Ordinal, [ kvpObj "code" CsrfPrevention.BlockedRequestCode ])
                 let error =
-                    GQLProblemDetails.Create (
-                        CsrfPrevention.blockedRequestMessage csrfPrevention.RequestHeaders,
-                        extensions :> IReadOnlyDictionary<string, obj>
-                    )
+                    GQLProblemDetails.Create (CsrfPrevention.blockedRequestMessage csrfPrevention.RequestHeaders, extensions)
                 // No document has been read, so there is no document id to report
                 Error (TypedResults.BadRequest (GQLResponse.RequestError (0, [ error ])) :> IResult)
             else
