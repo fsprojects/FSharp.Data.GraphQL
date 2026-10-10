@@ -2,7 +2,8 @@
 
 ## Project Details
 
-* F# 10, C# 14, .NET 10, nullability checks enabled
+* F# 10, C# 14, .NET 10
+* Nullable reference types are enabled per project with `<Nullable>enable</Nullable>`: new projects enable them, the existing projects do not yet
 * .NET SDK roll-forward policy in #file:'global.json'; the exact SDK version is pinned in the GitHub workflows and #file:'build/Program.fs'
 * Never change the pinned .NET SDK version without moving `FSharpCoreVersion` in #file:'Packages.props' to the FSharp.Core version that SDK ships – the `FSharp.Core.<version>.nupkg` in `sdk/<SDK version>/FSharp/library-packs` of the installation (for example, SDK 10.0.401 ships FSharp.Core 10.1.401). A compiler older than the referenced FSharp.Core may not behave correctly (see the [FSharp.Core notes](https://github.com/dotnet/fsharp/blob/main/docs/fsharp-core-notes.md)), so the SDK and FSharp.Core versions always change together, in the same commit
 * Common parameters specified in #file:'Directory.Build.props'
@@ -28,6 +29,9 @@
 ├── tests/
 │   ├── FSharp.Data.GraphQL.Tests/              – xUnit unit tests
 │   ├── FSharp.Data.GraphQL.Tests.Sql/          – LINQ to SQL tests
+│   ├── FSharp.Data.GraphQL.Testing/            – shared library of the MSTest projects (Assert, categories, CultureScope, TestDiscoveryGuard)
+│   ├── FSharp.Data.GraphQL.Testing.Tests/      – MSTest tests of the Testing library
+│   ├── FSharp.Data.GraphQL.Testing.Tests.DiscoverySamples/ – deliberately broken tests the TestDiscoveryGuard tests inspect
 │   ├── FSharp.Data.GraphQL.IntegrationTests/   – xUnit integration tests (in-process hosts via WebApplicationFactory)
 │   ├── FSharp.Data.GraphQL.IntegrationTests.Server/
 │   └── FSharp.Data.GraphQL.Benchmarks/         – BenchmarkDotNet benchmarks
@@ -268,13 +272,28 @@ During the implementation, if you need some types or members defined in the othe
 
 ## Testing
 
-* Tests use xUnit.net v3 on Microsoft.Testing.Platform (MTP): #file:'global.json' switches `dotnet test` to MTP mode.
+* The existing test projects use xUnit.net v3 and stay on it until they are migrated; new test projects use MSTest 4 with the shared `tests/FSharp.Data.GraphQL.Testing` library. All of them run on Microsoft.Testing.Platform (MTP): #file:'global.json' switches `dotnet test` to MTP mode.
 * If you work with tests, then do not build the whole solution as it is large and the build happens very slow. Run the tests individually or the whole test project instead.
 * Prefer running tests through the IDE's MCP test tools; fall back to the `--no-build` switch of `dotnet test` first to speed up execution when those tools are unavailable or fail to run the tests, and use the trx format for results so failures can be consumed and fixed.
-* In MTP mode pass the project through `--project` and request TRX results with `--report-xunit-trx --report-xunit-trx-filename <name>.trx`. VSTest switches such as `--logger` are rejected, while `--filter` still takes the VSTest filter syntax.
-* Use `Assert.Equal`, `Assert.Collection`, `Assert.Contains` / `Assert.DoesNotContain`, `Assert.Empty` / `Assert.NotEmpty` and `Assert.Single` for collection assertions – they work directly with F# lists, arrays and sequences.
+* In MTP mode pass the project through `--project` and request TRX results with `--report-xunit-trx --report-xunit-trx-filename <name>.trx` from an xUnit project and with `--report-trx --report-trx-filename <name>.trx` from an MSTest project. VSTest switches such as `--logger` are rejected, while `--filter` still takes the VSTest filter syntax.
 * Every assertion should produce a self-explanatory failure output.
 * Async tests must return `Task`, not `Async` or `Task<unit>` – always declare `) : Task = task {`.
+
+### xUnit Projects
+
+* Use `Assert.Equal`, `Assert.Collection`, `Assert.Contains` / `Assert.DoesNotContain`, `Assert.Empty` / `Assert.NotEmpty` and `Assert.Single` for collection assertions – they work directly with F# lists, arrays and sequences.
+* Never reference `FSharp.Data.GraphQL.Testing` from an xUnit project: its `Assert` clashes with `Xunit.Assert`.
+
+### MSTest Projects
+
+* A new test project is an MSTest 4 test application like `tests/FSharp.Data.GraphQL.Testing.Tests`: `OutputType` `Exe`, `EnableMSTestRunner` `true`, `IsTestProject` `true`, `Nullable` `enable`, the packages `MSTest.TestAdapter`, `MSTest.TestFramework` and `Microsoft.Testing.Extensions.TrxReport`, and a `testconfig.json` with method-level parallelism. Never use the `MSTest` metapackage, `MSTest.Sdk` or `Microsoft.NET.Test.Sdk`: they bring VSTest, which MTP does not need.
+* Reference `tests/FSharp.Data.GraphQL.Testing` and open both `Microsoft.VisualStudio.TestTools.UnitTesting` and `FSharp.Data.GraphQL.Testing`: `Assert` then offers MSTest's members together with the F# ones of the library (`WantSome`, `WantValueSome`, `WantOk`, `WantError`, `SomeEquals`, `OkEquals`, `StructurallyEquals`, `IsDefaultOf`, `FailWithData`, …). Assertions specific to a domain, such as responses or syntax errors, go into a `XxxAssert` class of the test project.
+* Pass a message to every assertion.
+* Use `Assert.HasCount`, `Assert.IsEmpty`, `Assert.ContainsSingle` and `Assert.Contains` instead of checking lengths, and `CollectionAssert` only with arrays. Use `Assert.StructurallyEquals` for F# values that contain arrays, which `Assert.AreEqual` compares by reference.
+* Mark tests with the category attributes of the library, such as `[<EditionSep2025; Lexical>]`, rather than `[<TestCategory "...">]` strings, and select them with `--filter TestCategory=<name>`.
+* Wrap a test that depends on the current culture in `use _ = new CultureScope ()`.
+* Write tests as instance members of a public `[<TestClass>]` type. F# gets no MSTest analyzers, and MSTest silently skips a module-level `[<TestMethod>]` function or a test method of a type without `[<TestClass>]`, so every MSTest project has a test calling `TestDiscoveryGuard.AssertNoProblems (typeof<SomeTests>.Assembly)`.
+* Run a new MSTest project from the `RunUnitTests` target of #file:'build/Program.fs' with `runTests <project> PlatformTrx <name>.trx ValueNone`, so that CI runs it.
 
 ## Build and Test Steps
 

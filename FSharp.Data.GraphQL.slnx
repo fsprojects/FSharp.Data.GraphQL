@@ -128,6 +128,9 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/FSharp.Data.GraphQL.Benchmarks/FSharp.Data.GraphQL.Benchmarks.fsproj" />
+    <Project Path="tests/FSharp.Data.GraphQL.Testing.Tests.DiscoverySamples/FSharp.Data.GraphQL.Testing.Tests.DiscoverySamples.fsproj" />
+    <Project Path="tests/FSharp.Data.GraphQL.Testing.Tests/FSharp.Data.GraphQL.Testing.Tests.fsproj" />
+    <Project Path="tests/FSharp.Data.GraphQL.Testing/FSharp.Data.GraphQL.Testing.fsproj" />
     <Project Path="tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" />
   </Folder>
 </Solution>
