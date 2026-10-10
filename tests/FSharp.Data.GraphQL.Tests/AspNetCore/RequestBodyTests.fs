@@ -2,11 +2,13 @@ module FSharp.Data.GraphQL.Tests.AspNetCore.RequestBodyTests
 
 open System
 open System.IO
+open System.Net.Mime
 open System.Text
 open System.Text.Json
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Http.Features
+open Microsoft.Net.Http.Headers
 open Xunit
 
 open FSharp.Data.GraphQL.Server.AspNetCore
@@ -20,21 +22,19 @@ let private Marker = "BODY-MARKER-5f0c2a"
 let private Boundary = "graphql-test-boundary"
 
 [<Literal>]
-let private MultipartContentType = "multipart/form-data; boundary=" + Boundary
-
-[<Literal>]
-let private JsonContentType = "application/json"
+let private MultipartContentType = MediaTypeNames.Multipart.FormData + "; boundary=" + Boundary
 
 [<Literal>]
 let private ValidOperations = """{"query":"{ hero(id: \"1000\") { id } }"}"""
 
 /// One form field of a multipart body, terminated by the line break that precedes the next boundary
 let private formPart (name : string) (value : string) =
-    $"--%s{Boundary}\r\nContent-Disposition: form-data; name=\"%s{name}\"\r\n\r\n%s{value}\r\n"
+    $"--%s{Boundary}\r\n{HeaderNames.ContentDisposition}: form-data; name=\"%s{name}\"\r\n\r\n%s{value}\r\n"
 
 /// One file of a multipart body, terminated by the line break that precedes the next boundary
 let private filePart (name : string) (fileName : string) (content : string) =
-    $"--%s{Boundary}\r\nContent-Disposition: form-data; name=\"%s{name}\"; filename=\"%s{fileName}\"\r\nContent-Type: text/plain\r\n\r\n%s{content}\r\n"
+    $"--%s{Boundary}\r\n{HeaderNames.ContentDisposition}: form-data; name=\"%s{name}\"; filename=\"%s{fileName}\"\r\n"
+    + $"{HeaderNames.ContentType}: {MediaTypeNames.Text.Plain}\r\n\r\n%s{content}\r\n"
 
 let private closingBoundary = $"--%s{Boundary}--\r\n"
 
@@ -50,8 +50,8 @@ let private multipartBody (parts : string seq) =
 /// and the file named by its upload name rather than by its map key, so the server must not insist on the
 /// two matching.
 let private clientStyleParts map = [
-    formPart "operations" ValidOperations
-    formPart "map" map
+    formPart RequestBody.OperationsField ValidOperations
+    formPart RequestBody.MapField map
     filePart "3f2b7a90-upload" "notes.txt" Marker
 ]
 
@@ -159,7 +159,7 @@ let private assertStatus (expectedStatus : int) (response : WrittenResponse) =
 let private assertProblem (expectedStatus : int) (expectedTitle : string) (response : WrittenResponse) =
     assertStatus expectedStatus response
 
-    if response.ContentType <> "application/problem+json" then
+    if response.ContentType <> MediaTypeNames.Application.ProblemJson then
         fail $"Expected a problem details response, but the content type is '%s{response.ContentType}' and the body is:\n%s{response.Body}"
 
     use document = JsonDocument.Parse response.Body
@@ -191,12 +191,12 @@ let ``Multipart request that follows the client format is executed`` () : Task =
 [<Fact>]
 let ``Multipart request without an operations part is answered with 400`` () : Task = task {
     let body =
-        multipartBody [ formPart "map" """{"0":["variables.file"]}"""; filePart "0" "notes.txt" Marker ]
+        multipartBody [ formPart RequestBody.MapField """{"0":["variables.file"]}"""; filePart "0" "notes.txt" Marker ]
 
     let! response = postTextAsync MultipartContentType body
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Invalid multipart request"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.InvalidMultipartTitle
     response |> assertDoesNotEcho Marker
 }
 
@@ -204,10 +204,10 @@ let ``Multipart request without an operations part is answered with 400`` () : T
 let ``Multipart request without a boundary is answered with 400`` () : Task = task {
     let body = multipartBody (clientStyleParts """{"0":["variables.file"]}""")
 
-    let! response = postTextAsync "multipart/form-data" body
+    let! response = postTextAsync MediaTypeNames.Multipart.FormData body
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.UnreadableBodyTitle
     response |> assertDoesNotEcho Marker
 }
 
@@ -215,10 +215,10 @@ let ``Multipart request without a boundary is answered with 400`` () : Task = ta
 let ``Multipart request with a boundary the body does not use is answered with 400`` () : Task = task {
     let body = multipartBody (clientStyleParts """{"0":["variables.file"]}""")
 
-    let! response = postTextAsync "multipart/form-data; boundary=another-boundary" body
+    let! response = postTextAsync $"{MediaTypeNames.Multipart.FormData}; boundary=another-boundary" body
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.UnreadableBodyTitle
     response |> assertDoesNotEcho Marker
 }
 
@@ -230,7 +230,7 @@ let ``Truncated multipart request is answered with 400`` () : Task = task {
     let! response = postTextAsync MultipartContentType truncatedBody
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.UnreadableBodyTitle
     response |> assertDoesNotEcho Marker
 }
 
@@ -241,7 +241,7 @@ let ``Multipart request with a map that is not JSON is answered with 400`` () : 
     let! response = postTextAsync MultipartContentType body
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Invalid multipart request"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.InvalidMultipartTitle
     response |> assertDoesNotEcho Marker
 }
 
@@ -261,7 +261,7 @@ let ``Multipart request with a map that is not an object of variable paths is an
     let! response = postTextAsync MultipartContentType body
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Invalid multipart request"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.InvalidMultipartTitle
 }
 
 [<Fact>]
@@ -273,7 +273,7 @@ let ``Multipart request over the form body length limit is answered with 413`` (
             (ctx :?> DefaultHttpContext).FormOptions <- FormOptions (MultipartBodyLengthLimit = 16L))
 
     response
-    |> assertProblem StatusCodes.Status413PayloadTooLarge "Request body too large"
+    |> assertProblem StatusCodes.Status413PayloadTooLarge RequestBody.BodyTooLargeTitle
     response |> assertDoesNotEcho Marker
 }
 
@@ -285,22 +285,22 @@ let ``Multipart request over the form value count limit is answered with 413`` (
         postAsync MultipartContentType (bodyStream body) (fun ctx -> (ctx :?> DefaultHttpContext).FormOptions <- FormOptions (ValueCountLimit = 1))
 
     response
-    |> assertProblem StatusCodes.Status413PayloadTooLarge "Request body too large"
+    |> assertProblem StatusCodes.Status413PayloadTooLarge RequestBody.BodyTooLargeTitle
 }
 
 /// A multipart body of the operations alone, delimited by the given boundary
 let private operationsBodyWith (boundary : string) =
-    $"--%s{boundary}\r\nContent-Disposition: form-data; name=\"operations\"\r\n\r\n%s{ValidOperations}\r\n--%s{boundary}--\r\n"
+    $"--%s{boundary}\r\n{HeaderNames.ContentDisposition}: form-data; name=\"{RequestBody.OperationsField}\"\r\n\r\n%s{ValidOperations}\r\n--%s{boundary}--\r\n"
 
 [<Fact>]
 let ``Multipart request with a boundary over the form boundary length limit is answered with 400`` () : Task = task {
     // The limit is on a parameter of the Content-Type header, not on the size of the body
     let boundary = String ('b', 200)
 
-    let! response = postTextAsync $"multipart/form-data; boundary=%s{boundary}" (operationsBodyWith boundary)
+    let! response = postTextAsync $"{MediaTypeNames.Multipart.FormData}; boundary=%s{boundary}" (operationsBodyWith boundary)
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.UnreadableBodyTitle
 }
 
 [<Fact>]
@@ -310,11 +310,11 @@ let ``Multipart request with a boundary longer than the buffer of the form reade
     let boundary = String.replicate 300 Marker
 
     let! response =
-        postAsync $"multipart/form-data; boundary=%s{boundary}" (bodyStream (operationsBodyWith boundary)) (fun ctx ->
+        postAsync $"{MediaTypeNames.Multipart.FormData}; boundary=%s{boundary}" (bodyStream (operationsBodyWith boundary)) (fun ctx ->
             (ctx :?> DefaultHttpContext).FormOptions <- FormOptions (MultipartBoundaryLengthLimit = 10_000))
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.UnreadableBodyTitle
     response |> assertDoesNotEcho Marker
 }
 
@@ -322,12 +322,12 @@ let ``Multipart request with a boundary longer than the buffer of the form reade
 let ``Multipart request with text after a delimiter on its line is answered with 400`` () : Task = task {
     // The form reader limits the rest of a delimiter line to 100 characters, which is no limit on the size of the body
     let body =
-        String.Concat (formPart "operations" ValidOperations, $"--%s{Boundary}%s{String ('x', 200)}\r\n", closingBoundary)
+        String.Concat (formPart RequestBody.OperationsField ValidOperations, $"--%s{Boundary}%s{String ('x', 200)}\r\n", closingBoundary)
 
     let! response = postTextAsync MultipartContentType body
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.UnreadableBodyTitle
 }
 
 [<Fact>]
@@ -335,14 +335,14 @@ let ``Multipart request with a malformed part header reading like a limit messag
     // The form reader quotes a malformed header line, so text of the client must not decide the status code
     let body =
         multipartBody [
-            formPart "operations" ValidOperations
+            formPart RequestBody.OperationsField ValidOperations
             $"--%s{Boundary}\r\nx limit 1 exceeded.\r\n\r\ncontent\r\n"
         ]
 
     let! response = postTextAsync MultipartContentType body
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.UnreadableBodyTitle
 }
 
 [<Fact>]
@@ -363,12 +363,12 @@ let ``Multipart request over the form buffer limit is answered with 413 when bou
     | Error result ->
         let! response = writeAsync ctx result
         response
-        |> assertProblem StatusCodes.Status413PayloadTooLarge "Request body too large"
+        |> assertProblem StatusCodes.Status413PayloadTooLarge RequestBody.BodyTooLargeTitle
         response |> assertDoesNotEcho Marker
 }
 
 [<Theory>]
-[<InlineData(JsonContentType)>]
+[<InlineData(MediaTypeNames.Application.Json)>]
 [<InlineData(MultipartContentType)>]
 let ``Request body over the server body size limit is answered with 413`` (contentType : string) : Task = task {
     // Kestrel reports a body over MaxRequestBodySize by throwing BadHttpRequestException from the body stream
@@ -378,11 +378,11 @@ let ``Request body over the server body size limit is answered with 413`` (conte
     let! response = postAsync contentType (new RejectingRequestBody (error) :> Stream) ignore
 
     response
-    |> assertProblem StatusCodes.Status413PayloadTooLarge "Request body too large"
+    |> assertProblem StatusCodes.Status413PayloadTooLarge RequestBody.BodyTooLargeTitle
 }
 
 [<Theory>]
-[<InlineData(JsonContentType)>]
+[<InlineData(MediaTypeNames.Application.Json)>]
 [<InlineData(MultipartContentType)>]
 let ``Request body that ends before its declared length is answered with 400`` (contentType : string) : Task = task {
     // Kestrel reports a body shorter than its Content-Length by throwing BadHttpRequestException from the body stream
@@ -392,17 +392,17 @@ let ``Request body that ends before its declared length is answered with 400`` (
     let! response = postAsync contentType (new RejectingRequestBody (error) :> Stream) ignore
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.UnreadableBodyTitle
 }
 
 [<Fact>]
 let ``JSON body with a syntax error is answered with 400 without repeating the body`` () : Task = task {
     let body = $$"""{"query":"{ hero(id: \"1000\") { id } }","variables":{"token":"{{Marker}}"} oops"""
 
-    let! response = postTextAsync JsonContentType body
+    let! response = postTextAsync MediaTypeNames.Application.Json body
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Invalid JSON body"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.InvalidJsonTitle
     response |> assertDoesNotEcho Marker
 }
 
@@ -412,14 +412,14 @@ let ``Multipart request with a malformed part header quotes at most a short exce
     let longHeaderLine = String.replicate 100 Marker
     let body =
         multipartBody [
-            formPart "operations" ValidOperations
+            formPart RequestBody.OperationsField ValidOperations
             $"--%s{Boundary}\r\n%s{longHeaderLine}\r\n\r\ncontent\r\n"
         ]
 
     let! response = postTextAsync MultipartContentType body
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Unreadable request body"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.UnreadableBodyTitle
     response |> assertDoesNotEcho longHeaderLine
     Assert.Contains (Marker, response.Body, StringComparison.Ordinal)
 }
@@ -428,7 +428,7 @@ let ``Multipart request with a malformed part header quotes at most a short exce
 [<InlineData("null")>]
 [<InlineData("""{"query":null}""")>]
 let ``JSON body that is null or has a null query is answered with 400`` (body : string) : Task = task {
-    let! response = postTextAsync JsonContentType body
+    let! response = postTextAsync MediaTypeNames.Application.Json body
 
     assertStatus StatusCodes.Status400BadRequest response
 }
@@ -439,7 +439,7 @@ let ``GraphQL syntax error is answered with 400 quoting at most a short excerpt 
     let longTail = String.replicate 100 Marker
     let body = JsonSerializer.Serialize {| query = "{ hero(id: \"1000\") { id ! " + longTail + " } }" |}
 
-    let! response = postTextAsync JsonContentType body
+    let! response = postTextAsync MediaTypeNames.Application.Json body
 
     response
     |> assertProblem StatusCodes.Status400BadRequest "Cannot parse GraphQL query"
@@ -450,13 +450,13 @@ let ``GraphQL syntax error is answered with 400 quoting at most a short excerpt 
 let ``Multipart operations with a syntax error are answered with 400 without repeating the body`` () : Task = task {
     let body =
         multipartBody [
-            formPart "operations" $$"""{"query":"{ hero(id: \"1000\") { id } }","variables":{"token":"{{Marker}}"} oops"""
-            formPart "map" "{}"
+            formPart RequestBody.OperationsField $$"""{"query":"{ hero(id: \"1000\") { id } }","variables":{"token":"{{Marker}}"} oops"""
+            formPart RequestBody.MapField "{}"
         ]
 
     let! response = postTextAsync MultipartContentType body
 
     response
-    |> assertProblem StatusCodes.Status400BadRequest "Invalid JSON body"
+    |> assertProblem StatusCodes.Status400BadRequest RequestBody.InvalidJsonTitle
     response |> assertDoesNotEcho Marker
 }

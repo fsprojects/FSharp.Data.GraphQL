@@ -2,6 +2,7 @@ module FSharp.Data.GraphQL.Tests.AspNetCore.RequestHandlerExtensibilityTests
 
 open System
 open System.IO
+open System.Net.Mime
 open System.Text
 open System.Text.Json
 open System.Threading.Tasks
@@ -83,7 +84,7 @@ let private createHandler<'Handler when 'Handler :> GraphQLRequestHandler<Root> 
 
             body
             |> ValueOption.iter (fun json ->
-                ctx.Request.ContentType <- "application/json"
+                ctx.Request.ContentType <- MediaTypeNames.Application.Json
                 let bytes = Encoding.UTF8.GetBytes (json : string)
                 ctx.Request.Body <- new MemoryStream (bytes)
                 ctx.Request.ContentLength <- int64 bytes.Length))

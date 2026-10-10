@@ -16,6 +16,8 @@ open Microsoft.Extensions.Options
 open FSharp.Core
 open FsToolkit.ErrorHandling
 
+open FSharp.Data.GraphQL
+
 /// Answers every problem with a request body with a problem details result of a fixed status code,
 /// so that no body turns into an unhandled exception or repeats itself back to the client.
 module internal RequestBody =
@@ -75,7 +77,7 @@ module internal RequestBody =
     /// of the deserializer, cut to a short excerpt, but never the body itself.
     let invalidJson (request : HttpRequest) (expectedJson : string) (reason : string) : IResult =
         let extensions =
-            seq { KeyValuePair ("expected", (expectedJson :> obj)) }
+            seq { kvpObj "expected" expectedJson }
             |> ImmutableDictionary.CreateRange
 
         Results.Problem (
