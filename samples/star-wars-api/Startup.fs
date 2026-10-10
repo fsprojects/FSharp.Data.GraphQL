@@ -62,7 +62,8 @@ type Startup private () =
                 //endpoints.MapOxpeckerEndpoint (HttpEndpoints.graphQL<Root>("/", id))
                 let handler =
                     setHttpHeader "Access-Control-Allow-Origin" "*"
-                    >=> setHttpHeader "Access-Control-Allow-Headers" "content-type"
+                    // A browser client sending a file upload or a GET needs the GraphQL-Preflight header to pass CSRF prevention
+                    >=> setHttpHeader "Access-Control-Allow-Headers" "content-type, graphql-preflight"
                     >=> (setHttpHeader "Request-Type" "Classic") // For integration testing purposes
                     >=> HttpEndpointHandlers.graphQL<Root>
                 endpoints.MapOxpeckerEndpoint (route "/" handler))

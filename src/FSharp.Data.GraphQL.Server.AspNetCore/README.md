@@ -88,6 +88,32 @@ Don't forget to notify subscribers about new values:
 
 Finally run the server (e.g. make it listen at `localhost:8086`).
 
+### Cross-site request forgery (CSRF) prevention
+
+A browser sends some requests to another site without asking that site first through a [CORS preflight](https://developer.mozilla.org/en-US/docs/Glossary/Preflight_request), and with the cookies of that site: a `GET`, `HEAD` or `POST` request without custom headers whose `Content-Type` is missing or one of `application/x-www-form-urlencoded`, `multipart/form-data` and `text/plain`. A page of any other site could use such a request to run an operation on behalf of a user signed in to your API.
+
+Like Apollo Server's `csrfPrevention`, the GraphQL HTTP handler therefore rejects such a request with `400 Bad Request` and a GraphQL error, unless it carries a non-empty value in one of these headers:
+
+* `GraphQL-Preflight`, which the GraphQL client provider of this library sends with every request
+* `Apollo-Require-Preflight` and `X-Apollo-Operation-Name`, the headers Apollo Server accepts, so that clients written for it work unchanged
+
+A browser never sends a custom header to another site without a preflight, which your CORS policy then allows or refuses. A request with `Content-Type: application/json`, which is what most GraphQL clients send, is not affected. A client that sends file uploads (`multipart/form-data`) or introspects the schema through `GET` must send one of the headers, for example `GraphQL-Preflight: 1`. If browsers of other origins call your API, also allow that header in the CORS `Access-Control-Allow-Headers` response header. WebSocket connections are handled by the WebSocket middleware and are not affected.
+
+The protection is on by default. Configure it through `GraphQLOptions.CsrfPrevention`, either to accept other headers or, for a server that is never called by browsers or that does not authenticate requests through cookies, to turn it off:
+
+```fsharp
+services.AddGraphQL<Root> (
+    Schema.executor,
+    rootFactory,
+    // Accept only GraphQL-Preflight and X-Requested-With
+    configure = fun options -> { options with CsrfPrevention = ValueSome { RequestHeaders = [ CsrfPreventionHeaders.GraphQLPreflight; "X-Requested-With" ] } }
+    // Or turn the protection off
+    // configure = fun options -> { options with CsrfPrevention = ValueNone }
+)
+```
+
+A custom `GraphQLRequestHandler<'Root>` that overrides `HandleAsync` without calling the base implementation should call `CheckCsrfPrevention ()` first.
+
 There's a demo chat application backend in the `samples/chat-app` folder that showcases the use of `FSharp.Data.GraphQL.Server.AspNetCore` in a real-time application scenario, that is: with usage of GraphQL subscriptions (but not only).
 The tried and trusted `star-wars-api` also shows how to use subscriptions, but is a more basic example in that regard. As a side note, the implementation in `star-wars-api` was used as a starting point for the development of `FSharp.Data.GraphQL.Server.AspNetCore`.
 

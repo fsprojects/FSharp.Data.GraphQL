@@ -9,6 +9,7 @@ open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Options
+open Microsoft.Extensions.Primitives
 
 open FSharp.Data.GraphQL
 open FsToolkit.ErrorHandling
@@ -21,6 +22,65 @@ module private DeferredEventLogging =
 
     /// The path of a deferred event as one string for the log, its segments joined as GraphQL error paths print them
     let formatPath (path : obj list) = String.Join<obj> ("/", path)
+
+/// <summary>
+/// Recognizes the requests a browser sends to another site without a CORS preflight, following the
+/// <see href="https://fetch.spec.whatwg.org/#cors-safelisted-method">CORS-safelisted methods</see> and
+/// <see href="https://fetch.spec.whatwg.org/#cors-safelisted-request-header">CORS-safelisted request headers</see>
+/// of the Fetch standard.
+/// </summary>
+module internal CsrfPrevention =
+
+    /// The media types of a request body that a browser sends to another site without a CORS preflight
+    let private preflightFreeMediaTypes = [| "application/x-www-form-urlencoded"; "multipart/form-data"; "text/plain" |]
+
+    /// Whether a browser sends a request with this method to another site without a CORS preflight
+    let isPreflightFreeMethod (method : string) =
+        HttpMethods.IsGet method
+        || HttpMethods.IsHead method
+        || HttpMethods.IsPost method
+
+    /// <summary>
+    /// Whether a browser sends a request with this <c>Content-Type</c> to another site without a CORS preflight: when there
+    /// is none, or when its media type without the parameters is one of the simple ones, compared case-insensitively.
+    /// </summary>
+    let isPreflightFreeContentType (contentType : string | null) =
+        match contentType with
+        | null -> true
+        | contentType ->
+            // The Fetch standard reads the media type as everything before the parameters with the HTTP whitespace around it
+            // trimmed. A value it cannot parse is not safelisted, so the browser preflights it, and this reading, which never
+            // fails, at worst rejects a malformed value a browser would not have sent without a preflight anyway.
+            let span = contentType.AsSpan ()
+            let mediaType =
+                match MemoryExtensions.IndexOf (span, ';') with
+                | -1 -> span
+                | parametersStart -> span.Slice (0, parametersStart)
+            let mediaType = MemoryExtensions.Trim (mediaType, " \t\r\n".AsSpan ())
+            let mutable isSimple = false
+            for simpleMediaType in preflightFreeMediaTypes do
+                if MemoryExtensions.Equals (mediaType, simpleMediaType.AsSpan (), StringComparison.OrdinalIgnoreCase) then
+                    isSimple <- true
+            isSimple
+
+    /// Whether the request carries any of the headers with a non-empty value
+    let hasAnyHeader (headers : IHeaderDictionary) (headerNames : string list) =
+        headerNames
+        |> List.exists (fun headerName ->
+            match headers.TryGetValue headerName with
+            | true, values -> not (StringValues.IsNullOrEmpty values)
+            | false, _ -> false)
+
+    /// The error message of a blocked request, modeled on Apollo Server's, telling the client how to get through
+    let blockedRequestMessage (headerNames : string list) =
+        let contentTypeAdvice =
+            $"""specify a 'Content-Type' header with a media type that is not one of {String.Join (", ", preflightFreeMediaTypes)}"""
+        let advice =
+            match headerNames with
+            | [] -> $"Please {contentTypeAdvice}."
+            | headerNames ->
+                $"""Please either {contentTypeAdvice}, or provide a non-empty value for one of the following headers: {String.Join (", ", headerNames)}."""
+        $"This operation has been blocked as a potential Cross-Site Request Forgery (CSRF). {advice}"
 
 /// Handles GraphQL requests using a provided root schema.
 type DefaultGraphQLRequestHandler<'Root>
@@ -269,6 +329,42 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
         return (TypedResults.Ok response) :> IResult
     }
 
+    /// <summary>
+    /// Rejects a request a browser could have sent from a page of another site without a CORS preflight: a <c>GET</c>,
+    /// <c>HEAD</c> or <c>POST</c> request with no <c>Content-Type</c>, or with <c>application/x-www-form-urlencoded</c>,
+    /// <c>multipart/form-data</c> or <c>text/plain</c>, that carries none of the
+    /// <see cref="CsrfPreventionOptions.RequestHeaders"/> with a non-empty value. Every request passes when
+    /// <see cref="GraphQLOptions{Root}.CsrfPrevention"/> is <c>ValueNone</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="HandleAsync"/> calls this before it reads the request, so an override of <see cref="HandleAsync"/> that
+    /// does not call the base implementation should call this first too.
+    /// </remarks>
+    /// <returns>
+    /// <c>Ok</c> when the request may be executed, or <c>Error</c> with a <c>400 Bad Request</c> GraphQL response whose
+    /// error explains how to get through.
+    /// </returns>
+    member _.CheckCsrfPrevention () : Result<unit, IResult> =
+        match options.CurrentValue.CsrfPrevention with
+        | ValueNone -> Ok ()
+        | ValueSome csrfPrevention ->
+            let request = ctx.Request
+            if
+                CsrfPrevention.isPreflightFreeMethod request.Method
+                && CsrfPrevention.isPreflightFreeContentType request.ContentType
+                && not (CsrfPrevention.hasAnyHeader request.Headers csrfPrevention.RequestHeaders)
+            then
+                logger.LogWarning (
+                    "Blocked a {method} request with Content-Type '{contentType}' and no CSRF prevention header as a potential cross-site request forgery",
+                    request.Method,
+                    request.ContentType
+                )
+                let error = GQLProblemDetails.Create (CsrfPrevention.blockedRequestMessage csrfPrevention.RequestHeaders)
+                // No document has been read, so there is no document id to report
+                Error (TypedResults.BadRequest (GQLResponse.RequestError (0, [ error ])) :> IResult)
+            else
+                Ok ()
+
     /// Handle the request and return the result
     abstract HandleAsync : unit -> Task<Result<IResult, IResult>>
 
@@ -276,6 +372,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
         if ctx.RequestAborted.IsCancellationRequested then
             return TypedResults.Empty
         else
+            do! handler.CheckCsrfPrevention ()
             match! handler.CheckOperationType () with
             | IntrospectionQuery optionalAstDocument -> return! handler.ExecuteIntrospectionQuery optionalAstDocument
             | OperationQuery content -> return! handler.ExecuteOperation (content)

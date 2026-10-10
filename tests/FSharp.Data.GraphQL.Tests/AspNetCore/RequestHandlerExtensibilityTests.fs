@@ -64,6 +64,8 @@ let private createHandler<'Handler when 'Handler :> GraphQLRequestHandler<Root> 
     let ctx = DefaultHttpContext (RequestServices = serviceProvider)
     ctx.Request.Method <- method
     ctx.Request.Path <- PathString "/graphql"
+    // These tests are about dispatch, so a GET must not be stopped by the CSRF prevention CsrfPreventionTests covers
+    ctx.Request.Headers[CsrfPreventionHeaders.GraphQLPreflight] <- Microsoft.Extensions.Primitives.StringValues "1"
 
     body
     |> ValueOption.iter (fun json ->

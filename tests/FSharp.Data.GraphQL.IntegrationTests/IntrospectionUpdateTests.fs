@@ -61,9 +61,15 @@ let updateIntrospectionFileAsync ct sourceStream = task {
     return shouldUpdate
 }
 
+/// An HTTP client of the integration server whose GET requests pass its CSRF prevention
+let createPreflightedHttpClient () =
+    let httpClient = TestHosts.createIntegrationHttpClient ()
+    httpClient.DefaultRequestHeaders.Add ("GraphQL-Preflight", "1")
+    httpClient
+
 [<Fact>]
 let ``Get GraphQL introspection response returns schema`` () = task {
-    use httpClient = TestHosts.createIntegrationHttpClient ()
+    use httpClient = createPreflightedHttpClient ()
     let! response = httpClient.GetFromJsonAsync<JsonElement> ("/", CancellationToken.None)
     let schema = response.GetProperty("data").GetProperty ("__schema")
     Assert.NotEqual (Unchecked.defaultof<JsonElement>, schema)
@@ -73,7 +79,7 @@ let ``Get GraphQL introspection response returns schema`` () = task {
 
 [<Fact>]
 let ``Update integration introspection file when schema changes`` () = task {
-    use httpClient = TestHosts.createIntegrationHttpClient ()
+    use httpClient = createPreflightedHttpClient ()
     let! sourceStream = httpClient.GetStreamAsync ("/")
     let! wasUpdated = updateIntrospectionFileAsync CancellationToken.None sourceStream
     Assert.True (File.Exists introspectionFilePath)

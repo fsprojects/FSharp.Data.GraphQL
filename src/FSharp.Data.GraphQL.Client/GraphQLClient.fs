@@ -42,15 +42,30 @@ module GraphQLClient =
             httpHeaders
             |> Seq.iter (fun (name, value) -> requestMessage.Headers.Add (name, value))
 
+    /// <summary>
+    /// The header that tells the CSRF prevention of a GraphQL server a browser would have preflighted the request.
+    /// Such a server, FSharp.Data.GraphQL.Server.AspNetCore by default, rejects a <c>GET</c> request or a multipart
+    /// file upload without it, since a browser sends those to another site without a CORS preflight.
+    /// </summary>
+    [<Literal>]
+    let private PreflightHeaderName = "GraphQL-Preflight"
+
+    /// Adds the preflight header to every request, unless the caller already set one through its own headers
+    let private addPreflightHeader (requestMessage : HttpRequestMessage) =
+        if not (requestMessage.Headers.Contains PreflightHeaderName) then
+            requestMessage.Headers.Add (PreflightHeaderName, "1")
+
     let private postAsync ct (invoker : HttpMessageInvoker) (serverUrl : string) (httpHeaders : seq<string * string>) (content : HttpContent) = task {
         use requestMessage = new HttpRequestMessage (HttpMethod.Post, serverUrl)
         requestMessage.Content <- content
         addHeaders httpHeaders requestMessage
+        addPreflightHeader requestMessage
         return! invoker.SendAsync (requestMessage, ct) |> ensureSuccessCode
     }
 
     let private getAsync ct (invoker : HttpMessageInvoker) (serverUrl : string) = task {
         use requestMessage = new HttpRequestMessage (HttpMethod.Get, serverUrl)
+        addPreflightHeader requestMessage
         return! invoker.SendAsync (requestMessage, ct) |> ensureSuccessCode
     }
 
