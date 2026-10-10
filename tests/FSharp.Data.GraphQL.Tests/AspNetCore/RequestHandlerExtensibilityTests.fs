@@ -9,6 +9,7 @@ open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Options
+open Microsoft.Extensions.Primitives
 open Xunit
 
 open FSharp.Data.GraphQL
@@ -64,6 +65,8 @@ let private createHandler<'Handler when 'Handler :> GraphQLRequestHandler<Root> 
     let ctx = DefaultHttpContext (RequestServices = serviceProvider)
     ctx.Request.Method <- method
     ctx.Request.Path <- PathString "/graphql"
+    // These tests are about dispatch, so a GET must not be stopped by the CSRF prevention, which CsrfPreventionTests covers
+    ctx.Request.Headers[CsrfPreventionHeaders.GraphQLPreflight] <- StringValues "1"
 
     body
     |> ValueOption.iter (fun json ->

@@ -23,6 +23,7 @@ module ServiceCollectionExtensions =
             ConnectionInitTimeout = TimeSpan.FromMilliseconds (GraphQLOptionsDefaults.WebSocketConnectionInitTimeoutInMs)
             CustomPingHandler = ValueNone
         }
+        CsrfPrevention = ValueSome CsrfPreventionOptions.Default
     }
 
     // See https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.mvc.jsonoptions
