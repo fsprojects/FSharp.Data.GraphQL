@@ -139,8 +139,14 @@ type internal SelectionPath private (parent : SelectionPath, name : string) =
 
     /// The path of the field with the response name under the field of this path, the same instance every time
     member this.Child (name : string) =
-        if isNull children then
-            children <- Dictionary<string, SelectionPath> (StringComparer.Ordinal)
+        let children =
+            match children with
+            | null ->
+                // Most paths are leaves, so the dictionary is created only for a path that gets a child
+                let created = Dictionary<string, SelectionPath> (StringComparer.Ordinal)
+                children <- created
+                created
+            | children -> children
         match children.TryGetValue name with
         | true, child -> child
         | false, _ ->
@@ -150,18 +156,22 @@ type internal SelectionPath private (parent : SelectionPath, name : string) =
 
     /// Whether the plan is walked under this path for the first time
     member _.FirstWalkOf (kind : ExecutionInfoKind) =
-        if isNull walkedPlans then
-            walkedPlans <- HashSet<ExecutionInfoKind> (HashIdentity.Reference)
+        let walkedPlans =
+            match walkedPlans with
+            | null ->
+                let created = HashSet<ExecutionInfoKind> (HashIdentity.Reference)
+                walkedPlans <- created
+                created
+            | walkedPlans -> walkedPlans
         walkedPlans.Add kind
 
     /// The response names of the fields of the path from the root of the operation
     member this.ToList () : obj list =
-        let mutable names = []
-        let mutable path = this
-        while not (isNull path.Parent) do
-            names <- box path.Name :: names
-            path <- path.Parent
-        names
+        let rec prepend (path : SelectionPath) (names : obj list) =
+            match path.Parent with
+            | null -> names
+            | parent -> prepend parent (box path.Name :: names)
+        prepend this []
 
 type internal ObjectListFilterMiddleware<'ObjectType, 'ListType> (reportToMetadata : bool) =
 
