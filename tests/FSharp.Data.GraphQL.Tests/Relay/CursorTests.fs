@@ -184,9 +184,10 @@ let resolveLetters (ctx : ResolveFieldContext) () =
     let first = ctx.TryArg "first" |> ValueOption.defaultValue letters.Length
     let edges =
         letters
-        |> Array.skip start
-        |> Array.truncate first
-        |> Array.mapi (fun index letter -> { Cursor = Cursor.ofOffset (start + index); Node = letter })
+        |> Seq.skip start
+        |> Seq.truncate first
+        |> Seq.mapi (fun index letter -> { Cursor = Cursor.ofOffset (start + index); Node = letter })
+        |> Seq.toArray
     Some {
         TotalCount = async { return Some letters.Length }
         PageInfo = {
@@ -235,7 +236,7 @@ let ``Connection field pages after a cursor ofOffset wrote`` () =
                 "letters", upcast NameValueLookup.ofList [
                     "edges", upcast [
                         box <| NameValueLookup.ofList [ "node", upcast "c" ]
-                        upcast NameValueLookup.ofList [ "node", upcast "d" ]
+                        box <| NameValueLookup.ofList [ "node", upcast "d" ]
                     ]
                 ]
             ]
