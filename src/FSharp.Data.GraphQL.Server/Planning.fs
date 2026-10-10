@@ -237,21 +237,119 @@ let private getAbstractionFrag = function
         Debug.Fail "Must be prevented by validation"
         raise (InvalidOperationException $"Expected a fragment to be planned as {nameof ResolveAbstraction}, but it was planned as {kindName kind}")
 
+/// Compares lists of execution kinds element by element, by reference
+let private kindListComparer =
+    { new IEqualityComparer<ExecutionInfoKind list> with
+        member _.Equals (x, y) =
+            List.length x = List.length y
+            && List.forall2 (fun xKind yKind -> obj.ReferenceEquals (xKind, yKind)) x y
+        member _.GetHashCode kinds =
+            (17, kinds) ||> List.fold (fun hash kind -> (hash * 397) ^^^ LanguagePrimitives.PhysicalHash kind) }
+
+/// <summary>
+/// Merges the plans of a field selected more than once, the selections under it in selection order, as
+/// <c>CollectFields</c> merges the selections of a response name.
+/// </summary>
+/// <remarks>
+/// <para>
+/// All the plans of a field are merged at once: merging them one after another would copy the growing selection set
+/// of the field for every selection of it, which is quadratic in the number of its selections.
+/// </para>
+/// <para>
+/// A plan shares the plans of the selection sets that are planned the same way, so merging the plans of a field
+/// selected twice with fields nested under an abstract type meets the same shared plans once for every possible type at
+/// every level. The merged plans are therefore remembered by the plans merged, compared by reference.
+/// </para>
+/// </remarks>
+[<Sealed>]
+type private PlanMerger () =
+    let mergedKinds = Dictionary<ExecutionInfoKind list, ExecutionInfoKind> (kindListComparer)
+
+    /// The first field with the plans of every selection of it merged
+    member this.MergeFields (first : ExecutionInfo, later : ExecutionInfo seq) : ExecutionInfo =
+        let kinds = first.Kind :: [ for field in later -> field.Kind ]
+        let kind = this.MergeKinds (first.Identifier, kinds)
+        if obj.ReferenceEquals (kind, first.Kind) then first else { first with Kind = kind }
+
+    /// The plans of the selections of a field merged into one
+    member this.MergeKinds (identifier : string, kinds : ExecutionInfoKind list) : ExecutionInfoKind =
+        match mergedKinds.TryGetValue kinds with
+        | true, kind -> kind
+        | false, _ ->
+            let first = List.head kinds
+            let cannotMerge (other : ExecutionInfoKind) : 'Merged =
+                Debug.Fail "Must be prevented by validation"
+                raise (
+                    InvalidOperationException
+                        $"Cannot merge field '%s{identifier}' planned as {kindName first} with the same field planned as {kindName other}"
+                )
+            let kind =
+                match first with
+                | ResolveValue ->
+                    for kind in kinds do
+                        match kind with
+                        | ResolveValue -> ()
+                        | other -> cannotMerge other
+                    first
+                | ResolveCollection firstItem ->
+                    let laterItems =
+                        kinds.Tail
+                        |> List.map (function
+                            | ResolveCollection item -> item
+                            | other -> cannotMerge other)
+                    ResolveCollection (this.MergeFields (firstItem, laterItems))
+                | SelectFields _ ->
+                    kinds
+                    |> List.map (function
+                        | SelectFields fields -> fields
+                        | other -> cannotMerge other)
+                    |> this.MergeLists
+                    |> SelectFields
+                | ResolveAbstraction _ ->
+                    let typeFields =
+                        kinds
+                        |> List.map (function
+                            | ResolveAbstraction typeFields -> typeFields
+                            | other -> cannotMerge other)
+                    typeFields
+                    |> Seq.collect Map.keys
+                    |> Seq.distinct
+                    |> Seq.map (fun typeName -> typeName, this.MergeLists (typeFields |> List.choose (Map.tryFind typeName)))
+                    |> Map.ofSeq
+                    |> ResolveAbstraction
+                | _ -> cannotMerge (List.item 1 kinds)
+            mergedKinds.Add (kinds, kind)
+            kind
+
+    /// The fields of the selection sets as one: the fields of the first in order, then the fields only the others select,
+    /// each field selected more than once with its plans merged
+    member this.MergeLists (lists : ExecutionInfo list list) : ExecutionInfo list =
+        match lists with
+        | [] -> []
+        | [ fields ] -> fields
+        | first :: later ->
+            let merged = PlannedFields this
+            first |> List.iter merged.Add
+            for fields in later do
+                fields |> List.iter merged.Merge
+            merged.ToList ()
+
 /// <summary>
 /// The fields of a selection set while it is planned, in selection order, indexed by identifier, so that adding a field
-/// or merging a field selected again takes constant time instead of a search through the fields planned so far.
+/// or selecting a field again takes constant time instead of a search through the fields planned so far.
 /// </summary>
-[<Sealed>]
-type private PlannedFields
-    /// <param name="mergeField">Merges a field selected again into the field planned with the same identifier.</param>
-    (mergeField : ExecutionInfo -> ExecutionInfo -> ExecutionInfo) =
+and [<Sealed>] private PlannedFields
+    /// <param name="merger">Merges the plans of a field selected more than once.</param>
+    (merger : PlanMerger) =
     let fields = ResizeArray<ExecutionInfo> ()
     let positions = Dictionary<string, int> (StringComparer.Ordinal)
+    // The later selections of the field at a position, merged into it all at once when the fields are listed
+    let laterSelections = Dictionary<int, ResizeArray<ExecutionInfo>> ()
 
     /// Whether a field with the identifier is planned already
     member _.Contains (identifier : string) = positions.ContainsKey identifier
 
-    /// Adds the field after the fields planned so far
+    /// Adds the field after the fields planned so far, even when a field with its identifier is planned already
     member _.Add (field : ExecutionInfo) =
         positions.TryAdd (field.Identifier, fields.Count) |> ignore
         fields.Add field
@@ -259,41 +357,74 @@ type private PlannedFields
     /// Merges the field into the field planned with the same identifier, or adds it when there is none
     member this.Merge (field : ExecutionInfo) =
         match positions.TryGetValue field.Identifier with
-        | true, position -> fields[position] <- mergeField (fields[position]) field
+        | true, position ->
+            match laterSelections.TryGetValue position with
+            | true, later -> later.Add field
+            | false, _ -> laterSelections.Add (position, ResizeArray [ field ])
         | false, _ -> this.Add field
 
     /// The fields in selection order
-    member _.ToList () = List.ofSeq fields
+    member _.ToList () = [
+        for position in 0 .. fields.Count - 1 do
+            match laterSelections.TryGetValue position with
+            | true, later -> merger.MergeFields (fields[position], later)
+            | false, _ -> fields[position]
+    ]
 
-/// The fields of both selections as one: a field selected by both has the selections under it merged, in the order
-/// of the first selection, and the fields only the second selects follow.
-let rec internal deepMerge (xs: ExecutionInfo list) (ys: ExecutionInfo list) =
-    match xs, ys with
-    | [], _ -> ys
-    | _, [] -> xs
-    | _ ->
-        // Indexed by identifier: searching the other list for every field is quadratic in the number of fields
-        let merged = PlannedFields mergeField
-        xs |> List.iter merged.Add
-        ys |> List.iter merged.Merge
+/// <summary>
+/// The fields with every deferred fragment the predicate selects replaced by its own fields, merged into the selection
+/// as if the directive were absent; a fragment the predicate does not select stays among the fields as it is.
+/// </summary>
+let internal inlineDeferredFragments (inlines : ExecutionInfo -> bool) (fields : ExecutionInfo list) =
+    let isInlined (field : ExecutionInfo) =
+        match field.Kind with
+        | ResolveDeferredFragment _ -> inlines field
+        | _ -> false
+    if not (fields |> List.exists isInlined) then
+        fields
+    else
+        let merged = PlannedFields (PlanMerger ())
+        let rec mergeFragment (fragmentFields : ExecutionInfo list) =
+            for field in fragmentFields do
+                match field.Kind with
+                | ResolveDeferredFragment (_, _, _, nestedFields) when inlines field -> mergeFragment nestedFields
+                | _ -> merged.Merge field
+        for field in fields do
+            match field.Kind with
+            | ResolveDeferredFragment (_, _, _, fragmentFields) when inlines field -> mergeFragment fragmentFields
+            | _ -> merged.Add field
         merged.ToList ()
 
-/// The field selected twice as one, with the selections under it merged in the order of the first selection
-and private mergeField (x: ExecutionInfo) (y: ExecutionInfo) =
-    match x.Kind, y.Kind with
-    | ResolveValue, ResolveValue -> x
-    | ResolveCollection(x'), ResolveCollection(y') -> { x with Kind = ResolveCollection(mergeField x' y') }
-    | ResolveAbstraction(xs'), ResolveAbstraction(ys') -> { x with Kind = ResolveAbstraction(Map.merge (fun _ x' y' -> deepMerge x' y') xs' ys')}
-    | SelectFields(xs'), SelectFields(ys') -> { x with Kind = SelectFields(deepMerge xs' ys') }
-    | _ ->
-        Debug.Fail "Must be prevented by validation"
-        raise (
-            InvalidOperationException
-                $"Cannot merge field '%s{x.Identifier}' planned as {kindName x.Kind} with the same field planned as {kindName y.Kind}"
-        )
+/// Whether a plan holds deferred fragment entries, which copy the field whose selection set holds them
+let private hasDeferredFragments (kind : ExecutionInfoKind) =
+    let isEntry (field : ExecutionInfo) =
+        match field.Kind with
+        | ResolveDeferredFragment _ -> true
+        | _ -> false
+    match kind with
+    | SelectFields fields -> fields |> List.exists isEntry
+    | ResolveAbstraction typeFields -> typeFields |> Map.exists (fun _ fields -> fields |> List.exists isEntry)
+    | _ -> false
 
-/// <summary>The fields of a selection set to plan, merged as <see cref="deepMerge"/> merges them.</summary>
-let private newPlannedFields () = PlannedFields mergeField
+/// The fields with their deferred fragment entries, nested ones included, copying the field instead
+let rec private withEntriesOf (field : ExecutionInfo) (fields : ExecutionInfo list) =
+    fields
+    |> List.map (fun entry ->
+        match entry.Kind with
+        | ResolveDeferredFragment (label, fragmentId, enabled, fragmentFields) -> {
+            field with
+                Identifier = entry.Identifier
+                Include = entry.Include
+                Kind = ResolveDeferredFragment (label, fragmentId, enabled, withEntriesOf field fragmentFields)
+          }
+        | _ -> entry)
+
+/// The plan with the deferred fragment entries of its selection set copying the field, which reuses a plan made for another field
+let private withDeferredFragmentsOf (field : ExecutionInfo) (kind : ExecutionInfoKind) =
+    match kind with
+    | SelectFields fields -> SelectFields (withEntriesOf field fields)
+    | ResolveAbstraction typeFields -> ResolveAbstraction (typeFields |> Map.map (fun _ fields -> withEntriesOf field fields))
+    | kind -> kind
 
 /// <summary>
 /// Compares the field of the document, the type it returns and its includer by reference: planning the selection set
@@ -327,8 +458,8 @@ let private includerKeyComparer =
             HashCode.Combine (LanguagePrimitives.PhysicalHash directives, LanguagePrimitives.PhysicalHash parent) }
 
 /// <summary>
-/// The state of planning one operation: the fragments of the document by name, the includers built so far, and the
-/// plans of the selection sets planned so far.
+/// The state of planning one operation: the fragments of the document by name, the includers built so far, the plans
+/// of the selection sets planned so far, and the merges of the plans of fields selected more than once.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -342,8 +473,8 @@ let private includerKeyComparer =
 /// build its own includers for the selections under it, and none of their plans would be reused.
 /// </para>
 /// <para>
-/// A reused plan keeps the deferred fragment entries planned the first time, which copy the parent field's definition;
-/// execution reads only their includer and kind, which are the same for every reuse.
+/// A deferred fragment entry copies the field whose selection set holds it, so a reused plan gets entries copied from
+/// the field reusing it, and is the same as the plan of planning the selection set again.
 /// </para>
 /// </remarks>
 [<Sealed>]
@@ -379,9 +510,12 @@ type private PlanState (ctx : PlanningContext) =
                 includers.Add (key, includer)
                 includer
 
-    /// The plans of the selection sets of fields, as their execution kinds
+    /// The plans of the selection sets of fields, as their execution kinds, each with whether it holds deferred fragment entries
     member val PlannedSelections =
-        Dictionary<struct (Field * OutputDef * Includer), ExecutionInfoKind> (plannedSelectionKeyComparer)
+        Dictionary<struct (Field * OutputDef * Includer), struct (ExecutionInfoKind * bool)> (plannedSelectionKeyComparer)
+
+    /// Merges the plans of the fields selected more than once
+    member val Merger = PlanMerger ()
 
 /// <summary>
 /// The state of planning one selection set together with the fragments spread into it: the fragments already spread
@@ -473,7 +607,7 @@ let private deferredFragmentEntry (directive : Directive) (fragmentId : int) (in
 /// delivers only its other fields, and whatever the fragment selects under that field is selected on the object's
 /// own field instead, wherever in the selection the fragment stands; a fragment left without fields delivers nothing
 /// and is dropped
-let private withoutDirectlySelectedFields (plannedFields : ExecutionInfo list) =
+let private withoutDirectlySelectedFields (merger : PlanMerger) (plannedFields : ExecutionInfo list) =
     let isDeferredFragment (field : ExecutionInfo) =
         match field.Kind with
         | ResolveDeferredFragment _ -> true
@@ -481,7 +615,7 @@ let private withoutDirectlySelectedFields (plannedFields : ExecutionInfo list) =
     if not (plannedFields |> List.exists isDeferredFragment) then
         plannedFields
     else
-        let ownFields = newPlannedFields ()
+        let ownFields = PlannedFields merger
         let fragments = ResizeArray<ExecutionInfo> ()
         for field in plannedFields do
             if isDeferredFragment field then fragments.Add field else ownFields.Add field
@@ -526,19 +660,20 @@ let rec private plan (state : PlanState) (info : ExecutionInfo) : ExecutionInfo 
 and private planFieldSelection (state : PlanState) (info : ExecutionInfo) : ExecutionInfo =
     let key = struct (info.Ast, info.ReturnDef, info.Include)
     match state.PlannedSelections.TryGetValue key with
-    | true, kind -> { info with Kind = kind }
+    | true, struct (kind, false) -> { info with Kind = kind }
+    | true, struct (kind, true) -> { info with Kind = withDeferredFragmentsOf info kind }
     | false, _ ->
         let planned =
             match info.ReturnDef with
             | Abstract _ -> planAbstraction state info.Ast.SelectionSet info (newScope ()) ValueNone
             | _ -> planSelection state info.Ast.SelectionSet info (newScope ())
-        state.PlannedSelections.Add (key, planned.Kind)
+        state.PlannedSelections.Add (key, struct (planned.Kind, hasDeferredFragments planned.Kind))
         planned
 
 and private planSelection (state : PlanState) (selectionSet: Selection list) (info: ExecutionInfo) (scope : SelectionScope) : ExecutionInfo =
     let ctx = state.Context
     let parentDef = downcast info.ReturnDef
-    let fields = newPlannedFields ()
+    let fields = PlannedFields state.Merger
     /// The fields of a fragment merged into the object's selection, or, when the fragment is deferred, delivered
     /// later as one payload of the object; the entry carries the fragment's own includer, so `@skip`/`@include` on
     /// the spread or inline fragment decide whether it is delivered at all
@@ -575,7 +710,7 @@ and private planSelection (state : PlanState) (selectionSet: Selection list) (in
             let fragmentInfo = planSelection state fragment.SelectionSet updatedInfo scope
             addFragmentFields updatedInfo fragment.Directives (getSelectionFrag fragmentInfo.Kind)
         | InlineFragment _ -> ()
-    { info with Kind = SelectFields (withoutDirectlySelectedFields (fields.ToList ())) }
+    { info with Kind = SelectFields (withoutDirectlySelectedFields state.Merger (fields.ToList ())) }
 
 and private planAbstraction (state : PlanState) (selectionSet: Selection list) (info : ExecutionInfo) (scope : SelectionScope) typeCondition : ExecutionInfo =
     let ctx = state.Context
@@ -584,7 +719,7 @@ and private planAbstraction (state : PlanState) (selectionSet: Selection list) (
         match typeFields.TryGetValue typeName with
         | true, fields -> fields
         | false, _ ->
-            let fields = newPlannedFields ()
+            let fields = PlannedFields state.Merger
             typeFields.Add (typeName, fields)
             fields
     /// The fields of a fragment merged into every type's selection, or, when the fragment is deferred, delivered
@@ -633,7 +768,7 @@ and private planAbstraction (state : PlanState) (selectionSet: Selection list) (
     // An empty map is a valid state representing "no fields selected for this type condition."
     let plannedTypeFields =
         typeFields
-        |> Seq.map (fun (KeyValue (typeName, fields)) -> typeName, withoutDirectlySelectedFields (fields.ToList ()))
+        |> Seq.map (fun (KeyValue (typeName, fields)) -> typeName, withoutDirectlySelectedFields state.Merger (fields.ToList ()))
         |> Map.ofSeq
     { info with Kind = ResolveAbstraction plannedTypeFields }
 

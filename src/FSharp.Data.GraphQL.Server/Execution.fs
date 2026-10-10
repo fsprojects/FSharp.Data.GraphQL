@@ -363,14 +363,11 @@ let private deferredFragmentEvents
 /// still deferred stays among the fields as it is.
 /// </summary>
 let private inlineDisabledFragments (variables : ImmutableDictionary<string, obj>) (fields : ExecutionInfo list) =
-    let rec inlineDisabled (fields : ExecutionInfo list) =
-        ([], fields)
-        ||> List.fold (fun fields field ->
-            match field.Kind with
-            | ResolveDeferredFragment (_, _, enabled, fragmentFields) when enabled variables = Ok false ->
-                Planning.deepMerge fields (inlineDisabled fragmentFields)
-            | _ -> [ yield! fields; yield field ])
-    inlineDisabled fields
+    fields
+    |> Planning.inlineDeferredFragments (fun fragment ->
+        match fragment.Kind with
+        | ResolveDeferredFragment (_, _, enabled, _) -> enabled variables = Ok false
+        | _ -> false)
 
 /// The root fields a deferred fragment at the operation's root selects, those of the fragments nested in it included.
 let rec private rootFieldsOfFragment (info : ExecutionInfo) =

@@ -1497,3 +1497,33 @@ let ``Object list filter: Must return empty filter when no discriminated union t
     let query = parse """query testQuery() { Properties { __typename } }"""
     let result = execute query
     ensureDirect result <| fun _ errors -> empty errors
+
+[<Fact>]
+let ``Object list filter: Must return the filters of every list field in Metadata`` () =
+    let query =
+        parse
+            """query testQuery {
+                A (id : 1) {
+                    first : subjects (filter : { id : 2 }) { ...Value }
+                    second : subjects (filter : { id : 6 }) { ...Value }
+                }
+        }
+
+        fragment Value on Subject {
+                ...on A {
+                    id
+                }
+                ...on B {
+                    id
+                }
+        }"""
+    let result = execute query
+    ensureDirect result <| fun _ errors -> empty errors
+    let filters =
+        result.Metadata.TryFind<ObjectListFilters>("filters")
+        |> wantValueSome
+    filters.Count |> equals 2
+    filters[[ box "A"; box "first" ]]
+    |> equals (Equals ({ FieldName = "id"; Value = 2L }, null))
+    filters[[ box "A"; box "second" ]]
+    |> equals (Equals ({ FieldName = "id"; Value = 6L }, null))
