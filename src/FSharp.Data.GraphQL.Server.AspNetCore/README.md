@@ -91,5 +91,13 @@ Finally run the server (e.g. make it listen at `localhost:8086`).
 There's a demo chat application backend in the `samples/chat-app` folder that showcases the use of `FSharp.Data.GraphQL.Server.AspNetCore` in a real-time application scenario, that is: with usage of GraphQL subscriptions (but not only).
 The tried and trusted `star-wars-api` also shows how to use subscriptions, but is a more basic example in that regard. As a side note, the implementation in `star-wars-api` was used as a starting point for the development of `FSharp.Data.GraphQL.Server.AspNetCore`.
 
+### Error masking
+
+An error caused by an unexpected exception, such as an `InvalidOperationException` thrown by a resolver, reaches the client with the message `Unexpected error`, keeping its `path` and `locations`, while the exception itself is logged. Errors reported on purpose, such as a `GQLMessageException`, keep their messages. To see the original messages during development, turn the masking off:
+
+```fsharp
+services.AddGraphQL<Root>(Schema.executor, rootFactory, configure = (fun options -> { options with MaskUnexpectedErrors = false }))
+```
+
 ### Client
 Using your favorite (or not :)) client library (e.g.: [Apollo Client](https://www.apollographql.com/docs/react/get-started), [Relay](https://relay.dev), [Strawberry Shake](https://chillicream.com/docs/strawberryshake/v13), [elm-graphql](https://github.com/dillonkearns/elm-graphql) ❤️), just point to `localhost:8086/graphql` (as per the example above) and, as long as the client implements the `graphql-transport-ws` subprotocol, subscriptions should work.

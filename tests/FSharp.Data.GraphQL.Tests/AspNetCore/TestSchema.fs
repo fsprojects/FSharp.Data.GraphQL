@@ -1,5 +1,7 @@
 namespace FSharp.Data.GraphQL.Tests.AspNetCore
 
+open System
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 
@@ -42,7 +44,27 @@ type Character =
     | Human of Human
     | Droid of Droid
 
+/// An exception that declares a message for clients, through IGQLError, other than its own message
+type DivergentGraphQLError (clientMessage : string, detail : string) =
+    inherit Exception (detail)
+
+    interface IGQLError with
+        member _.Message = clientMessage
+
 module TestSchema =
+
+    /// The message of the unexpected exception the unexpectedFailure field fails with, which must never reach a client while errors are masked
+    [<Literal>]
+    let SecretDetail = "secret detail"
+
+    /// The message of the GraphQL error the deliberateFailure field reports to the client on purpose
+    [<Literal>]
+    let DeliberateFailureMessage = "The hero keeps this one to themselves"
+
+    /// The message for clients of the exception the divergentFailure field fails with, whose own message is SecretDetail
+    [<Literal>]
+    let DivergentClientMessage = "The hero declines to say"
+
     let humans = [
         {
             Id = "1000"
@@ -164,6 +186,30 @@ module TestSchema =
                     )
                     Define.Field ("appearsIn", ListOf EpisodeType, "Which movies they appear in.", (fun _ (h : Human) -> h.AppearsIn))
                     Define.Field ("homePlanet", Nullable StringType, "The home planet of the human, or null if unknown.", (fun _ h -> h.HomePlanet))
+                    Define.Field (
+                        "unexpectedFailure",
+                        Nullable StringType,
+                        "Fails with an unexpected exception, as a backend failure would.",
+                        fun _ (_ : Human) -> raise (InvalidOperationException SecretDetail) : string option
+                    )
+                    Define.Field (
+                        "deliberateFailure",
+                        Nullable StringType,
+                        "Fails with a GraphQL error raised for the client on purpose.",
+                        fun _ (_ : Human) -> raise (GQLMessageException DeliberateFailureMessage) : string option
+                    )
+                    Define.Field (
+                        "divergentFailure",
+                        Nullable StringType,
+                        "Fails with an exception whose message for clients differs from its own.",
+                        fun _ (_ : Human) -> raise (DivergentGraphQLError (DivergentClientMessage, SecretDetail)) : string option
+                    )
+                    Define.Field (
+                        "unexpectedNonNullFailure",
+                        StringType,
+                        "Fails with an unexpected exception, which a null cannot stand in for.",
+                        fun _ (_ : Human) -> raise (InvalidOperationException SecretDetail) : string
+                    )
                 ]
         )
 
@@ -278,3 +324,9 @@ module TestSchema =
     let schema : ISchema<Root> = upcast Schema (Query, Mutation, Subscription, schemaConfig)
 
     let executor = Executor (schema, [])
+
+    /// An executor whose execution middleware throws an unexpected exception, so that every operation is rejected
+    /// with a request error carrying that exception. Its schema has the query root only: compiling the schema
+    /// above for a second executor would register its subscription field a second time in the same provider.
+    let requestFailureExecutor =
+        Executor (Schema<Root> Query, [ ExecutorMiddleware (execute = fun _ _ _ -> raise (InvalidOperationException SecretDetail)) ])

@@ -89,7 +89,8 @@ type internal DeferredPayloads
         /// <inheritdoc />
         member _.Translate event =
             match event with
-            | DeferredErrors (_, errors, _) -> logger.LogWarning ("Deferred response errors: {deferredErrors}", ErrorFormatting.formatErrors errors)
+            // At the debug level: the sender logs the exceptions of the errors it masks, once per message
+            | DeferredErrors (_, errors, _) -> logger.LogDebug ("Deferred response errors: {deferredErrors}", ErrorFormatting.formatErrors errors)
             | _ -> ()
 
             delivery.Apply event
@@ -117,7 +118,8 @@ type internal StreamPayloads
             match event with
             | SubscriptionResult output -> ValueSome (SubscriptionExecutionResult.Create (ValueSome output, []))
             | SubscriptionErrors (output, errors) ->
-                logger.LogWarning ("Subscription errors: {subscriptionErrors}", ErrorFormatting.formatErrors errors)
+                // At the debug level: the sender logs the exceptions of the errors it masks, once per message
+                logger.LogDebug ("Subscription errors: {subscriptionErrors}", ErrorFormatting.formatErrors errors)
                 // The executor may still have resolved partial data alongside the field errors; it is forwarded as-is
                 match output with
                 | ValueNone -> ValueSome (SubscriptionExecutionResult.CreateErrors errors)

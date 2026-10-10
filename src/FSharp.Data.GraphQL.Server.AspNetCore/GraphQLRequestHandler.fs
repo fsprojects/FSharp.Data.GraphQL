@@ -56,6 +56,14 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
             let jsonSerializerOptions = options.Get(GraphQLOptions.IndentedOptionsName).SerializerOptions
             JsonSerializer.Serialize (value, jsonSerializerOptions)
 
+        // Every response of the handler is built here, so no error caused by an unexpected exception, whether it is a field
+        // error or a request error, can reach the client unmasked
+        let toClientErrors (errors : GQLProblemDetails list) =
+            if options.CurrentValue.MaskUnexpectedErrors then
+                ErrorMasking.maskErrors logger errors
+            else
+                errors
+
         match content with
         | Direct (data, errs) ->
             logger.LogDebug ("Produced direct GraphQL response with documentId = '{documentId}' and metadata:\n{metadata}", documentId, metadata)
@@ -63,7 +71,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
             if logger.IsEnabled LogLevel.Trace then
                 logger.LogTrace ("GraphQL response data:\n{data}", serializeIndented (data |> ValueOption.toObj))
 
-            GQLResponse.Direct (documentId, data |> ValueOption.toObj, errs)
+            GQLResponse.Direct (documentId, data |> ValueOption.toObj, toClientErrors errs)
         | Deferred (data, errs, deferred) ->
             logger.LogDebug ("Produced deferred GraphQL response with documentId = '{documentId}' and metadata:\n{metadata}", documentId, metadata)
 
@@ -103,7 +111,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
                     | DeferredFragmentCompleted (path, fragmentId) ->
                         logger.LogDebug ("Completed GraphQL deferred fragment #{fragmentId} at path: {path}", fragmentId, formatPath path))
 
-            GQLResponse.Direct (documentId, data, errs)
+            GQLResponse.Direct (documentId, data, toClientErrors errs)
 
         | Stream stream ->
             logger.LogDebug ("Produced stream GraphQL response with documentId = '{documentId}' and metadata:\n{metadata}", documentId, metadata)
@@ -140,7 +148,7 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
                 metadata
             )
 
-            GQLResponse.RequestError (documentId, errs)
+            GQLResponse.RequestError (documentId, toClientErrors errs)
 
     /// Checks if the request contains a body
     let checkIfHasBody (request : HttpRequest) = task {
