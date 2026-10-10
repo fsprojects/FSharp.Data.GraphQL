@@ -29,7 +29,10 @@ type GraphQLTransportWSOptions = {
 [<RequireQualifiedAccess>]
 module CsrfPreventionHeaders =
 
-    /// The header the GraphQL client provider of this library sends with every request, with the value <c>1</c>.
+    /// <summary>
+    /// The header the GraphQL client provider of this library sends, with the value <c>1</c>, with every request a browser
+    /// would send without a preflight: <c>GET</c> requests and multipart file uploads.
+    /// </summary>
     [<Literal>]
     let GraphQLPreflight = "GraphQL-Preflight"
 
@@ -52,9 +55,11 @@ module CsrfPreventionHeaders =
 /// even though it cannot read the response.
 /// </para>
 /// <para>
-/// The request handler therefore rejects such a request with <c>400 Bad Request</c> unless it carries one of the
-/// <see cref="RequestHeaders"/> with a non-empty value. A browser never sends a custom header to another site without a
-/// preflight, which the CORS policy of the server then allows or refuses.
+/// The request handler therefore rejects every request with such a <c>Content-Type</c> with <c>400 Bad Request</c>, unless
+/// it carries one of the <see cref="RequestHeaders"/> with a non-empty value. A browser never sends a custom header to
+/// another site without a preflight, which the CORS policy of the server then allows or refuses. The method of a request is
+/// not checked, since a middleware overriding the method from a form field would turn a form posted from another site into
+/// a request with any method; only a CORS preflight itself always passes.
 /// </para>
 /// </summary>
 type CsrfPreventionOptions = {

@@ -106,7 +106,9 @@ let private assertBlocked (struct (statusCode : int, body : JsonElement)) =
     | true, errors ->
         let error = Assert.Single (errors.EnumerateArray ())
         let message = error.GetProperty("message").GetString()
-        Assert.Contains ("blocked as a potential Cross-Site Request Forgery (CSRF)", message)
+        Assert.Contains ("blocked as a potential Cross-Site Request Forgery (CSRF)", message, StringComparison.Ordinal)
+        // The code Apollo Server reports a blocked request with, which clients written for it may match
+        Assert.Equal ("BAD_REQUEST", error.GetProperty("extensions").GetProperty("code").GetString ())
         message
     | false, _ ->
         fail $"Expected a GraphQL error explaining the block, but the response has no errors: {describe body}"
@@ -221,13 +223,23 @@ let ``POST with a content type a browser preflights is executed without a prefli
     assertOperationExecuted response
 }
 
-[<Theory>]
-[<InlineData("OPTIONS")>]
-[<InlineData("PUT")>]
-let ``A request with a method a browser always preflights is not blocked`` (method : string) : Task = task {
-    // A CORS preflight itself is an OPTIONS request without custom headers, and it must not fail
-    let! response = sendWithDefaults method ValueNone [] [||]
+[<Fact>]
+let ``A CORS preflight is not blocked`` () : Task = task {
+    // A preflight is an OPTIONS request without the custom headers of the request it asks about, so it must pass
+    let! response = sendWithDefaults HttpMethods.Options ValueNone [ "Access-Control-Request-Method", "POST" ] [||]
     assertIntrospectionExecuted response
+}
+
+[<Theory>]
+[<InlineData("PUT")>]
+[<InlineData("DELETE")>]
+[<InlineData("PATCH")>]
+[<InlineData("OPTIONS")>]
+let ``A request with a content type a browser does not preflight is blocked whatever its method`` (method : string) : Task = task {
+    // A middleware overriding the method from a form field turns a form posted from another site into a request with any method
+    let! body = bodyOf "form"
+    let! response = sendWithDefaults method (ValueSome "application/x-www-form-urlencoded") [] body
+    assertBlocked response |> ignore
 }
 
 [<Fact>]
@@ -277,7 +289,7 @@ let ``Configured request headers replace the default ones`` () : Task = task {
     let! defaultHeaderResponse =
         send withCustomHeader HttpMethods.Post (ValueSome "text/plain") [ "GraphQL-Preflight", "1" ] body
     let message = assertBlocked defaultHeaderResponse
-    Assert.EndsWith ("for one of the following headers: X-Requested-With.", message)
+    Assert.EndsWith ("for one of the following headers: X-Requested-With.", message, StringComparison.Ordinal)
 
     let! customHeaderResponse =
         send withCustomHeader HttpMethods.Post (ValueSome "text/plain") [ "X-Requested-With", "XMLHttpRequest" ] body
@@ -292,7 +304,7 @@ let ``No configured request header lets only requests a browser preflights throu
     let! simpleResponse =
         send withoutHeaders HttpMethods.Post (ValueSome "text/plain") [ "GraphQL-Preflight", "1" ] body
     let message = assertBlocked simpleResponse
-    Assert.DoesNotContain ("following headers", message)
+    Assert.DoesNotContain ("following headers", message, StringComparison.Ordinal)
 
     let! jsonResponse = send withoutHeaders HttpMethods.Post (ValueSome "application/json") [] body
     assertOperationExecuted jsonResponse

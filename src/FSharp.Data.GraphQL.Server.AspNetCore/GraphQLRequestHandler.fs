@@ -1,6 +1,8 @@
 namespace FSharp.Data.GraphQL.Server.AspNetCore
 
 open System
+open System.Collections.Generic
+open System.Collections.Immutable
 open System.IO
 open System.Text.Json
 open System.Text.Json.Serialization
@@ -25,20 +27,31 @@ module private DeferredEventLogging =
 
 /// <summary>
 /// Recognizes the requests a browser sends to another site without a CORS preflight, following the
-/// <see href="https://fetch.spec.whatwg.org/#cors-safelisted-method">CORS-safelisted methods</see> and
 /// <see href="https://fetch.spec.whatwg.org/#cors-safelisted-request-header">CORS-safelisted request headers</see>
 /// of the Fetch standard.
 /// </summary>
+/// <remarks>
+/// The method of a request is not checked, as Apollo Server does not check it either: a middleware overriding the method
+/// from a form field, such as the one <c>UseHttpMethodOverride</c> adds, turns a form a browser posts to another site
+/// without a preflight into a request with any method.
+/// </remarks>
 module internal CsrfPrevention =
 
     /// The media types of a request body that a browser sends to another site without a CORS preflight
     let private preflightFreeMediaTypes = [| "application/x-www-form-urlencoded"; "multipart/form-data"; "text/plain" |]
 
-    /// Whether a browser sends a request with this method to another site without a CORS preflight
-    let isPreflightFreeMethod (method : string) =
-        HttpMethods.IsGet method
-        || HttpMethods.IsHead method
-        || HttpMethods.IsPost method
+    /// The extension code of the error of a blocked request, the one Apollo Server reports it with
+    [<Literal>]
+    let BlockedRequestCode = "BAD_REQUEST"
+
+    /// <summary>
+    /// Whether the request is the CORS preflight a browser sends before a request it does not send without one: an
+    /// <c>OPTIONS</c> request with an <c>Access-Control-Request-Method</c> header, which a form cannot set. It carries
+    /// neither an operation nor the headers that let a request through, so it is never blocked.
+    /// </summary>
+    let isCorsPreflight (request : HttpRequest) =
+        HttpMethods.IsOptions request.Method
+        && request.Headers.ContainsKey Microsoft.Net.Http.Headers.HeaderNames.AccessControlRequestMethod
 
     /// <summary>
     /// Whether a browser sends a request with this <c>Content-Type</c> to another site without a CORS preflight: when there
@@ -330,10 +343,10 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
     }
 
     /// <summary>
-    /// Rejects a request a browser could have sent from a page of another site without a CORS preflight: a <c>GET</c>,
-    /// <c>HEAD</c> or <c>POST</c> request with no <c>Content-Type</c>, or with <c>application/x-www-form-urlencoded</c>,
-    /// <c>multipart/form-data</c> or <c>text/plain</c>, that carries none of the
-    /// <see cref="CsrfPreventionOptions.RequestHeaders"/> with a non-empty value. Every request passes when
+    /// Rejects a request a browser could have sent from a page of another site without a CORS preflight: a request with no
+    /// <c>Content-Type</c>, or with <c>application/x-www-form-urlencoded</c>, <c>multipart/form-data</c> or
+    /// <c>text/plain</c>, whatever its method, that carries none of the <see cref="CsrfPreventionOptions.RequestHeaders"/>
+    /// with a non-empty value. A CORS preflight itself always passes, and so does every request when
     /// <see cref="GraphQLOptions{Root}.CsrfPrevention"/> is <c>ValueNone</c>.
     /// </summary>
     /// <remarks>
@@ -350,16 +363,23 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
         | ValueSome csrfPrevention ->
             let request = ctx.Request
             if
-                CsrfPrevention.isPreflightFreeMethod request.Method
+                not (CsrfPrevention.isCorsPreflight request)
                 && CsrfPrevention.isPreflightFreeContentType request.ContentType
                 && not (CsrfPrevention.hasAnyHeader request.Headers csrfPrevention.RequestHeaders)
             then
-                logger.LogWarning (
+                // At the debug level: a page of another site decides how many such requests the browsers visiting it send
+                logger.LogDebug (
                     "Blocked a {method} request with Content-Type '{contentType}' and no CSRF prevention header as a potential cross-site request forgery",
                     request.Method,
                     request.ContentType
                 )
-                let error = GQLProblemDetails.Create (CsrfPrevention.blockedRequestMessage csrfPrevention.RequestHeaders)
+                let extensions =
+                    ImmutableDictionary.CreateRange (StringComparer.Ordinal, [ KeyValuePair ("code", box CsrfPrevention.BlockedRequestCode) ])
+                let error =
+                    GQLProblemDetails.Create (
+                        CsrfPrevention.blockedRequestMessage csrfPrevention.RequestHeaders,
+                        extensions :> IReadOnlyDictionary<string, obj>
+                    )
                 // No document has been read, so there is no document id to report
                 Error (TypedResults.BadRequest (GQLResponse.RequestError (0, [ error ])) :> IResult)
             else

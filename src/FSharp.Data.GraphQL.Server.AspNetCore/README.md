@@ -92,12 +92,14 @@ Finally run the server (e.g. make it listen at `localhost:8086`).
 
 A browser sends some requests to another site without asking that site first through a [CORS preflight](https://developer.mozilla.org/en-US/docs/Glossary/Preflight_request), and with the cookies of that site: a `GET`, `HEAD` or `POST` request without custom headers whose `Content-Type` is missing or one of `application/x-www-form-urlencoded`, `multipart/form-data` and `text/plain`. A page of any other site could use such a request to run an operation on behalf of a user signed in to your API.
 
-Like Apollo Server's `csrfPrevention`, the GraphQL HTTP handler therefore rejects such a request with `400 Bad Request` and a GraphQL error, unless it carries a non-empty value in one of these headers:
+Like Apollo Server's `csrfPrevention`, the GraphQL HTTP handler therefore rejects every request with such a `Content-Type`, or without one, with `400 Bad Request` and a GraphQL error whose `extensions.code` is `BAD_REQUEST`, unless it carries a non-empty value in one of these headers:
 
-* `GraphQL-Preflight`, which the GraphQL client provider of this library sends with every request
+* `GraphQL-Preflight`, which the GraphQL client provider of this library sends with its `GET` requests and file uploads
 * `Apollo-Require-Preflight` and `X-Apollo-Operation-Name`, the headers Apollo Server accepts, so that clients written for it work unchanged
 
-A browser never sends a custom header to another site without a preflight, which your CORS policy then allows or refuses. A request with `Content-Type: application/json`, which is what most GraphQL clients send, is not affected. A client that sends file uploads (`multipart/form-data`) or introspects the schema through `GET` must send one of the headers, for example `GraphQL-Preflight: 1`. If browsers of other origins call your API, also allow that header in the CORS `Access-Control-Allow-Headers` response header. WebSocket connections are handled by the WebSocket middleware and are not affected.
+A browser never sends a custom header to another site without a preflight, which your CORS policy then allows or refuses. The method of a request is not checked, since a middleware overriding the method from a form field, such as `UseHttpMethodOverride`, would turn a form posted from another site into a request with any method; only a CORS preflight itself always passes. A request with `Content-Type: application/json`, which is what most GraphQL clients send, is not affected. A client that sends file uploads (`multipart/form-data`) or introspects the schema through `GET` must send one of the headers, for example `GraphQL-Preflight: 1`. If browsers of other origins call your API, also allow that header in the CORS `Access-Control-Allow-Headers` response header.
+
+WebSocket connections are handled by the WebSocket middleware and are not checked. A browser opens a WebSocket connection to another site with the cookies of that site too, so a server that authenticates its WebSocket connections through cookies must check their `Origin` header itself.
 
 The protection is on by default. Configure it through `GraphQLOptions.CsrfPrevention`, either to accept other headers or, for a server that is never called by browsers or that does not authenticate requests through cookies, to turn it off:
 

@@ -50,7 +50,14 @@ module GraphQLClient =
     [<Literal>]
     let private PreflightHeaderName = "GraphQL-Preflight"
 
-    /// Adds the preflight header to every request, unless the caller already set one through its own headers
+    /// <summary>
+    /// Adds the preflight header, unless the caller already set one through its own headers.
+    /// </summary>
+    /// <remarks>
+    /// Only the requests a browser would send without a preflight need it: a <c>GET</c> request and a multipart upload. A
+    /// JSON request, which a browser preflights anyway, is sent without it, so that a client hosted in a browser does not need
+    /// the CORS policy of every server it calls to allow the header.
+    /// </remarks>
     let private addPreflightHeader (requestMessage : HttpRequestMessage) =
         if not (requestMessage.Headers.Contains PreflightHeaderName) then
             requestMessage.Headers.Add (PreflightHeaderName, "1")
@@ -59,7 +66,9 @@ module GraphQLClient =
         use requestMessage = new HttpRequestMessage (HttpMethod.Post, serverUrl)
         requestMessage.Content <- content
         addHeaders httpHeaders requestMessage
-        addPreflightHeader requestMessage
+        match content with
+        | :? MultipartFormDataContent -> addPreflightHeader requestMessage
+        | _ -> ()
         return! invoker.SendAsync (requestMessage, ct) |> ensureSuccessCode
     }
 

@@ -1,5 +1,6 @@
 module FSharp.Data.GraphQL.IntegrationTests.CsrfPreventionTests
 
+open System
 open System.Net
 open System.Net.Http
 open System.Net.Http.Headers
@@ -60,12 +61,14 @@ let private assertPreflightSent (expectedValue : string) (handler : RecordingHan
         )
 
 [<Fact>]
-let ``The client sends the preflight header with a GraphQL request`` () : Task = task {
+let ``The client sends no preflight header with a JSON request`` () : Task = task {
+    // A browser preflights a JSON request anyway, and a browser-hosted client would need every server to allow the header
     let struct (handler, connection) = createRecordingConnection ()
     use _ = connection
     use! _ =
         GraphQLClient.sendRequestAsync CancellationToken.None connection (createRequest "query { hero { name } }" [||])
-    handler |> assertPreflightSent "1"
+    let struct (_, values) = Assert.Single handler.Sent
+    Assert.True (values.IsEmpty, $"Expected a JSON request to carry no '{PreflightHeaderName}' header, but it carried %A{values}")
 }
 
 [<Fact>]
@@ -116,7 +119,7 @@ let ``Server blocks a multipart file upload without a preflight header`` () : Ta
     use! response = httpClient.PostAsync ("/", content)
     let! body = response.Content.ReadAsStringAsync ()
     Assert.True ((response.StatusCode = HttpStatusCode.BadRequest), $"Expected 400 Bad Request, but got {response.StatusCode}: {body}")
-    Assert.Contains ("blocked as a potential Cross-Site Request Forgery (CSRF)", body)
+    Assert.Contains ("blocked as a potential Cross-Site Request Forgery (CSRF)", body, StringComparison.Ordinal)
 }
 
 [<Fact>]
@@ -128,7 +131,7 @@ let ``Server executes a multipart file upload with a preflight header`` () : Tas
     use! response = httpClient.SendAsync request
     let! body = response.Content.ReadAsStringAsync ()
     Assert.True ((response.StatusCode = HttpStatusCode.OK), $"Expected 200 OK, but got {response.StatusCode}: {body}")
-    Assert.Contains (FileContent, body)
+    Assert.Contains (FileContent, body, StringComparison.Ordinal)
 }
 
 [<Fact>]
@@ -143,5 +146,5 @@ let ``Server executes a multipart file upload the GraphQL client sends`` () : Ta
     // The client throws on a status code other than success, so a blocked upload fails here
     use! response = GraphQLClient.sendMultipartRequestAsync CancellationToken.None connection request
     let! body = response.Content.ReadAsStringAsync ()
-    Assert.Contains (FileContent, body)
+    Assert.Contains (FileContent, body, StringComparison.Ordinal)
 }
