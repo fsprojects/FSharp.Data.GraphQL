@@ -107,7 +107,9 @@ type internal MemoryCache<'key, 'value>
         // Evicting down to 90% of the limit instead of just below it lets many additions pass before the next scan,
         // so that a cache kept full by new keys does not sort its entries on every addition
         let target = sizeLimit - sizeLimit / 10L
-        let byLastUsage = entries |> Seq.toArray |> Array.sortBy _.Value.LastUsage
+        // ToArray takes a consistent snapshot under the locks of the dictionary; copying it as a collection reads its
+        // count first and throws when another thread adds an entry before the copy
+        let byLastUsage = entries.ToArray () |> Array.sortBy _.Value.LastUsage
         let mutable index = 0
         while Interlocked.Read &totalSize > target && index < byLastUsage.Length do
             let pair = byLastUsage[index]
@@ -160,6 +162,10 @@ type internal MemoryCache<'key, 'value>
             let size = getSize key
             if size > sizeLimit then
                 // An entry larger than the whole cache would evict all the others, so its value is not cached at all
+                producer ()
+            elif Interlocked.Read &totalSize > sizeLimit && Volatile.Read &maintaining = 1 then
+                // Another thread is evicting and the cache is still over its limit: entries added meanwhile would only
+                // outrun the eviction, so the value is not cached until it has caught up
                 producer ()
             else
                 let added = CacheEntry (Lazy<'value> (Func<'value> producer, LazyThreadSafetyMode.ExecutionAndPublication), size, now)

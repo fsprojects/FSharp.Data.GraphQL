@@ -13,11 +13,11 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Validation
 
-/// A schema with the single field <c>f(x): Int</c>, whose argument <c>x</c> is the given one
+/// <summary>A schema with the single field <c>f(x): Int</c>, whose argument <c>x</c> is the given one</summary>
 let private createSchema (argument : InputFieldDef) =
     Schema (Define.Object<unit>("Query", [ Define.Field ("f", IntType, "Returns 1", [ argument ], fun _ () -> 1) ]))
 
-/// A schema with the single field <c>f(x: Int): Int</c>, so that a Boolean literal for <c>x</c> fails validation
+/// <summary>A schema with the single field <c>f(x: Int): Int</c>, so that a Boolean literal for <c>x</c> fails validation</summary>
 let private intArgumentSchema = createSchema (Define.Input ("x", Nullable IntType))
 
 let private introspected (schema : ISchema) = schema.Introspected
@@ -108,6 +108,18 @@ let ``Keys of documents with colliding structural hash codes are different`` () 
     )
 
 [<Fact>]
+let ``Keys of different documents with equal hash codes are different`` () =
+    // A hash code only buckets the keys, and any two keys can share one, so equality must compare the documents
+    let schema = introspected intArgumentSchema
+    let first = ValidationResultKey (schema, parse "{ f(x: 1) }", 42)
+    let second = ValidationResultKey (schema, parse "{ f(x: 2) }", 42)
+    Assert.True ((first.GetHashCode () = second.GetHashCode ()), "The test requires keys with equal hash codes, but they differ")
+    Assert.False (
+        first.Equals second,
+        "Expected the keys of { f(x: 1) } and { f(x: 2) } to be different despite their equal hash codes, but they are equal"
+    )
+
+[<Fact>]
 let ``Keys of equal documents parsed separately are equal`` () =
     let query =
         "query Q($v: Int) { a: f(x: $v) @include(if: true) ...F } fragment F on Query { f(x: [1.5, \"s\", { y: null }]) }"
@@ -131,16 +143,22 @@ let ``Keys of one document and two schema instances are different`` () =
     )
 
 [<Fact>]
-let ``Document size counts the nodes of the document`` () =
-    let simple = keyOf "{ f(x: 1) }"
-    // The document, the operation, the field, the argument and its value
-    Assert.True ((simple.DocumentSize = 5), $"Expected {{ f(x: 1) }} to have 5 nodes, but got %d{simple.DocumentSize}")
+let ``Document size estimates the memory of the nodes and strings of the document`` () =
+    let withInt = keyOf "{ f(x: 1) }"
+    let characters = String ('s', 100_000)
+    let withString = keyOf $"{{ f(x: \"%s{characters}\") }}"
+    // The documents have the same nodes, with an Int and a String value for x, so they differ by the characters of the
+    // string, two bytes each: a document with a single large literal must count as large
+    Assert.True (
+        (withString.DocumentSize - withInt.DocumentSize = 200_000L),
+        $"Expected a 100 000-character string to add 200 000 bytes, but it added %d{withString.DocumentSize - withInt.DocumentSize}"
+    )
     let complex =
         keyOf "query Q($v: [Int!]) { a: f(x: $v) @include(if: true) ...F } fragment F on Query { f }"
-    // The document; the operation, its variable and the 3 type references of [Int!]; the field, its argument and
-    // variable value, its directive, the directive's argument and Boolean value; the fragment spread; the fragment
-    // definition and its field
-    Assert.True ((complex.DocumentSize = 15), $"Expected the complex document to have 15 nodes, but got %d{complex.DocumentSize}")
+    Assert.True (
+        (complex.DocumentSize > withInt.DocumentSize),
+        $"Expected a document with more nodes to be larger, but got %d{complex.DocumentSize} and %d{withInt.DocumentSize}"
+    )
 
 [<Fact>]
 let ``Concurrent requests for one key run the validation once`` () : Task = task {
@@ -195,24 +213,27 @@ let ``Validation that throws is run again by the next request`` () =
 
 [<Fact>]
 let ``Validation result cache does not keep documents larger than its size limit`` () =
-    let cache = MemoryValidationResultCache (TimeSpan.FromMinutes 1.0, 4) :> IValidationResultCache
+    let small = keyOf "{ f }"
+    let large = keyOf "{ f(x: 1) }"
+    // Between the sizes of the two documents, which have 3 and 5 nodes
+    let cache =
+        MemoryValidationResultCache (TimeSpan.FromMinutes 1.0, small.DocumentSize + 1L) :> IValidationResultCache
     let runs = ref 0
     let producer () =
         runs.Value <- runs.Value + 1
         Success
-    // 3 nodes: the document, the operation and the field
-    let small = keyOf "{ f }"
     cache.GetOrAdd producer small |> ignore
     cache.GetOrAdd producer small |> ignore
     Assert.True ((runs.Value = 1), $"Expected a document within the size limit to be validated once, but it was validated %d{runs.Value} times")
-    // 5 nodes
-    let large = keyOf "{ f(x: 1) }"
     cache.GetOrAdd producer large |> ignore
     cache.GetOrAdd producer large |> ignore
     Assert.True (
         (runs.Value = 3),
         $"Expected a document over the size limit to be validated on every request, but it was validated %d{runs.Value - 1} times in 2 requests"
     )
+    // A document over the limit is not cached, so it does not evict the documents within it either
+    cache.GetOrAdd producer small |> ignore
+    Assert.True ((runs.Value = 3), "Expected the document within the size limit to stay cached after the ones over it, but it was validated again")
 
 /// A cache of strings whose size is their length, on a clock the test sets
 let private createCache (policy : CacheExpirationPolicy) (sizeLimit : int64) (now : TimeSpan ref) =
@@ -293,11 +314,34 @@ let ``Entry larger than the size limit is produced on every request without bein
     let now = ref TimeSpan.Zero
     let cache = createCache NoExpiration 10L now
     let get = getCounting cache (Dictionary StringComparer.Ordinal)
+    get "small"
+    |> ensureProduction 1 "the first request of an entry within the limit"
     get "elevenchars"
     |> ensureProduction 1 "the first request of an entry over the limit"
     get "elevenchars"
     |> ensureProduction 2 "the second request of an entry over the limit"
-    Assert.True ((cache.Count = 0), $"Expected no entry to be cached, but the cache has %d{cache.Count}")
+    Assert.True ((cache.Count = 1), $"Expected only the entry within the limit to be cached, but the cache has %d{cache.Count} entries")
+    get "small"
+    |> ensureProduction 1 "a request of the entry within the limit after the ones over it"
+
+[<Fact>]
+let ``Cache evicts while many threads add entries`` () =
+    let now = ref TimeSpan.Zero
+    let cache = createCache NoExpiration 1_000L now
+    let requests =
+        Array.init 8 (fun thread ->
+            Task.Factory.StartNew (
+                (fun () ->
+                    for i in 0..49_999 do
+                        cache.GetOrAddResult $"%d{thread}-%d{i}" (fun () -> i)
+                        |> ignore),
+                TaskCreationOptions.LongRunning
+            ))
+    // Copying the entries to evict while other threads add entries threw before, failing the requests
+    Task.WaitAll requests
+    // A request after the concurrent ones brings the cache back within its limit, whatever they left behind
+    cache.GetOrAddResult "last" (fun () -> 0) |> ignore
+    Assert.True ((cache.Size <= 1_000L), $"Expected the cache to be within its size limit of 1000, but its size is %d{cache.Size}")
 
 /// A schema that counts how often its introspected representation is read
 let private countIntrospectedReads (schema : ISchema<unit>) (reads : int ref) = {

@@ -237,10 +237,17 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         | Ok executionPlan -> execute (executionPlan, data, variables, getInputContext)
         | Error (documentId, errors) -> async.Return <| GQLExecutionResult.Invalid(documentId, errors, meta)
 
+    /// <summary>
     /// Creates an execution plan for provided GraphQL document AST without
     /// executing it. This is useful in cases when you have the same query executed
     /// multiple times with different parameters. In that case, query can be used
-    /// to construct execution plan, which then is cached (using DocumentId as a key) and reused when needed.
+    /// to construct execution plan, which then is cached and reused when needed.
+    /// </summary>
+    /// <remarks>
+    /// Key a cache of execution plans by the document itself, not by <see cref="ExecutionPlan.DocumentId"/> alone: that is
+    /// a hash code, which different documents can share, so a cache keyed by it could execute a document that was never
+    /// validated with the plan of another.
+    /// </remarks>
     /// <param name="ast">The parsed GraphQL query string.</param>
     /// <param name="operationName">The name of the operation that should be executed on the parsed document.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution plan customizations.</param>
@@ -248,10 +255,17 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         let meta = defaultValueArg meta Metadata.Empty
         createExecutionPlan (ast, operationName, meta)
 
+    /// <summary>
     /// Creates an execution plan for provided GraphQL query string without
     /// executing it. This is useful in cases when you have the same query executed
     /// multiple times with different parameters. In that case, query can be used
-    /// to construct execution plan, which then is cached (using DocumentId as a key) and reused when needed.
+    /// to construct execution plan, which then is cached and reused when needed.
+    /// </summary>
+    /// <remarks>
+    /// Key a cache of execution plans by the query string itself, not by <see cref="ExecutionPlan.DocumentId"/> alone: that
+    /// is a hash code, which different documents can share, so a cache keyed by it could execute a document that was never
+    /// validated with the plan of another.
+    /// </remarks>
     /// <param name="queryOrMutation">The GraphQL query string.</param>
     /// <param name="operationName">The name of the operation that should be executed on the parsed document.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution plan customizations.</param>

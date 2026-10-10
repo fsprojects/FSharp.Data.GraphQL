@@ -29,7 +29,7 @@ As the name suggests, `ExecutionPlan` and its components (a tree of objects know
 - Combining information from the query AST (resolved fields / aliases) with server-side information about them (field and type definitions);
 - Preparation of the hooks in the execution chain that will be supplied with potential variables upon execution.
 
-Splitting planning and execution phases is a good idea when you have the same GraphQL query requested many times (with potentially different variables). This way you can compute the execution plan once and cache it. You can use `executionPlan.DocumentId` as a cache identifier. `DocumentId` is also returned as one of the top level fields in the response, so it can be used from the client side. Other GraphQL implementations describe that technique as **persistent queries**.
+Splitting planning and execution phases is a good idea when you have the same GraphQL query requested many times (with potentially different variables). This way you can compute the execution plan once and cache it. Key the cache by the query text or the parsed document itself, not by `executionPlan.DocumentId` alone: that is a hash code, which different documents can share, so a cache keyed by it could execute a document that was never validated with the plan of another. `DocumentId` is also returned as one of the top level fields in the response, so it can be used from the client side. Other GraphQL implementations describe that technique as **persistent queries**.
 
 ## Execution phase 
 

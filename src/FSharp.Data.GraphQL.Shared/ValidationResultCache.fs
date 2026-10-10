@@ -39,10 +39,16 @@ module internal DocumentHashing =
         z <- (z ^^^ (z >>> 27)) * 0x94D049BB133111EBUL
         z ^^^ (z >>> 31)
 
+    /// The average memory of a node of a parsed document, without the characters of its strings, in bytes. On .NET 10,
+    /// parsed documents take between 0.6 and 1.2 times the estimate it gives: more for plain fields, less for arguments
+    /// and directives
+    [<Literal>]
+    let private NodeBytes = 128L
+
     [<Sealed>]
     type private Accumulator () =
         let mutable state = seed
-        let mutable size = 0
+        let mutable size = 0L
 
         member _.State = state
         member _.Size = size
@@ -50,12 +56,15 @@ module internal DocumentHashing =
         member _.Add (value : uint64) = state <- mix state value
 
         // String hash codes are themselves randomized per process on .NET; .NET Framework does not randomize them, but
-        // only the client provider runs there, hashing documents written by the developer rather than sent by clients
-        member this.Add (value : string) = this.Add (uint64 (uint32 (StringComparer.Ordinal.GetHashCode value)))
+        // only the client provider runs there, hashing documents written by the developer rather than sent by clients.
+        // A string takes two bytes per character, which the size counts: a single literal can be as large as the document
+        member this.Add (value : string) =
+            size <- size + 2L * int64 value.Length
+            this.Add (uint64 (uint32 (StringComparer.Ordinal.GetHashCode value)))
 
-        /// Adds a node of the document, identified by its kind, and counts it
+        /// Adds a node of the document, identified by its kind, and counts its memory
         member this.Node (kind : uint64) =
-            size <- size + 1
+            size <- size + NodeBytes
             this.Add kind
 
     let private addOptional (acc : Accumulator) (value : string voption) =
@@ -91,7 +100,8 @@ module internal DocumentHashing =
             acc.Add (uint64 value)
         | FloatValue value ->
             acc.Node 5UL
-            // Document equality holds 0.0 equal to -0.0 and every NaN equal to any other, so they must hash alike
+            // Document equality holds 0.0 equal to -0.0, so they must hash alike; it never holds a document with a NaN
+            // equal to any other, so hashing every NaN alike only saves telling their payloads apart
             let bits =
                 if value = 0.0 then 0L
                 elif Double.IsNaN value then BitConverter.DoubleToInt64Bits Double.NaN
@@ -181,7 +191,8 @@ module internal DocumentHashing =
             acc.Node 20UL
             addFragment acc fragment
 
-    /// Returns the hash code of the document, seeded per process, and its size: the number of its nodes
+    /// Returns the hash code of the document, seeded per process, and its size: the estimated memory of the parsed
+    /// document, in bytes
     let hashAndMeasure (document : Document) =
         let acc = Accumulator ()
         acc.Node 0UL
@@ -212,9 +223,10 @@ type ValidationResultKey =
     /// The validated document, compared structurally.
     val Document : Document
 
-    /// The number of nodes of the document: its definitions, selections, arguments, directives, values, variables and
-    /// type references.
-    val DocumentSize : int
+    /// The estimated memory of the parsed document, in bytes: a fixed amount for each of its definitions, selections,
+    /// arguments, directives, values, variables and type references, and two bytes for each character of its names and
+    /// strings.
+    val DocumentSize : int64
 
     val private hashCode : int
 
@@ -229,6 +241,19 @@ type ValidationResultKey =
             Document = document
             DocumentSize = documentSize
             hashCode = int hash ^^^ int (hash >>> 32)
+        }
+
+    /// <summary>Creates a key with the given hash code, so that tests can make the keys of different documents collide.</summary>
+    /// <param name="schema">The schema the document is validated against.</param>
+    /// <param name="document">The validated document.</param>
+    /// <param name="hashCode">The hash code of the key.</param>
+    internal new (schema : IntrospectionSchema, document : Document, hashCode : int) =
+        let struct (_, documentSize) = DocumentHashing.hashAndMeasure document
+        {
+            Schema = schema
+            Document = document
+            DocumentSize = documentSize
+            hashCode = hashCode
         }
 
     /// <summary>Indicates whether both keys hold the same schema instance and structurally equal documents.</summary>
@@ -277,7 +302,7 @@ type IValidationResultCache =
 /// yet run the validation once and share its result; a validation that throws leaves no entry behind.
 /// </para>
 /// <para>
-/// The cache holds the documents of its keys, so their total size, counted in nodes
+/// The cache holds the documents of its keys, so their total size, the estimated memory of the parsed documents in bytes
 /// (<see cref="ValidationResultKey.DocumentSize"/>), is limited: beyond the limit the least recently used entries are
 /// evicted, and a document larger than the whole limit is validated on every request without being cached. This bounds
 /// the memory clients can make the cache hold by sending distinct documents; the validation results are not counted.
@@ -289,20 +314,20 @@ type IValidationResultCache =
 /// </remarks>
 type MemoryValidationResultCache
     /// <param name="slidingExpiration">How long an entry stays cached after it was last used.</param>
-    /// <param name="sizeLimit">The maximum total size of the cached documents, in nodes.</param>
-    (slidingExpiration : TimeSpan, sizeLimit : int) =
+    /// <param name="sizeLimit">The maximum total size of the cached documents, in bytes of estimated memory.</param>
+    (slidingExpiration : TimeSpan, sizeLimit : int64) =
 
     do
         if slidingExpiration <= TimeSpan.Zero then
             raise (ArgumentOutOfRangeException (nameof slidingExpiration, slidingExpiration, "The sliding expiration must be positive."))
-        if sizeLimit <= 0 then
+        if sizeLimit <= 0L then
             raise (ArgumentOutOfRangeException (nameof sizeLimit, sizeLimit, "The size limit must be positive."))
 
     let cache =
         MemoryCache<ValidationResultKey, ValidationResult<GQLProblemDetails>> (
             SlidingExpiration slidingExpiration,
-            int64 sizeLimit,
-            (fun key -> int64 key.DocumentSize),
+            sizeLimit,
+            (fun key -> key.DocumentSize),
             EqualityComparer<ValidationResultKey>.Default,
             CacheClock.create ()
         )
@@ -310,9 +335,8 @@ type MemoryValidationResultCache
     /// The sliding expiration of a cache created without arguments: 30 seconds.
     static member DefaultSlidingExpiration = TimeSpan.FromSeconds 30.0
 
-    /// The size limit of a cache created without arguments: 100 000 nodes, a few thousand typical documents, which take
-    /// roughly 10 to 15 MB of memory once parsed.
-    static member DefaultSizeLimit = 100_000
+    /// The size limit of a cache created without arguments: 16 MiB of estimated memory, a few thousand typical documents.
+    static member DefaultSizeLimit = 16L * 1024L * 1024L
 
     /// <summary>
     /// Creates a cache with the <see cref="MemoryValidationResultCache.DefaultSlidingExpiration"/> and the
