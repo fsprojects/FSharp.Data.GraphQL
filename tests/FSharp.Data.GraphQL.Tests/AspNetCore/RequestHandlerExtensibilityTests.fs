@@ -205,14 +205,9 @@ let private wantMember (name : string) (responseBody : string) (element : JsonEl
 /// Asserts that the request was answered the way Apollo Server answers a persisted query when they are disabled: an HTTP 200
 /// response, uncacheable, with a single `PersistedQueryNotSupported` error and no data, and that nothing was executed.
 let private assertPersistedQueryNotSupported (recorder : RecordingHandler) (ctx : HttpContext) (outcome : Result<IResult, IResult>) = task {
-    Assert.True (
-        recorder.IntrospectionCalls.Count = 0,
-        $"Expected a persisted query request not to be answered with the introspection result, but ExecuteIntrospectionQuery was called %d{recorder.IntrospectionCalls.Count} time(s)"
-    )
-    Assert.True (
-        recorder.OperationCalls.Count = 0,
-        $"Expected a persisted query request not to be executed, but ExecuteOperation was called %d{recorder.OperationCalls.Count} time(s)"
-    )
+    // A persisted query request is neither answered with the introspection result nor executed
+    Assert.Empty recorder.IntrospectionCalls
+    Assert.Empty recorder.OperationCalls
 
     let! struct (statusCode, responseBody) = executeOutcome ctx outcome
 
@@ -222,14 +217,12 @@ let private assertPersistedQueryNotSupported (recorder : RecordingHandler) (ctx 
     )
     use document = JsonDocument.Parse responseBody
     let root = document.RootElement
-    Assert.False (fst (root.TryGetProperty "data"), $"Expected no 'data' member in the response of a rejected request, but got:\n%s{responseBody}")
+    // Apollo Client 4 falls back to the full query only for a result without other top-level members than data, errors and
+    // extensions, so the answer has the errors alone, as Apollo Server's
+    let members = root.EnumerateObject () |> Seq.map _.Name |> List.ofSeq
+    Assert.True ((members = [ "errors" ]), $"Expected the response to have the member 'errors' alone, but got:\n%s{responseBody}")
     let errors = root |> wantMember "errors" responseBody
-    let error =
-        match errors.EnumerateArray () |> Seq.toList with
-        | [ error ] -> error
-        | _ ->
-            fail $"Expected exactly one error in the response, but got:\n%s{responseBody}"
-            Unchecked.defaultof<_>
+    let error = Assert.Single (errors.EnumerateArray ())
     Assert.Equal ("PersistedQueryNotSupported", (error |> wantMember "message" responseBody).GetString ())
     let code = error |> wantMember "extensions" responseBody |> wantMember "code" responseBody
     Assert.Equal ("PERSISTED_QUERY_NOT_SUPPORTED", code.GetString ())
@@ -343,6 +336,10 @@ let ``GET with both a query and a persisted query hash is answered with Persiste
 [<InlineData("""{"persistedQuery":false}""")>]
 [<InlineData("""{"persistedQuery":""}""")>]
 [<InlineData("""{"persistedQuery":0}""")>]
+[<InlineData("""{"persistedQuery":-0}""")>]
+[<InlineData("""{"persistedQuery":1e-400}""")>]
+[<InlineData("""{"persistedQuery":{},"persistedQuery":null}""")>]
+[<InlineData("""{"tracing":{"persistedQuery":true}}""")>]
 [<InlineData("""[]""")>]
 let ``POST operation whose extensions do not ask for a persisted query is executed as before`` (extensions : string) : Task = task {
     let query = "query { hero(id: \"1000\") { id name } }"
@@ -361,12 +358,45 @@ let ``POST operation whose extensions do not ask for a persisted query is execut
     assertOkResponse outcome
 }
 
-[<Fact>]
-let ``GET whose extensions do not ask for a persisted query is still answered with the introspection result`` () : Task = task {
+// The last of duplicate members counts, as in JSON.parse
+[<Theory>]
+[<InlineData("""{"persistedQuery":true}""")>]
+[<InlineData("""{"persistedQuery":1}""")>]
+[<InlineData("""{"persistedQuery":-1}""")>]
+[<InlineData("""{"persistedQuery":1e400}""")>]
+[<InlineData("""{"persistedQuery":"x"}""")>]
+[<InlineData("""{"persistedQuery":[]}""")>]
+[<InlineData("""{"tracing":{"nested":[1,{"persistedQuery":null}]},"persistedQuery":{}}""")>]
+[<InlineData("""{"persistedQuery":null,"persistedQuery":{}}""")>]
+let ``POST whose extensions ask for a persisted query in any JavaScript truthy way is answered with PersistedQueryNotSupported``
+    (extensions : string)
+    : Task =
+    task {
+        let body = $"""{{"query":%s{JsonSerializer.Serialize persistedQueryText},"extensions":%s{extensions}}}"""
+        let struct (handler, recorder, ctx, scope) =
+            createHandlerFor<RecordingHandler> (fun request ->
+                request.Method <- HttpMethods.Post
+                setJsonBody body request)
+        use _ = scope
+
+        let! outcome = handler.HandleAsync ()
+
+        do! assertPersistedQueryNotSupported recorder ctx outcome
+    }
+
+// A value that is not JSON is ignored, as the GET request handling ignores every other parameter
+[<Theory>]
+[<InlineData("""{"tracing":true}""")>]
+[<InlineData("""{"persistedQuery":false}""")>]
+[<InlineData("""{"persistedQuery":0}""")>]
+[<InlineData("""{"persistedQuery":""}""")>]
+[<InlineData("null")>]
+[<InlineData("not JSON")>]
+let ``GET whose extensions do not ask for a persisted query is still answered with the introspection result`` (extensions : string) : Task = task {
     let struct (handler, recorder, _, scope) =
         createHandlerFor<RecordingHandler> (fun request ->
             request.Method <- HttpMethods.Get
-            request |> setQueryString [ "extensions", """{"tracing":true}""" ])
+            request |> setQueryString [ "extensions", extensions ])
     use _ = scope
 
     let! outcome = handler.HandleAsync ()
