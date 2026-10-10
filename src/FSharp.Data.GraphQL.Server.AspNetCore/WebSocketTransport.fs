@@ -33,7 +33,7 @@ module internal WebSocketStates =
         && socket.State <> WebSocketState.Closed
 
 /// <summary>
-/// Reads whole client messages from a socket and deserializes them into protocol messages.
+/// Reads whole client messages from a socket, and deserializes them into protocol messages.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -42,7 +42,8 @@ module internal WebSocketStates =
 /// </para>
 /// <para>
 /// A message is buffered only up to the maximum size: a message exceeding it is rejected with
-/// <see cref="WebSocketCloseStatus.MessageTooBig"/> as soon as one byte beyond the limit is read, and the rest of it is left unread.
+/// <see cref="WebSocketCloseStatus.MessageTooBig"/> as soon as one byte beyond the limit is received, and no more of it is buffered; closing the
+/// socket afterwards may still read and discard the rest of it.
 /// </para>
 /// </remarks>
 type internal WebSocketMessageReader
@@ -61,29 +62,43 @@ type internal WebSocketMessageReader
     let messageTooBigError =
         Error (InvalidMessage (int WebSocketCloseStatus.MessageTooBig, $"Message exceeds the maximum size of %d{maxMessageSize} bytes"))
 
-    let deserializeClientMessage (message : IReadOnlyPooledList<byte>) = taskResult {
+    /// <summary>
+    /// Deserializes the JSON of a client message into a protocol message, or the protocol failure the message is rejected with.
+    /// </summary>
+    member _.Deserialize (json : byte array) : Result<ClientMessage, ClientMessageProtocolFailure> =
         try
-            return JsonSerializer.Deserialize<ClientMessage>(message.Span, serializerOptions)
+            Ok (JsonSerializer.Deserialize<ClientMessage>(ReadOnlySpan<byte> json, serializerOptions))
         with
         | :? InvalidWebsocketMessageException as ex ->
-            logger.LogError (ex, "Invalid websocket message:\n{payload}", message)
-            return! Error (InvalidMessage (CustomWebSocketStatus.InvalidMessage, ex.Message.ToString ()))
+            logger.LogError (ex, "Invalid websocket message")
+            Error (InvalidMessage (CustomWebSocketStatus.InvalidMessage, ex.Message.ToString ()))
         | :? JsonException as ex when logger.IsEnabled (LogLevel.Trace) ->
-            logger.LogError (ex, "Cannot deserialize WebSocket message:\n{payload}", message)
-            return! invalidJsonInClientMessageError
+            logger.LogError (ex, "Cannot deserialize WebSocket message:\n{payload}", Encoding.UTF8.GetString json)
+            invalidJsonInClientMessageError
         | :? JsonException as ex ->
             logger.LogError (ex, "Cannot deserialize WebSocket message")
-            return! invalidJsonInClientMessageError
+            invalidJsonInClientMessageError
         | ex ->
             logger.LogError (ex, $"Unexpected exception '{ex.GetType().Name}' in GraphQLWebsocketMiddleware")
-            return! invalidJsonInClientMessageError
+            invalidJsonInClientMessageError
+
+    /// <summary>
+    /// Receives the next message and deserializes it, as the connection handshake does with the single message it reads.
+    /// </summary>
+    member this.ReceiveMessageAsync () : Task<Result<ClientMessage voption, ClientMessageProtocolFailure>> = taskResult {
+        match! this.ReceiveAsync () with
+        | ValueNone -> return ValueNone
+        | ValueSome json ->
+            let! message = this.Deserialize json
+            return ValueSome message
     }
 
     /// <summary>
-    /// Receives the next message: a protocol message, <see cref="ValueNone"/> for an empty message (such as the client's close frame), or the
-    /// protocol failure the message is rejected with.
+    /// Receives the next message as its JSON: <see cref="ValueNone"/> for an empty message (such as the client's close frame), or the
+    /// protocol failure of a message over the maximum size. The message is deserialized by <see cref="Deserialize"/> when it is handled,
+    /// so that a message waiting to be handled holds no more memory than its bytes.
     /// </summary>
-    member _.ReceiveAsync () : Task<Result<ClientMessage voption, ClientMessageProtocolFailure>> = taskResult {
+    member _.ReceiveAsync () : Task<Result<byte array voption, ClientMessageProtocolFailure>> = taskResult {
         let buffer = ArrayPool.Shared.Rent readBufferSize
         try
             use completeMessage = new PooledList<byte> ()
@@ -119,34 +134,85 @@ type internal WebSocketMessageReader
                 if completeMessage.All (fun b -> b = 0uy) then
                     return ValueNone
                 else
-                    let! result = deserializeClientMessage completeMessage
-                    return ValueSome result
+                    return ValueSome (completeMessage.Span.ToArray ())
         finally
             ArrayPool.Shared.Return buffer
     }
+
+/// <summary>
+/// The queue of the sender loop of a connection: every message is serialized when it is queued, so that what waits for the client is counted
+/// in bytes, and a message that would make more than the limit wait is refused.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A client that does not read what the server sends would otherwise make the connection hold every message for it, such as the pong of every
+/// ping it keeps sending. The producers of a connection never wait for room, so a refused message means that the client does not keep up: the
+/// queue reports it, and the connection aborts the socket.
+/// </para>
+/// <para>
+/// A message is accepted whatever its size while nothing else waits, so that a result larger than the limit still reaches a client that reads.
+/// </para>
+/// </remarks>
+[<Sealed>]
+type internal SenderQueue
+    /// <param name="serializerOptions">The options server messages are serialized with.</param>
+    /// <param name="byteLimit">The most bytes that may wait for the client.</param>
+    /// <param name="onOverflow">Called, possibly more than once, when a message is refused because too much waits for the client.</param>
+    /// <param name="logger">The logger of the connection.</param>
+    (serializerOptions : JsonSerializerOptions, byteLimit : int64, onOverflow : unit -> unit, logger : ILogger) =
+    inherit ChannelWriter<OutboundMessage> ()
+
+    let queue =
+        Channel.CreateUnbounded<QueuedMessage> (UnboundedChannelOptions (SingleReader = true, SingleWriter = false, AllowSynchronousContinuations = false))
+
+    // The bytes of the messages queued and not sent yet, counted by the producers and released by the sender loop
+    let mutable queuedBytes = 0L
+
+    /// The messages for the sender loop
+    member _.Reader = queue.Reader
+
+    /// Releases the bytes of a message the sender loop sent or dropped
+    member _.Release (json : byte array) = Interlocked.Add (&queuedBytes, -int64 json.Length) |> ignore
+
+    /// <inheritdoc />
+    override _.TryWrite (message : OutboundMessage) =
+        match message with
+        | Close (status, description) -> queue.Writer.TryWrite (QueuedClose (status, description))
+        | Send serverMessage ->
+            logger.LogTrace ("<- Response: {response}", serverMessage)
+            let json = Encoding.UTF8.GetBytes (serializeServerMessage serializerOptions serverMessage)
+            let size = int64 json.Length
+            let total = Interlocked.Add (&queuedBytes, size)
+            if total > byteLimit && total > size then
+                Interlocked.Add (&queuedBytes, -size) |> ignore
+                onOverflow ()
+                false
+            elif queue.Writer.TryWrite (QueuedSend json) then
+                true
+            else
+                Interlocked.Add (&queuedBytes, -size) |> ignore
+                false
+
+    /// <inheritdoc />
+    override _.WaitToWriteAsync (cancellationToken : CancellationToken) = queue.Writer.WaitToWriteAsync cancellationToken
+
+    /// <inheritdoc />
+    override _.TryComplete (error : exn | null) = queue.Writer.TryComplete error
 
 /// <summary>
 /// The sender loop of a connection: the sole caller of <see cref="WebSocket.SendAsync"/>, <see cref="WebSocket.CloseAsync"/> and
 /// <see cref="WebSocket.Abort"/> on its socket, so nothing else needs to serialize access to it.
 /// </summary>
 /// <remarks>
-/// Messages are sent in the order they were queued. The first <see cref="OutboundMessage.Close"/> closes the socket gracefully, aborting it when the
+/// Messages are sent in the order they were queued. The first <see cref="QueuedMessage.QueuedClose"/> closes the socket gracefully, aborting it when the
 /// handshake does not complete within the timeout; whatever is queued after it is dropped. A failed send also marks the connection closed, since the
 /// socket is gone.
 /// </remarks>
 type internal WebSocketMessageSender
     /// <param name="socket">The socket to write to.</param>
-    /// <param name="serializerOptions">The options server messages are serialized with.</param>
     /// <param name="gracefulCloseTimeout">How long a close handshake may take before the socket is aborted.</param>
     /// <param name="logger">The logger of the connection.</param>
-    (socket : WebSocket, serializerOptions : JsonSerializerOptions, gracefulCloseTimeout : TimeSpan, logger : ILogger) =
-
-    let sendMessage (message : ServerMessage) : Task = task {
-        logger.LogTrace ("<- Response: {response}", message)
-        let serialized = serializeServerMessage serializerOptions message
-        let segment = ArraySegment<byte>(Encoding.UTF8.GetBytes serialized)
-        do! socket.SendAsync (segment, WebSocketMessageType.Text, endOfMessage = true, cancellationToken = CancellationToken.None)
-    }
+    (socket : WebSocket, gracefulCloseTimeout : TimeSpan, logger : ILogger) =
 
     let closeSocket (status : WebSocketCloseStatus) (description : string) : Task = task {
         if socket |> WebSocketStates.canClose then
@@ -166,8 +232,15 @@ type internal WebSocketMessageSender
             logger.LogTrace ("Ignoring socket close request, since its state is neither writable nor closeable, but '{state}'", socket.State)
     }
 
+    /// <summary>
     /// Sends every queued message until the queue is completed, closing the socket at the first close request.
-    member _.RunAsync (outbound : ChannelReader<OutboundMessage>) : Task = backgroundTask {
+    /// </summary>
+    /// <param name="queue">The messages to send.</param>
+    /// <param name="sendCancellation">
+    /// Cancelled when the client does not read what waits for it: a pending send then fails and aborts the socket.
+    /// </param>
+    member _.RunAsync (queue : SenderQueue, sendCancellation : CancellationToken) : Task = backgroundTask {
+        let outbound = queue.Reader
         let mutable closed = false
         let mutable more = true
         while more do
@@ -178,21 +251,27 @@ type internal WebSocketMessageSender
                 let mutable draining = true
                 while draining do
                     match outbound.TryRead () with
-                    | true, Send message when closed ->
-                        logger.LogTrace ("Ignoring message to be sent after the connection was closed: {response}", message)
-                    | true, Send message when socket.State <> WebSocketState.Open ->
+                    | true, QueuedSend json when closed ->
+                        queue.Release json
+                        logger.LogTrace "Ignoring a message to be sent after the connection was closed"
+                    | true, QueuedSend json when socket.State <> WebSocketState.Open ->
+                        queue.Release json
                         logger.LogTrace (
                             $"Ignoring message to be sent via socket, since its state is not '{nameof WebSocketState.Open}', but '{{state}}'",
                             socket.State
                         )
-                    | true, Send message ->
+                    | true, QueuedSend json ->
                         try
-                            do! sendMessage message
-                        with ex ->
-                            logger.LogWarning (ex, "Sending a message failed; the connection is treated as closed")
-                            closed <- true
-                    | true, Close _ when closed -> ()
-                    | true, Close (status, description) ->
+                            try
+                                do! socket.SendAsync (ArraySegment<byte> json, WebSocketMessageType.Text, endOfMessage = true, cancellationToken = sendCancellation)
+                            with ex ->
+                                logger.LogWarning (ex, "Sending a message failed; the connection is treated as closed")
+                                closed <- true
+                        finally
+                            // Counted until it is sent, so that a send the client does not take keeps counting against the limit
+                            queue.Release json
+                    | true, QueuedClose _ when closed -> ()
+                    | true, QueuedClose (status, description) ->
                         closed <- true
                         do! closeSocket status description
                     | false, _ -> draining <- false

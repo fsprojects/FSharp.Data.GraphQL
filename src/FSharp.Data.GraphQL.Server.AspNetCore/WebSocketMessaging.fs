@@ -12,10 +12,20 @@ type internal OutboundMessage =
     /// Close the socket with the given status; every message queued before it is sent first, every one after it is dropped.
     | Close of status : WebSocketCloseStatus * description : string
 
+/// A message waiting for the sender loop of a connection, serialized when it was queued.
+type internal QueuedMessage =
+    /// The JSON of a protocol message to send.
+    | QueuedSend of json : byte array
+    /// Close the socket with the given status; every message queued before it is sent first, every one after it is dropped.
+    | QueuedClose of status : WebSocketCloseStatus * description : string
+
 /// An event for the control loop of a connection, the only owner of its subscription registry.
 type internal ConnectionEvent =
-    /// The client sent a protocol message.
-    | MessageReceived of message : ClientMessage
+    /// <summary>
+    /// The client sent a message, as its JSON: the control loop deserializes it into a <see cref="ClientMessage"/>, so that
+    /// a message waiting for it holds no more memory than its bytes.
+    /// </summary>
+    | MessageReceived of json : byte array
     /// The client sent something that is not a valid protocol message.
     | ProtocolFailure of code : int * explanation : string
     /// A subscription worker ended, whether by completing, failing, or being cancelled.

@@ -28,8 +28,9 @@ type GraphQLTransportWSOptions = {
     /// <summary>
     /// The maximum size in bytes of a message a client may send, <see cref="GraphQLOptionsDefaults.WebSocketMaxReceiveMessageSize"/> by default.
     /// <para>
-    /// A message is only buffered up to this size: as soon as a message exceeds it, the connection stops reading from the socket and is closed with
-    /// <see cref="System.Net.WebSockets.WebSocketCloseStatus.MessageTooBig"/> (1009). Must be positive.
+    /// A message is only buffered up to this size: as soon as a message exceeds it, no more of it is buffered and the connection is closed with
+    /// <see cref="System.Net.WebSockets.WebSocketCloseStatus.MessageTooBig"/> (1009); closing the socket may still read and discard the rest of it.
+    /// Must be positive, which the middleware checks when the application starts.
     /// </para>
     /// </summary>
     MaxReceiveMessageSize : int
