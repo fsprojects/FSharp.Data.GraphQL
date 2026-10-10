@@ -606,3 +606,23 @@ let ``Input value rule stops after the error limit`` () =
     let errors = runIsolated (fun () -> validateInputValues context |> errorMessages)
     // The fragment is checked first, and its own invalid values exceed the limit, so no operation spreading it is checked
     errors |> List.length |> equals 2_000
+
+[<Fact>]
+let ``Variables whose default value uses a variable are reported instead of followed`` () =
+    // The input value rule followed the default value of a variable used in an argument, and so a variable used in a
+    // default value, forever: both when the default value can be coerced and when it cannot
+    let coercible =
+        runIsolated (fun () -> validate "query Q($a: Int = $a, $b: [Int] = [1, $a]) { values(v: $a) other: values(list: $b) }")
+    coercible
+    |> errorMessages
+    |> equals [
+        "The default value of variable '$a' in operation 'Q' uses a variable. Default values must be constants."
+        "The default value of variable '$b' in operation 'Q' uses a variable. Default values must be constants."
+    ]
+    let invalid = runIsolated (fun () -> validate "query Q($b: [Int] = [\"s\", $b]) { values(list: $b) }")
+    invalid
+    |> errorMessages
+    |> equals [
+        "Argument field or value named 'list' can not be coerced. It does not match a valid literal representation for the type."
+        "The default value of variable '$b' in operation 'Q' uses a variable. Default values must be constants."
+    ]

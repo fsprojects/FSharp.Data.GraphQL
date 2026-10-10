@@ -3,9 +3,11 @@
 module FSharp.Data.GraphQL.Execution
 
 open System
+open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Diagnostics
+open System.Runtime.CompilerServices
 open System.Text.Json
 open System.Threading
 open FSharp.Control.Reactive
@@ -358,16 +360,33 @@ let private deferredFragmentEvents
     | ValueNone -> events
 
 /// <summary>
+/// The selection sets of each request with the deferred fragments its variables disable inlined, by the fields of the
+/// selection set, compared by reference.
+/// </summary>
+/// <remarks>
+/// Every object of a list resolves the same selection set, and inlining it for each of them would merge the fields of
+/// the fragments once per object: the time would grow with the number of objects times the size of the fragments. The
+/// table holds the inlined selection sets for as long as the execution context of the request is alive.
+/// </remarks>
+let private inlinedSelectionSets =
+    ConditionalWeakTable<ExecutionContext, ConcurrentDictionary<ExecutionInfo list, ExecutionInfo list>> ()
+
+/// <summary>
 /// The fields with every deferred fragment whose <c>if</c> argument is <see langword="false"/> with the variables of
 /// the request replaced by its own fields, merged into the selection as if the directive were absent; a fragment
 /// still deferred stays among the fields as it is.
 /// </summary>
-let private inlineDisabledFragments (variables : ImmutableDictionary<string, obj>) (fields : ExecutionInfo list) =
-    fields
-    |> Planning.inlineDeferredFragments (fun fragment ->
+let private inlineDisabledFragments (ctx : ExecutionContext) (fields : ExecutionInfo list) =
+    let isDisabled (fragment : ExecutionInfo) =
         match fragment.Kind with
-        | ResolveDeferredFragment (_, _, enabled, _) -> enabled variables = Ok false
-        | _ -> false)
+        | ResolveDeferredFragment (_, _, enabled, _) -> enabled ctx.Variables = Ok false
+        | _ -> false
+    if not (fields |> List.exists isDisabled) then
+        fields
+    else
+        let inlined =
+            inlinedSelectionSets.GetValue (ctx, fun _ -> ConcurrentDictionary<ExecutionInfo list, ExecutionInfo list> (HashIdentity.Reference))
+        inlined.GetOrAdd (fields, Planning.inlineDeferredFragments isDisabled)
 
 /// The root fields a deferred fragment at the operation's root selects, those of the fragments nested in it included.
 let rec private rootFieldsOfFragment (info : ExecutionInfo) =
@@ -868,7 +887,7 @@ and executeObjectFields
     // on the fragment excludes it
     let ownFields, deferredFragments =
         fields
-        |> inlineDisabledFragments ctx.Variables
+        |> inlineDisabledFragments ctx.Context
         |> List.partition (fun field ->
             match field.Kind with
             | ResolveDeferredFragment _ -> false
@@ -1228,7 +1247,7 @@ let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLExecutionRe
     let includeResults =
         ctx.ExecutionPlan.Fields
         // A root fragment disabled with `if: false` through a variable contributes its fields to the root selection
-        |> inlineDisabledFragments ctx.Variables
+        |> inlineDisabledFragments ctx
         |> List.map (fun info ->
             info.Include ctx.Variables
             |> Result.map (fun include -> struct (info, include)))

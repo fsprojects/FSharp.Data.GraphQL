@@ -69,25 +69,30 @@ let private root = {
     Items = []
 }
 
-/// Node implemented by A, B and C, whose field child returns Node; a new schema each time, because a middleware may
-/// change the schema of its executor
-let private nodeSchema () =
+/// Node implemented by A, B and C, whose field child returns Node, with the given node as the root; a new schema each
+/// time, because a middleware may change the schema of its executor
+let private nodeSchemaWith (root : Node) =
     let nodeType = nodeInterface ()
     let implementations =
         [ "A"; "B"; "C" ]
         |> List.map (implementation nodeType (Nullable nodeType))
     schemaOf nodeType implementations root
 
+let private nodeSchema () = nodeSchemaWith root
+
 let private executor = Executor (nodeSchema ())
 
-/// Node implemented by A0 to A3, whose field child returns B0 to B3, and by B0 to B3, whose field child returns Node
-let private covariantExecutor =
+/// Node implemented by A0 to A3, whose field child returns B0 to B3, and by B0 to B3, whose field child returns Node,
+/// with the given node as the root
+let private covariantSchema (root : Node) =
     let nodeType = nodeInterface ()
     let bTypes = [ for i in 0..3 -> implementation nodeType (Nullable nodeType) $"B%i{i}" ]
     let aTypes =
         bTypes
         |> List.mapi (fun i bType -> implementation nodeType (Nullable bType) $"A%i{i}")
-    Executor (schemaOf nodeType [ yield! aTypes; yield! bTypes ] root)
+    schemaOf nodeType [ yield! aTypes; yield! bTypes ] root
+
+let private covariantExecutor = Executor (covariantSchema root)
 
 let private noVariables = ImmutableDictionary<string, JsonElement>.Empty
 
@@ -127,15 +132,18 @@ let private executeIsolated (executor : Executor<obj>) (plan : ExecutionPlan) (v
         executor.AsyncExecute (plan, getMockInputContext, variables = variables)
         |> sync)
 
-/// The field nested to the depth, selecting id at the bottom
-let private nestedChain (depth : int) (field : string) =
+/// The field nested to the depth, with the selection at the bottom
+let private nestedAround (depth : int) (field : string) (bottom : string) =
     let document = StringBuilder ()
     for _ in 1..depth do
         document.Append $" %s{field} {{" |> ignore
-    document.Append " id" |> ignore
+    document.Append bottom |> ignore
     for _ in 1..depth do
         document.Append " }" |> ignore
     document.ToString ()
+
+/// The field nested to the depth, selecting id at the bottom
+let private nestedChain (depth : int) (field : string) = nestedAround depth field " id"
 
 /// The node field with the field nested to the depth under it
 let private nestedUnderNode (depth : int) (field : string) = $"{{ node {{%s{nestedChain depth field} }} }}"
@@ -285,6 +293,86 @@ let ``Object list filter middleware collects the filters under an interface quic
     |> Seq.map (fun (KeyValue (path, _)) -> path |> List.map string)
     |> List.ofSeq
     |> equals [ [ "node"; "items" ] ]
+
+[<Fact>]
+let ``Object list filter middleware collects the filters under covariant implementations quickly`` () =
+    // The implementations return different types, so the plans under them differ while their paths are the same:
+    // walking every plan under every path to it multiplies the walks by about 5 at every level
+    let executor =
+        Executor (covariantSchema { root with Type = "A0"; Child = ValueNone }, [ Define.ObjectListFilterMiddleware<Node, Node>(true) ])
+    let chain = nestedAround 20 "child" " ... on B0 { items(filter: { id: 1 }) { id } }"
+    let plan = planIsolated executor $"{{ node {{%s{chain} }} }}"
+    let result = executeIsolated executor plan noVariables
+    ensureDirect result <| fun _ errors -> empty errors
+    result.Metadata.TryFind<ObjectListFilters> "filters"
+    |> wantValueSome
+    |> Seq.map (fun (KeyValue (path, _)) -> path |> List.map string)
+    |> List.ofSeq
+    |> equals [ [ yield "node"; yield! List.replicate 20 "child"; yield "items" ] ]
+
+[<Fact>]
+let ``Object list filter middleware collects many filters nested deeply quickly`` () =
+    // Hashing the whole path of every filter at every level takes time quadratic in the nesting. The document has more
+    // selections than validation allows, so it is planned without validation
+    let schema = nodeSchema ()
+    let executor = Executor (schema, [ Define.ObjectListFilterMiddleware<Node, Node>(true) ])
+    let lists =
+        [ for i in 0..23_999 -> $"l%i{i}: items(filter: {{ id: 1 }}) {{ id }}" ]
+        |> String.concat " "
+    let chain = nestedAround 120 "child" $" ... on A {{ %s{lists} }}"
+    let plan = planWithoutValidation schema $"{{ node {{%s{chain} }} }}"
+    let result = executeIsolated executor plan noVariables
+    ensureDirect result <| fun _ errors -> empty errors
+    let filters = result.Metadata.TryFind<ObjectListFilters> "filters" |> wantValueSome
+    filters.Count |> equals 24_000
+
+[<Fact>]
+let ``Object list filter middleware reports one filter for a list field filtered differently under different types`` () =
+    // The filters are reported by path, and the field has the same path under both types
+    let executor = Executor (nodeSchema (), [ Define.ObjectListFilterMiddleware<Node, Node>(true) ])
+    let plan =
+        planIsolated executor "{ node { ... on A { items(filter: { id: 1 }) { id } } ... on B { items(filter: { id: 2 }) { id } } } }"
+    let result = executeIsolated executor plan noVariables
+    ensureDirect result <| fun _ errors -> empty errors
+    result.Metadata.TryFind<ObjectListFilters> "filters"
+    |> wantValueSome
+    |> Seq.map (fun (KeyValue (path, _)) -> path |> List.map string)
+    |> List.ofSeq
+    |> equals [ [ "node"; "items" ] ]
+
+[<Fact>]
+let ``Object list filter middleware accepts a deferred fragment at the root`` () =
+    // The entry of a deferred fragment at the root has no field of the document, whose name the middleware read
+    let executor = Executor (nodeSchema (), [ Define.ObjectListFilterMiddleware<Node, Node>(true) ])
+    let plan = planIsolated executor "{ ... @defer { hello } }"
+    let result = executeIsolated executor plan noVariables
+    ensureDeferred result <| fun _ errors _ -> empty errors
+    result.Metadata.TryFind<ObjectListFilters> "filters"
+    |> wantValueSome
+    |> empty
+
+[<Fact>]
+let ``Executing fragments deferred conditionally on a variable in the objects of a list completes quickly when the variable disables them`` () =
+    // A disabled fragment is merged into the selection of every object executed, so merging the fields of the
+    // fragments again for each object of a list multiplies the time by the number of objects
+    let items = [ for i in 1..1_000 -> { Type = "B"; Id = string i; Child = ValueNone; Items = [] } ]
+    let executor = Executor (nodeSchemaWith { root with Items = items })
+    let aliases = String.Join (" ", Seq.init 2_000 (fun i -> $"a%i{i}: id"))
+    let fragments = "... @defer(if: $f) { child { ...Big } } ... @defer(if: $f) { child { ...Big } }"
+    let plan =
+        planIsolated
+            executor
+            $"query Q($f: Boolean!) {{ node {{ ... on A {{ items {{ %s{fragments} }} }} }} }} fragment Big on Node {{ %s{aliases} }}"
+    let variables = noVariables.Add ("f", JsonDocument.Parse("false").RootElement)
+    let result = executeIsolated executor plan variables
+    ensureDirect result
+    <| fun data errors ->
+        empty errors
+        let node = data["node"] :?> Output
+        node["items"] :?> obj seq
+        |> Seq.map (fun item -> (item :?> Output)["child"])
+        |> List.ofSeq
+        |> equals (List.replicate 1_000 null)
 
 [<Fact>]
 let ``Reused plans keep the deferred fragments of the field reusing them`` () =

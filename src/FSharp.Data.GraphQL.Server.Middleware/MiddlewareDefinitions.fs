@@ -1,5 +1,6 @@
 namespace FSharp.Data.GraphQL.Server.Middleware
 
+open System
 open System.Collections.Generic
 open System.Collections.Immutable
 open FSharp.Data.GraphQL.Shared
@@ -117,6 +118,51 @@ type internal QueryWeightMiddleware (threshold : float, reportToMetadata : bool)
         member _.PlanOperation = ValueNone
         member _.ExecuteOperationAsync = ValueSome (middleware threshold)
 
+/// <summary>
+/// The path of a field from the root of an operation, by response names, with the plans walked under it.
+/// </summary>
+/// <remarks>
+/// A path has a single instance, which its parent hands out, so that equal paths are compared in constant time however
+/// deep they are.
+/// </remarks>
+[<Sealed; AllowNullLiteral>]
+type internal SelectionPath private (parent : SelectionPath, name : string) =
+    let mutable children : Dictionary<string, SelectionPath> = null
+    let mutable walkedPlans : HashSet<ExecutionInfoKind> = null
+
+    /// The path of the root of an operation, which no field has
+    static member Root () = SelectionPath (null, null)
+
+    member _.Parent = parent
+
+    member _.Name = name
+
+    /// The path of the field with the response name under the field of this path, the same instance every time
+    member this.Child (name : string) =
+        if isNull children then
+            children <- Dictionary<string, SelectionPath> (StringComparer.Ordinal)
+        match children.TryGetValue name with
+        | true, child -> child
+        | false, _ ->
+            let child = SelectionPath (this, name)
+            children.Add (name, child)
+            child
+
+    /// Whether the plan is walked under this path for the first time
+    member _.FirstWalkOf (kind : ExecutionInfoKind) =
+        if isNull walkedPlans then
+            walkedPlans <- HashSet<ExecutionInfoKind> (HashIdentity.Reference)
+        walkedPlans.Add kind
+
+    /// The response names of the fields of the path from the root of the operation
+    member this.ToList () : obj list =
+        let mutable names = []
+        let mutable path = this
+        while not (isNull path.Parent) do
+            names <- box path.Name :: names
+            path <- path.Parent
+        names
+
 type internal ObjectListFilterMiddleware<'ObjectType, 'ListType> (reportToMetadata : bool) =
 
     let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
@@ -154,56 +200,55 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType> (reportToMetada
             filterResults
             |> splitSeqErrorsList
             |> Result.map (Seq.vchoose id >> Seq.toList)
-        // The filters of the list fields under the fields, each with the path of its field from them, and each path and
-        // filter once; the filters of the fields of a list field's items are not collected.
+        // The filters of the list fields of the operation by path; the filters of the fields of a list field's items are
+        // not collected, and a path filtered differently under different types of an abstract field keeps the last
+        // filter.
         //
         // A plan shares the plans of the selection sets that are planned the same way, so walking it field by field
-        // would visit a shared plan once for every path to it: exponentially often with the nesting of abstract fields.
-        // The filters under each plan are therefore collected once, with paths from the field holding the plan.
-        let filtersByKind =
-            Dictionary<ExecutionInfoKind, Result<struct (obj list * ObjectListFilter) list, IGQLError list>> (HashIdentity.Reference)
-        let rec collectFilters (fields : ExecutionInfo list) =
-            let filters = ResizeArray<struct (obj list * ObjectListFilter)> ()
-            let found = HashSet<struct (obj list * ObjectListFilter)> (HashIdentity.Structural)
-            let add (path : obj list) (filter : ObjectListFilter) =
-                let entry = struct (path, filter)
-                if found.Add entry then filters.Add entry
-            let rec collect (fields : ExecutionInfo list) =
-                match fields with
-                | [] -> Ok ()
-                | field :: rest ->
-                    let name = box field.Ast.AliasOrName
-                    let collected =
-                        match field.Kind with
-                        | SelectFields _
-                        | ResolveAbstraction _ ->
-                            collectKindFilters field.Kind
-                            |> Result.map (List.iter (fun struct (path, filter) -> add (name :: path) filter))
-                        | ResolveCollection item -> fieldFilters item |> Result.map (List.iter (add [ name ]))
-                        | _ -> Ok ()
-                    match collected with
-                    | Error errs -> Error errs
-                    | Ok () -> collect rest
-            collect fields |> Result.map (fun () -> List.ofSeq filters)
-        and collectKindFilters (kind : ExecutionInfoKind) =
-            match filtersByKind.TryGetValue kind with
-            | true, collected -> collected
-            | false, _ ->
+        // would walk a shared plan once for every path through the plans to it: exponentially often with the nesting of
+        // abstract fields. A shared plan is therefore walked once per path of response names, which the plans sharing it
+        // have in common.
+        let filters = Dictionary<SelectionPath, ObjectListFilter> (HashIdentity.Reference)
+        // The fields selected under a field, those of every possible type of an abstract field included
+        let selectedFields (kind : ExecutionInfoKind) =
+            match kind with
+            | SelectFields fields -> fields
+            | ResolveAbstraction typeFields -> typeFields |> Map.toList |> List.collect snd
+            | _ -> []
+        let rec collectFilters (parent : SelectionPath) (fields : ExecutionInfo list) =
+            let mutable errors = ValueNone
+            let mutable remaining = fields
+            while errors.IsNone && not remaining.IsEmpty do
+                let field = remaining.Head
+                remaining <- remaining.Tail
+                // Only the fields with these plans have an AST: the deferred fragments at the root have none
                 let collected =
-                    match kind with
-                    | SelectFields fields -> collectFilters fields
-                    | ResolveAbstraction typeFields -> typeFields |> Map.toList |> List.collect snd |> collectFilters
-                    | _ -> Ok []
-                filtersByKind.Add (kind, collected)
-                collected
+                    match field.Kind with
+                    | SelectFields _
+                    | ResolveAbstraction _ ->
+                        let path = parent.Child field.Ast.AliasOrName
+                        if path.FirstWalkOf field.Kind then collectFilters path (selectedFields field.Kind) else Ok ()
+                    | ResolveCollection item ->
+                        let path = parent.Child field.Ast.AliasOrName
+                        fieldFilters item
+                        |> Result.map (List.iter (fun filter -> filters[path] <- filter))
+                    | _ -> Ok ()
+                match collected with
+                | Error errs -> errors <- ValueSome errs
+                | Ok () -> ()
+            match errors with
+            | ValueSome errs -> Error errs
+            | ValueNone -> Ok ()
+        let filtersByPath () =
+            let builder = ImmutableDictionary.CreateBuilder<obj list, ObjectListFilter> ()
+            for KeyValue (path, filter) in filters do
+                builder.Add (path.ToList (), filter)
+            builder.ToImmutable ()
         let ctxResult = result {
-            let! filters = collectFilters ctx.ExecutionPlan.Fields
-            let args = filters |> List.map (fun struct (path, filter) -> KeyValuePair (path, filter))
+            do! collectFilters (SelectionPath.Root ()) ctx.ExecutionPlan.Fields
 
             match reportToMetadata with
-            | true ->
-                let filters = ImmutableDictionary.CreateRange args
-                return { ctx with Metadata = ctx.Metadata.Add ("filters", filters) }
+            | true -> return { ctx with Metadata = ctx.Metadata.Add ("filters", filtersByPath ()) }
             | false -> return ctx
         }
         match ctxResult with

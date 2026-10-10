@@ -1331,7 +1331,8 @@ module Ast =
                 variableUsages.Add (key, found)
                 found
 
-    /// Whether the default value of every variable used in a value can be coerced to the type of the variable
+    /// Whether the default value of every variable used in a value can be coerced to the type of the variable, apart from
+    /// the variables in it
     let private defaultValuesAreCoercible
         (state : InputValueState)
         (variables : IReadOnlyDictionary<string, VariableDefinition>)
@@ -1342,8 +1343,11 @@ module Ast =
             match variables.TryGetValue variableName with
             | true, definition when definition.DefaultValue.IsSome ->
                 match state.Schema.TryGetInputType definition.Type with
-                // A default value is a constant, so it uses no variable
-                | Some variableType -> state.TryGetVariableUsages (variableType, name, definition.DefaultValue.Value) = ValueSome []
+                // A default value must be a constant: the variables in it are reported by
+                // validateVariableDefaultValuesAreConstant and never followed, so only the rest of the value is checked
+                | Some variableType ->
+                    let usages = state.TryGetVariableUsages (variableType, name, definition.DefaultValue.Value)
+                    usages.IsSome
                 | None -> false
             | _ -> true)
 
@@ -1355,7 +1359,7 @@ module Ast =
         let schemaInfo = state.Schema
         // Reports every error of the value in order: run only once the value or the default value of a variable used in
         // it is known not to coerce, so that a valid value is walked once per document instead of once per operation
-        let rec checkIsCoercible (tref : IntrospectionTypeRef) (argName : string) (value : InputValue) =
+        let rec checkIsCoercible (inDefaultValue : bool) (tref : IntrospectionTypeRef) (argName : string) (value : InputValue) =
             let canNotCoerce () =
                 AstError.AsResult (
                     $"Argument field or value named '%s{argName}' can not be coerced. It does not match a valid literal representation for the type.",
@@ -1368,7 +1372,7 @@ module Ast =
                     selection.Path
                 )
             | NullValue -> Success
-            | _ when tref.Kind = TypeKind.NON_NULL -> checkIsCoercible tref.OfType.Value argName value
+            | _ when tref.Kind = TypeKind.NON_NULL -> checkIsCoercible inDefaultValue tref.OfType.Value argName value
             | IntValue _ ->
                 match tref.Name, tref.Kind with
                 | ValueSome ("ID" | "Int" | "Long" | "Float"), TypeKind.SCALAR -> Success
@@ -1394,7 +1398,7 @@ module Ast =
                 match tref.Kind with
                 | TypeKind.LIST when tref.OfType.IsSome ->
                     values
-                    |> ValidationResult.collect (checkIsCoercible tref.OfType.Value argName)
+                    |> ValidationResult.collect (checkIsCoercible inDefaultValue tref.OfType.Value argName)
                 | _ -> canNotCoerce ()
             | ObjectValue props ->
                 match tref.Kind with
@@ -1425,7 +1429,7 @@ module Ast =
                             props
                             |> ValidationResult.collect (fun kvp ->
                                 match Map.tryFind kvp.Key fieldMap with
-                                | Some fieldTypeRef -> checkIsCoercible fieldTypeRef kvp.Key kvp.Value
+                                | Some fieldTypeRef -> checkIsCoercible inDefaultValue fieldTypeRef kvp.Key kvp.Value
                                 | None ->
                                     AstError.AsResult (
                                         $"Can not coerce argument '%s{argName}'. The field '%s{kvp.Key}' is not a valid field in the argument definition.",
@@ -1434,11 +1438,14 @@ module Ast =
                         canCoerceFields @@ canCoerceProps
                     | ValueNone -> canNotCoerce ()
                 | _ -> canNotCoerce ()
+            // A default value must be a constant, so a variable in it is reported by validateVariableDefaultValuesAreConstant
+            // instead of followed: following it could loop forever, as in query ($a: Int = $a)
+            | VariableName _ when inDefaultValue -> Success
             | VariableName varName ->
                 match variables.TryGetValue varName with
                 | true, vdef when vdef.DefaultValue.IsSome ->
                     match schemaInfo.TryGetInputType vdef.Type with
-                    | Some vtype -> checkIsCoercible vtype argName vdef.DefaultValue.Value
+                    | Some vtype -> checkIsCoercible true vtype argName vdef.DefaultValue.Value
                     | None -> canNotCoerce ()
                 | _ -> Success
         selection.Field.Arguments
@@ -1452,7 +1459,7 @@ module Ast =
                 match state.TryGetVariableUsages (argumentTypeRef, arg.Name, arg.Value) with
                 | ValueSome usages when defaultValuesAreCoercible state variables usages -> Success
                 | _ ->
-                    match checkIsCoercible argumentTypeRef arg.Name arg.Value with
+                    match checkIsCoercible false argumentTypeRef arg.Name arg.Value with
                     | Success -> Success
                     | ValidationError errors as result ->
                         state.ErrorCount <- state.ErrorCount + errors.Length
@@ -1733,6 +1740,46 @@ module Ast =
                         AstError.AsResult (
                             $"A variable '$%s{var.VariableName}' has a type is not an input type defined by the schema (%s{var.Type.ToString ()})."
                         )
+                    | _ -> Success)
+            | _ -> Success)
+
+    /// Whether the value holds a variable, walked without recursion
+    let private holdsVariable (value : InputValue) =
+        let pending = Stack<InputValue> ()
+        pending.Push value
+        let mutable found = false
+        while not found && pending.Count > 0 do
+            match pending.Pop () with
+            | VariableName _ -> found <- true
+            | ObjectValue fields ->
+                for KeyValue (_, field) in fields do
+                    pending.Push field
+            | ListValue items ->
+                for item in items do
+                    pending.Push item
+            | _ -> ()
+        found
+
+    /// <summary>
+    /// Reports the variables whose default value uses a variable.
+    /// </summary>
+    /// <remarks>
+    /// The grammar of GraphQL only allows constants as default values, but the parser accepts variables in them. The other
+    /// rules never follow such a variable: following it could loop forever, as in <c>query ($a: Int = $a)</c>.
+    /// </remarks>
+    let internal validateVariableDefaultValuesAreConstant (ctx : ValidationContext) =
+        ctx.Document.Definitions
+        |> ValidationResult.collect (function
+            | OperationDefinition def ->
+                def.VariableDefinitions
+                |> ValidationResult.collect (fun var ->
+                    match var.DefaultValue, def.Name with
+                    | Some value, ValueSome operationName when holdsVariable value ->
+                        AstError.AsResult
+                            $"The default value of variable '$%s{var.VariableName}' in operation '%s{operationName}' uses a variable. Default values must be constants."
+                    | Some value, ValueNone when holdsVariable value ->
+                        AstError.AsResult
+                            $"The default value of variable '$%s{var.VariableName}' uses a variable. Default values must be constants."
                     | _ -> Success)
             | _ -> Success)
 
@@ -2224,6 +2271,7 @@ module Ast =
         validateDeferStreamDirectiveLabels
         validateVariableUniqueness
         validateVariablesAsInputTypes
+        validateVariableDefaultValuesAreConstant
         validateVariablesUsesDefined
         validateAllVariablesUsed
         validateVariableUsagesAllowed
