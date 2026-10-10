@@ -66,8 +66,9 @@ module GraphQLClient =
         use requestMessage = new HttpRequestMessage (HttpMethod.Post, serverUrl)
         requestMessage.Content <- content
         addHeaders httpHeaders requestMessage
+        // A multipart upload, built as MultipartContent of the form-data subtype, rather than MultipartFormDataContent
         match content with
-        | :? MultipartFormDataContent -> addPreflightHeader requestMessage
+        | :? MultipartContent -> addPreflightHeader requestMessage
         | _ -> ()
         return! invoker.SendAsync (requestMessage, ct) |> ensureSuccessCode
     }
