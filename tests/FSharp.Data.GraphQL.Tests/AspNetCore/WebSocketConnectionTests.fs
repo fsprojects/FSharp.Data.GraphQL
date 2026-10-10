@@ -9,10 +9,12 @@ open System.Threading.Channels
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging.Abstractions
 open Microsoft.Extensions.Options
 open Xunit
 
+open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Server.AspNetCore
 open FSharp.Data.GraphQL.Shared.WebSockets
 
@@ -121,7 +123,7 @@ type private Session = {
     Scope : IDisposable
 }
 
-let private startConnectionWith (executor : FSharp.Data.GraphQL.Executor<Root>) (configure : GraphQLOptions<Root> -> GraphQLOptions<Root>) =
+let private startConnectionWith (executor : Executor<Root>) (configure : GraphQLOptions<Root> -> GraphQLOptions<Root>) =
     let services = ServiceCollection ()
     services.AddLogging () |> ignore
     services.AddGraphQL<Root> (executor, (fun _ -> { RequestId = "test" })) |> ignore
@@ -596,7 +598,7 @@ let ``A maximum message size that is not positive fails when the middleware is c
     use _ = provider
     let invalid = Options.Create { options with WebsocketOptions = { options.WebsocketOptions with MaxReceiveMessageSize = 0 } }
     let lifetime =
-        { new Microsoft.Extensions.Hosting.IHostApplicationLifetime with
+        { new IHostApplicationLifetime with
             member _.ApplicationStarted = CancellationToken.None
             member _.ApplicationStopping = CancellationToken.None
             member _.ApplicationStopped = CancellationToken.None
