@@ -2,6 +2,7 @@ module FSharp.Data.GraphQL.Tests.AspNetCore.CsrfPreventionTests
 
 open System
 open System.Collections.Generic
+open System.Collections.Immutable
 open System.IO
 open System.Net.Http
 open System.Text
@@ -250,7 +251,7 @@ let ``The error of a blocked request explains how to get through`` () : Task = t
         "This operation has been blocked as a potential Cross-Site Request Forgery (CSRF). "
         + "Please either specify a 'Content-Type' header with a media type that is not one of "
         + "application/x-www-form-urlencoded, multipart/form-data, text/plain, or provide a non-empty value "
-        + "for one of the following headers: GraphQL-Preflight, Apollo-Require-Preflight, X-Apollo-Operation-Name.",
+        + "for one of the following headers: Apollo-Require-Preflight, GraphQL-Preflight, X-Apollo-Operation-Name.",
         message
     )
 }
@@ -282,7 +283,7 @@ let ``GET is executed without a preflight header when CSRF prevention is off`` (
 let ``Configured request headers replace the default ones`` () : Task = task {
     let withCustomHeader (options : GraphQLOptions<Root>) = {
         options with
-            CsrfPrevention = ValueSome { RequestHeaders = [ "X-Requested-With" ] }
+            CsrfPrevention = ValueSome { RequestHeaders = ImmutableHashSet.Create "X-Requested-With" }
     }
     let! body = bodyOf "json"
 
@@ -298,7 +299,10 @@ let ``Configured request headers replace the default ones`` () : Task = task {
 
 [<Fact>]
 let ``No configured request header lets only requests a browser preflights through`` () : Task = task {
-    let withoutHeaders (options : GraphQLOptions<Root>) = { options with CsrfPrevention = ValueSome { RequestHeaders = [] } }
+    let withoutHeaders (options : GraphQLOptions<Root>) = {
+        options with
+            CsrfPrevention = ValueSome { RequestHeaders = ImmutableHashSet<string>.Empty }
+    }
     let! body = bodyOf "json"
 
     let! simpleResponse =

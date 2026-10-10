@@ -2,6 +2,7 @@ namespace FSharp.Data.GraphQL.Server.AspNetCore
 
 open FSharp.Data.GraphQL
 open System
+open System.Collections.Immutable
 open System.Text.Json
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
@@ -65,11 +66,23 @@ module CsrfPreventionHeaders =
 type CsrfPreventionOptions = {
     /// <summary>
     /// The names of the request headers that let a request a browser would not preflight through, when any of them has a
-    /// non-empty value. Header names are case-insensitive. An empty list rejects every such request, so that only requests
-    /// with another <c>Content-Type</c>, such as <c>application/json</c>, are executed.
+    /// non-empty value. Header names are matched case-insensitively, whatever the comparer of the set. An empty set rejects
+    /// every such request, so that only requests with another <c>Content-Type</c>, such as <c>application/json</c>, are
+    /// executed.
     /// </summary>
-    RequestHeaders : string list
+    RequestHeaders : ImmutableHashSet<string>
 } with
+
+    // Created once, as the options of every endpoint start from it
+    static let defaultOptions = {
+        RequestHeaders =
+            ImmutableHashSet.Create (
+                StringComparer.OrdinalIgnoreCase,
+                CsrfPreventionHeaders.GraphQLPreflight,
+                CsrfPreventionHeaders.ApolloRequirePreflight,
+                CsrfPreventionHeaders.ApolloOperationName
+            )
+    }
 
     /// <summary>
     /// The default protection: a request a browser would not preflight passes with a non-empty
@@ -80,13 +93,7 @@ type CsrfPreventionOptions = {
     /// Apollo's header names are accepted too, so that a client written for Apollo Server's CSRF prevention works unchanged:
     /// a custom header of any name makes a browser preflight the request, so each of them protects equally well.
     /// </remarks>
-    static member Default = {
-        RequestHeaders = [
-            CsrfPreventionHeaders.GraphQLPreflight
-            CsrfPreventionHeaders.ApolloRequirePreflight
-            CsrfPreventionHeaders.ApolloOperationName
-        ]
-    }
+    static member Default = defaultOptions
 
 type IGraphQLOptions =
     abstract member SerializerOptions : JsonSerializerOptions

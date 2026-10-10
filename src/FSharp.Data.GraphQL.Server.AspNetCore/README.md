@@ -108,7 +108,7 @@ services.AddGraphQL<Root> (
     Schema.executor,
     rootFactory,
     // Accept only GraphQL-Preflight and X-Requested-With
-    configure = fun options -> { options with CsrfPrevention = ValueSome { RequestHeaders = [ CsrfPreventionHeaders.GraphQLPreflight; "X-Requested-With" ] } }
+    configure = fun options -> { options with CsrfPrevention = ValueSome { RequestHeaders = ImmutableHashSet.Create (CsrfPreventionHeaders.GraphQLPreflight, "X-Requested-With") } }
     // Or turn the protection off
     // configure = fun options -> { options with CsrfPrevention = ValueNone }
 )

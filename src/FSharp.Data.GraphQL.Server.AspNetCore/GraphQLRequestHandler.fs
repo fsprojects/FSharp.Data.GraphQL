@@ -77,22 +77,26 @@ module internal CsrfPrevention =
             isSimple
 
     /// Whether the request carries any of the headers with a non-empty value
-    let hasAnyHeader (headers : IHeaderDictionary) (headerNames : string list) =
+    let hasAnyHeader (headers : IHeaderDictionary) (headerNames : ImmutableHashSet<string>) =
         headerNames
-        |> List.exists (fun headerName ->
+        |> Seq.exists (fun headerName ->
             match headers.TryGetValue headerName with
             | true, values -> not (StringValues.IsNullOrEmpty values)
             | false, _ -> false)
 
     /// The error message of a blocked request, modeled on Apollo Server's, telling the client how to get through
-    let blockedRequestMessage (headerNames : string list) =
+    let blockedRequestMessage (headerNames : ImmutableHashSet<string>) =
         let contentTypeAdvice =
             $"""specify a 'Content-Type' header with a media type that is not one of {String.Join (", ", preflightFreeMediaTypes)}"""
         let advice =
-            match headerNames with
-            | [] -> $"Please {contentTypeAdvice}."
-            | headerNames ->
-                $"""Please either {contentTypeAdvice}, or provide a non-empty value for one of the following headers: {String.Join (", ", headerNames)}."""
+            if headerNames.IsEmpty then
+                $"Please {contentTypeAdvice}."
+            else
+                // A hash set enumerates in no particular order, so the names are sorted to keep the message stable
+                let sortedHeaderNames =
+                    headerNames
+                    |> Seq.sortWith (fun first second -> String.CompareOrdinal (first, second))
+                $"""Please either {contentTypeAdvice}, or provide a non-empty value for one of the following headers: {String.Join (", ", sortedHeaderNames)}."""
         $"This operation has been blocked as a potential Cross-Site Request Forgery (CSRF). {advice}"
 
 /// Handles GraphQL requests using a provided root schema.
