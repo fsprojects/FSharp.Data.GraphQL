@@ -2,6 +2,7 @@ module FSharp.Data.GraphQL.Tests.AspNetCore.RequestHandlerExtensibilityTests
 
 open System
 open System.IO
+open System.Net.Mime
 open System.Text
 open System.Text.Json
 open System.Threading.Tasks
@@ -47,13 +48,13 @@ type private SentinelHandler
 let private requestBody (query : string) = JsonSerializer.Serialize {| query = query |}
 
 /// Builds a handler of the given type wired through the real `AddGraphQL` DI registration (the same path
-/// a hosted app uses), backed by an `HttpContext` with the given method and JSON body. Returns it both as
+/// a hosted app uses), backed by an `HttpContext` that `configureRequest` fills in. Returns it both as
 /// the base type (to prove `HandleAsync` dispatches virtually) and downcast to the concrete type (to
-/// assert on what it recorded), plus the DI scope to dispose once the test is done with it.
-let private createHandler<'Handler when 'Handler :> GraphQLRequestHandler<Root> and 'Handler : not struct>
-    (method : string)
-    (body : string voption)
-    : GraphQLRequestHandler<Root> * 'Handler * IDisposable =
+/// assert on what it recorded), the `HttpContext` (to write the result into a response), plus the DI
+/// scope to dispose once the test is done with it.
+let internal createHandlerFor<'Handler when 'Handler :> GraphQLRequestHandler<Root> and 'Handler : not struct>
+    (configureRequest : HttpContext -> unit)
+    : GraphQLRequestHandler<Root> * 'Handler * HttpContext * IDisposable =
     let services = ServiceCollection ()
     services.AddLogging () |> ignore
     services.AddGraphQL<Root, 'Handler>(TestSchema.executor, (fun _ -> { RequestId = "test" }))
@@ -62,22 +63,32 @@ let private createHandler<'Handler when 'Handler :> GraphQLRequestHandler<Root> 
     let serviceProvider = scope.ServiceProvider
 
     let ctx = DefaultHttpContext (RequestServices = serviceProvider)
-    ctx.Request.Method <- method
     ctx.Request.Path <- PathString "/graphql"
-
-    body
-    |> ValueOption.iter (fun json ->
-        ctx.Request.ContentType <- "application/json"
-        let bytes = Encoding.UTF8.GetBytes (json : string)
-        ctx.Request.Body <- new MemoryStream (bytes)
-        ctx.Request.ContentLength <- int64 bytes.Length)
+    configureRequest ctx
 
     // The handler captures `httpContextAccessor.HttpContext` in its own constructor, so the accessor
     // must carry the request's HttpContext before the handler is resolved from the container.
     serviceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext <- ctx
 
     let handler = serviceProvider.GetRequiredService<GraphQLRequestHandler<Root>>()
-    handler, (handler :?> 'Handler), (scope :> IDisposable)
+    handler, (handler :?> 'Handler), (ctx :> HttpContext), (scope :> IDisposable)
+
+/// Builds a handler as `createHandlerFor` does, for a request with the given method and JSON body.
+let private createHandler<'Handler when 'Handler :> GraphQLRequestHandler<Root> and 'Handler : not struct>
+    (method : string)
+    (body : string voption)
+    : GraphQLRequestHandler<Root> * 'Handler * IDisposable =
+    let handler, concreteHandler, _, scope =
+        createHandlerFor<'Handler> (fun ctx ->
+            ctx.Request.Method <- method
+
+            body
+            |> ValueOption.iter (fun json ->
+                ctx.Request.ContentType <- MediaTypeNames.Application.Json
+                let bytes = Encoding.UTF8.GetBytes (json : string)
+                ctx.Request.Body <- new MemoryStream (bytes)
+                ctx.Request.ContentLength <- int64 bytes.Length))
+    handler, concreteHandler, scope
 
 let private assertOkResponse (outcome : Result<IResult, IResult>) =
     match outcome with

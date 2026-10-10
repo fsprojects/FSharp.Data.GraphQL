@@ -142,17 +142,21 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
 
             GQLResponse.RequestError (documentId, errs)
 
-    /// Checks if the request contains a body
-    let checkIfHasBody (request : HttpRequest) = task {
+    /// Checks if the request contains a body. Reading the first byte is where the server first rejects a body
+    /// over its size limit, so that rejection is answered here with the status code the server gives.
+    let checkIfHasBody (request : HttpRequest) : Task<Result<bool, IResult>> = task {
         if request.Body.CanSeek then
-            return (request.Body.Length > 0L)
+            return Ok (request.Body.Length > 0L)
         else
-            request.EnableBuffering ()
-            let body = request.Body
-            let buffer = Array.zeroCreate 1
-            let! bytesRead = body.ReadAsync (buffer, 0, 1)
-            body.Seek (0, SeekOrigin.Begin) |> ignore
-            return bytesRead > 0
+            try
+                request.EnableBuffering ()
+                let body = request.Body
+                let buffer = Array.zeroCreate 1
+                let! bytesRead = body.ReadAsync (buffer, 0, 1, ctx.RequestAborted)
+                body.Seek (0, SeekOrigin.Begin) |> ignore
+                return Ok (bytesRead > 0)
+            with :? BadHttpRequestException as ex ->
+                return Error (RequestBody.ofBadHttpRequest request ex)
     }
 
     /// Execute default or custom introspection query
@@ -179,7 +183,11 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
     /// so calling this more than once (e.g. once from a derived handler and again from
     /// <see cref="HandleAsync"/>) will fail to bind the request on the second call.
     /// </remarks>
-    /// <returns>Result of check of <see cref="OperationType"/></returns>
+    /// <returns>
+    /// Result of check of <see cref="OperationType"/>, or a problem details result when the request body cannot be
+    /// read as a GraphQL request: 400 for a malformed body, 413 for a body over a server or form limit
+    /// (see <see cref="HttpContextExtensions.TryBindJsonAsync"/>).
+    /// </returns>
     member _.CheckOperationType () = taskResult {
 
         let checkAnonymousFieldsOnly (ctx : HttpContext) = taskResult {
@@ -269,7 +277,8 @@ and [<AbstractClass>] GraphQLRequestHandler<'Root>
         return (TypedResults.Ok response) :> IResult
     }
 
-    /// Handle the request and return the result
+    /// Handle the request and return the result: the GraphQL response, or a problem details result
+    /// (400 or 413) when the request body cannot be read as a GraphQL request
     abstract HandleAsync : unit -> Task<Result<IResult, IResult>>
 
     default handler.HandleAsync () : Task<Result<IResult, IResult>> = taskResult {
