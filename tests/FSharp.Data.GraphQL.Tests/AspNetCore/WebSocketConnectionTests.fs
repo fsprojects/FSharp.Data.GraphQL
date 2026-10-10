@@ -9,6 +9,7 @@ open System.Threading.Channels
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Logging.Abstractions
 open Microsoft.Extensions.Options
 open Xunit
@@ -95,7 +96,19 @@ type private Session = {
     Scope : IDisposable
 }
 
-let private startConnection (configure : GraphQLOptions<Root> -> GraphQLOptions<Root>) =
+/// A logger that keeps the level and the message of every entry, so that a test can count them
+type private RecordingLogger () =
+    let entries = System.Collections.Concurrent.ConcurrentQueue<struct (LogLevel * string)> ()
+
+    member _.Entries = List.ofSeq entries
+
+    interface ILogger with
+        member _.BeginScope<'TState> (_ : 'TState) : IDisposable = Unchecked.defaultof<IDisposable>
+        member _.IsEnabled (_ : LogLevel) = true
+        member _.Log<'TState> (level : LogLevel, _ : EventId, state : 'TState, ex : exn | null, formatter : Func<'TState, exn | null, string>) =
+            entries.Enqueue (struct (level, formatter.Invoke (state, ex)))
+
+let private startConnectionLogging (logger : ILogger) (configure : GraphQLOptions<Root> -> GraphQLOptions<Root>) =
     let services = ServiceCollection ()
     services.AddLogging () |> ignore
     services.AddGraphQL<Root> (TestSchema.executor, (fun _ -> { RequestId = "test" })) |> ignore
@@ -105,8 +118,10 @@ let private startConnection (configure : GraphQLOptions<Root> -> GraphQLOptions<
     serviceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext <- httpContext
     let options = serviceProvider.GetRequiredService<IOptions<GraphQLOptions<Root>>>().Value |> configure
     let socket = new FakeWebSocket ()
-    let connection = GraphQLWebSocketConnection<Root> (httpContext, socket, options, serviceProvider, NullLogger.Instance, CancellationToken.None)
+    let connection = GraphQLWebSocketConnection<Root> (httpContext, socket, options, serviceProvider, logger, CancellationToken.None)
     { Socket = socket; Run = connection.RunAsync (); Scope = scope }
+
+let private startConnection (configure : GraphQLOptions<Root> -> GraphQLOptions<Root>) = startConnectionLogging NullLogger.Instance configure
 
 let private start () = startConnection id
 
@@ -377,5 +392,96 @@ let ``A request error caused by an unexpected exception reaches a WebSocket clie
     typeOf error |> equals "error"
     Assert.DoesNotContain (TestSchema.SecretDetail, error.RootElement.GetRawText ())
     (payloadOf error).EnumerateArray () |> single |> messageOf |> equals ErrorMasking.UnexpectedErrorMessage
+    do! closeFromClient session
+}
+
+[<Fact>]
+let ``The unexpected exceptions masked in one message are logged once at the error level`` () : Task = task {
+    // A client controls how many errors a message holds, so an error entry per masked error would let it flood the log
+    let logger = RecordingLogger ()
+    let session = startConnectionLogging logger id
+    use _ = session.Scope
+    do! initialize session
+    let failures = String.Join (" ", Seq.init 20 (fun i -> $"f%d{i}: unexpectedFailure"))
+    subscribe session "1" $"""{{ hero(id: "1000") {{ %s{failures} }} }}"""
+    let! messages = receiveUntilTerminal session "1"
+    errorsOf (payloadOf (List.head messages)) |> List.length |> equals 20
+    let entriesAbout (level : LogLevel) =
+        logger.Entries
+        |> List.filter (fun struct (entryLevel, message) -> entryLevel = level && message.Contains ("Masked", StringComparison.Ordinal))
+    let struct (_, errorEntry) = entriesAbout LogLevel.Error |> single
+    Assert.Contains ("Masked 20 unexpected error(s)", errorEntry, StringComparison.Ordinal)
+    entriesAbout LogLevel.Debug |> List.length |> equals 20
+    do! closeFromClient session
+}
+
+[<Fact>]
+let ``A syntax error of a query reaches a WebSocket client with the message of the parser`` () : Task = task {
+    let query = """{ hero(id: "1000") { name """
+    let expected =
+        match FSharp.Data.GraphQL.Parser.tryParse query with
+        | Error message -> message
+        | Ok _ -> failwith "The query of the test must not parse"
+    let session = start ()
+    use _ = session.Scope
+    do! initialize session
+    subscribe session "1" query
+    let! messages = receiveUntilTerminal session "1"
+    let error = List.exactlyOne messages
+    typeOf error |> equals "error"
+    (payloadOf error).EnumerateArray () |> single |> messageOf |> equals expected
+    do! closeFromClient session
+}
+
+[<Fact>]
+let ``A GraphQL error of an exception declaring another message for clients reaches a WebSocket client with that message`` () : Task = task {
+    let session = start ()
+    use _ = session.Scope
+    do! initialize session
+    subscribe session "1" """{ hero(id: "1000") { name divergentFailure } }"""
+    let! messages = receiveUntilTerminal session "1"
+    let next = List.head messages
+    Assert.DoesNotContain (TestSchema.SecretDetail, next.RootElement.GetRawText ())
+    let error = errorsOf (payloadOf next) |> single
+    messageOf error |> equals TestSchema.DivergentClientMessage
+    pathOf error |> equals [ "hero"; "divergentFailure" ]
+    do! closeFromClient session
+}
+
+[<Fact>]
+let ``A GraphQL error thrown while an operation starts keeps its message over WebSocket`` () : Task = task {
+    let session =
+        startConnection (fun options -> { options with RootFactory = fun _ -> raise (FSharp.Data.GraphQL.GQLMessageException "The root is closed") })
+    use _ = session.Scope
+    do! initialize session
+    subscribe session "1" """{ hero(id: "1000") { name } }"""
+    let! messages = receiveUntilTerminal session "1"
+    let error = List.exactlyOne messages
+    typeOf error |> equals "error"
+    (payloadOf error).EnumerateArray () |> single |> messageOf |> equals "The root is closed"
+    do! closeFromClient session
+}
+
+[<Fact>]
+let ``An unexpected exception completing a deferred fragment reaches a WebSocket client as a generic error`` () : Task = task {
+    let session = start ()
+    use _ = session.Scope
+    do! initialize session
+    // The field is non-null, so its failure propagates up to the fragment, which completes with the error and no data
+    subscribe session "1" """{ hero(id: "1000") { name ... @defer { unexpectedNonNullFailure } } }"""
+    let! messages = receiveUntilTerminal session "1"
+    let received = messages |> List.map _.RootElement.GetRawText() |> String.concat "\n"
+    Assert.DoesNotContain (TestSchema.SecretDetail, received)
+    let completedErrors =
+        messages
+        |> List.filter (fun message -> typeOf message = "next")
+        |> List.map payloadOf
+        |> List.filter (hasProperty "completed")
+        |> List.collect (fun payload -> payload.GetProperty("completed").EnumerateArray () |> List.ofSeq)
+        |> List.filter (hasProperty "errors")
+        |> List.collect errorsOf
+    match completedErrors with
+    | [ error ] -> messageOf error |> equals ErrorMasking.UnexpectedErrorMessage
+    | _ -> fail $"Expected a single error in the completed entries, but received:\n{received}"
     do! closeFromClient session
 }

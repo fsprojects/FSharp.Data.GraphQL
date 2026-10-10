@@ -104,28 +104,36 @@ type internal GraphQLWebSocketConnection<'Root>
             return false
         else
             try
-                let variables = query.Variables |> Skippable.toValueOption
-                let root = options.RootFactory httpContext
-                let! executionResult =
-                    options.SchemaExecutor.AsyncExecute (query.Query, getInputContext, root, ?variables = variables)
-                match executionResult.Content with
-                | Direct (data, errors) ->
-                    // An execution result, whose data is null when a non-null root field failed during execution;
-                    // still a result, so it is sent as Next + Complete like any other, not as the terminal Error
-                    if not errors.IsEmpty then
-                        logger.LogWarning ("Execution errors:\n{errors}", errors)
-                    send (Next (id, SubscriptionExecutionResult.Create (data, errors)))
-                    // The graphql-transport-ws protocol requires Complete after the single Next of a query or mutation
-                    send (Complete id)
-                | RequestError problemDetails ->
-                    logger.LogWarning ("Request errors:\n{errors}", problemDetails)
-                    // The request was rejected before execution, so it is not a result: the protocol requires it to be
-                    // sent as the terminal Error message instead of a Next followed by Complete, or a client would
-                    // read it as a successful result with null data. The sender masks the errors that unexpected exceptions
-                    // caused, as it does those of every other message
-                    send (ServerError (id, problemDetails))
-                | Deferred (data, errors, events) -> startWorker id events (DeferredPayloads (logger, data, errors))
-                | Stream stream -> startWorker id stream (StreamPayloads logger)
+                match FSharp.Data.GraphQL.Parser.tryParse query.Query with
+                | Error syntaxError ->
+                    // A malformed document is a mistake of the client, reported with the message of the parser as an HTTP
+                    // request gets it, rather than as an unexpected error
+                    logger.LogDebug ("Cannot parse the query of the operation with id '{id}': {error}", id, syntaxError)
+                    send (ServerError (id, [ GQLProblemDetails.Create syntaxError ]))
+                | Ok ast ->
+                    let variables = query.Variables |> Skippable.toValueOption
+                    let root = options.RootFactory httpContext
+                    let! executionResult = options.SchemaExecutor.AsyncExecute (ast, getInputContext, root, ?variables = variables)
+                    // The errors are only counted here: the sender logs the exceptions of the errors it masks once per
+                    // message, so logging the errors here too would repeat every exception with its stack trace
+                    match executionResult.Content with
+                    | Direct (data, errors) ->
+                        // An execution result, whose data is null when a non-null root field failed during execution;
+                        // still a result, so it is sent as Next + Complete like any other, not as the terminal Error
+                        if not errors.IsEmpty then
+                            logger.LogDebug ("The operation with id '{id}' produced {count} execution error(s)", id, errors.Length)
+                        send (Next (id, SubscriptionExecutionResult.Create (data, errors)))
+                        // The graphql-transport-ws protocol requires Complete after the single Next of a query or mutation
+                        send (Complete id)
+                    | RequestError problemDetails ->
+                        logger.LogDebug ("The operation with id '{id}' was rejected with {count} request error(s)", id, problemDetails.Length)
+                        // The request was rejected before execution, so it is not a result: the protocol requires it to be
+                        // sent as the terminal Error message instead of a Next followed by Complete, or a client would
+                        // read it as a successful result with null data. The sender masks the errors that unexpected
+                        // exceptions caused, as it does those of every other message
+                        send (ServerError (id, problemDetails))
+                    | Deferred (data, errors, events) -> startWorker id events (DeferredPayloads (logger, data, errors))
+                    | Stream stream -> startWorker id stream (StreamPayloads logger)
             with ex ->
                 logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
                 send (ServerError (id, problemDetailsOfObservableError options.MaskUnexpectedErrors ex))

@@ -210,3 +210,14 @@ let ``A request error caused by an unexpected exception reaches an HTTP client a
     Assert.True (response.Data.IsSkip, $"A request error must not carry data, but got %A{response.Data}")
     Assert.Equal (ErrorMasking.UnexpectedErrorMessage, (errorsOf response |> single).Message)
 }
+
+[<Fact>]
+let ``A GraphQL error of an exception declaring another message for clients reaches an HTTP client with that message`` () : Task = task {
+    // The default ParseError of a schema reports an exception by its own message, which an IGQLError keeps for the server
+    let! struct (response, json) = executeOverHttp id """{ hero(id: "1000") { name divergentFailure } }"""
+
+    Assert.DoesNotContain (TestSchema.SecretDetail, json)
+    let error = errorsOf response |> single
+    Assert.Equal (TestSchema.DivergentClientMessage, error.Message)
+    error.Path |> equals (Include [ box "hero"; box "divergentFailure" ])
+}

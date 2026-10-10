@@ -14,6 +14,8 @@ module GraphQLOptionsDefaults =
     let [<Literal>] ReadBufferSize = 4096
     let [<Literal>] WebSocketEndpoint = "/ws"
     let [<Literal>] WebSocketConnectionInitTimeoutInMs = 3000.0
+
+    /// <summary>Whether errors caused by unexpected exceptions are masked by default; see <see cref="GraphQLOptions{Root}.MaskUnexpectedErrors"/>.</summary>
     let [<Literal>] MaskUnexpectedErrors = true
 
 module GraphQLOptions =
@@ -52,10 +54,16 @@ type GraphQLOptions<'Root> = {
     /// </para>
     /// <para>
     /// A masked error gets the message <c>Unexpected error</c> and keeps its <c>path</c>, its <c>locations</c> and its
-    /// <c>kind</c> extension, but no other extension; its exception is logged at the error level instead. Masking
-    /// applies to HTTP responses and to the <c>next</c> and <c>error</c> messages of <c>graphql-transport-ws</c>,
-    /// including the incremental payloads of <c>@defer</c> and <c>@stream</c>. The failure of a subscription's source
-    /// is reported as <c>Unexpected error during subscription</c> while masking is on.
+    /// <c>kind</c> extension, but no other extension. Its exception is logged instead: the exceptions masked in one
+    /// response or message are logged once at the error level, with their number, their first paths and the first
+    /// exception, so that a client cannot multiply the entries of the log, and each one at the debug level. An error of
+    /// an <see cref="IGQLError"/> exception that reports the message of the exception gets the message the exception
+    /// declares for clients instead.
+    /// </para>
+    /// <para>
+    /// Masking applies to HTTP responses and to the <c>next</c> and <c>error</c> messages of <c>graphql-transport-ws</c>,
+    /// the incremental payloads of <c>@defer</c> and <c>@stream</c> included. An unexpected failure of a subscription's
+    /// source is reported as <c>Unexpected error during subscription</c> while masking is on.
     /// </para>
     /// <para>Set it to <see langword="false"/> only for development: exception messages can disclose implementation details.</para>
     /// </remarks>

@@ -44,6 +44,13 @@ type Character =
     | Human of Human
     | Droid of Droid
 
+/// An exception that declares a message for clients, through IGQLError, other than its own message
+type DivergentGraphQLError (clientMessage : string, detail : string) =
+    inherit Exception (detail)
+
+    interface IGQLError with
+        member _.Message = clientMessage
+
 module TestSchema =
 
     /// The message of the unexpected exception the unexpectedFailure field fails with, which must never reach a client while errors are masked
@@ -53,6 +60,10 @@ module TestSchema =
     /// The message of the GraphQL error the deliberateFailure field reports to the client on purpose
     [<Literal>]
     let DeliberateFailureMessage = "The hero keeps this one to themselves"
+
+    /// The message for clients of the exception the divergentFailure field fails with, whose own message is SecretDetail
+    [<Literal>]
+    let DivergentClientMessage = "The hero declines to say"
 
     let humans = [
         {
@@ -186,6 +197,18 @@ module TestSchema =
                         Nullable StringType,
                         "Fails with a GraphQL error raised for the client on purpose.",
                         fun _ (_ : Human) -> raise (GQLMessageException DeliberateFailureMessage) : string option
+                    )
+                    Define.Field (
+                        "divergentFailure",
+                        Nullable StringType,
+                        "Fails with an exception whose message for clients differs from its own.",
+                        fun _ (_ : Human) -> raise (DivergentGraphQLError (DivergentClientMessage, SecretDetail)) : string option
+                    )
+                    Define.Field (
+                        "unexpectedNonNullFailure",
+                        StringType,
+                        "Fails with an unexpected exception, which a null cannot stand in for.",
+                        fun _ (_ : Human) -> raise (InvalidOperationException SecretDetail) : string
                     )
                 ]
         )
