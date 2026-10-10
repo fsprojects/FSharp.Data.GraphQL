@@ -40,6 +40,15 @@ and QueryType : ObjectDef<obj> =
                 Define.Field ("user", UserType, (fun _ root -> root))
                 for name in [ "a"; "b"; "c"; "d"; "e" ] do
                     Define.Field (name, StringType, (fun _ _ -> ""))
+                Define.Field (
+                    "values",
+                    StringType,
+                    [
+                        Define.Input ("list", Nullable (ListOf (Nullable IntType)))
+                        Define.Input ("v", Nullable IntType)
+                    ],
+                    (fun _ _ -> "")
+                )
             ]
     )
 
@@ -405,3 +414,215 @@ let ``Executor rejects a document with two hundred thousand fields`` () =
         errors
         |> List.map _.Message
         |> equals [ tooManySelections DocumentLimitsDefaults.MaxRecursiveSelections ]
+
+[<Fact>]
+let ``Unused variable rule completes quickly for many variables and values`` () =
+    // Searching the whole document once per variable takes twenty thousand passes over a hundred thousand values
+    let variables =
+        [ for i in 0..19_999 -> $"$v%i{i}: Int" ]
+        |> String.concat " "
+    let values = [ for i in 0..99_999 -> string i ] |> String.concat ", "
+    let context = getContext $"query Q(%s{variables}) {{ a(list: [%s{values}]) }}"
+    let errors = runIsolated (fun () -> validateAllVariablesUsed context |> errorMessages)
+    errors |> List.length |> equals 20_000
+    errors
+    |> List.head
+    |> equals "A variable '$v0' is not used in operation 'Q'. Every variable must be used."
+
+[<Fact>]
+let ``Unused variable rule finds variables in nested values and fragments`` () =
+    let actual =
+        getContext
+            """query Q($inList: Int, $inObject: Int, $inFragment: Int, $unused: Int) {
+  a(list: [1, [$inList]], object: { nested: { value: $inObject } })
+  ...F
+}
+fragment F on Query { b(value: $inFragment) ...F }"""
+        |> validateAllVariablesUsed
+    actual
+    |> errorMessages
+    |> equals [ "A variable '$unused' is not used in operation 'Q'. Every variable must be used." ]
+
+[<Fact>]
+let ``Validation of many operations completes quickly`` () =
+    // Counting every operation name against all definitions is quadratic in the number of operations
+    let document = StringBuilder ()
+    for i in 0..23_999 do
+        document.AppendLine $"query Q%i{i} {{ a }}" |> ignore
+    let actual = runIsolated (fun () -> validate (document.ToString ()))
+    actual |> equals Success
+
+[<Fact>]
+let ``Operation name uniqueness ignores a fragment with the same name`` () =
+    let actual = validate "query A { ...A } fragment A on Query { a }"
+    actual |> equals Success
+
+[<Fact>]
+let ``Operation name uniqueness reports each duplicated name once in definition order`` () =
+    let actual =
+        getContext "query B { a } query A { a } query B { b } query A { c } query B { d }"
+        |> validateOperationNameUniqueness
+    actual
+    |> errorMessages
+    |> equals [
+        "Operation 'B' has 3 definitions. Each operation name must be unique."
+        "Operation 'A' has 2 definitions. Each operation name must be unique."
+    ]
+
+/// Two fields with the same response name at every level, each selecting the subtree one level shallower, down to the leaves
+let rec private sameNameTree (depth : int) (leaf : bool -> string) (isLeft : bool) =
+    if depth = 0 then
+        leaf isLeft
+    else
+        $"field {{ %s{sameNameTree (depth - 1) leaf true} }} field {{ %s{sameNameTree (depth - 1) leaf false} }}"
+
+[<Fact>]
+let ``Field merging of nested fields with the same response name completes quickly`` () =
+    // Merging the selections of both fields and comparing them again reaches the same pairs exponentially often
+    let tree = sameNameTree 13 (fun _ -> "hello") true
+    let document = $"{{ %s{tree} }}"
+    let actual = runIsolated (fun () -> validate document)
+    actual |> equals Success
+
+/// The tree of same-named fields whose leaves select different fields under the same response name
+let private conflictingTree depth =
+    let tree = sameNameTree depth (fun isLeft -> if isLeft then "x: hello" else "x: a") true
+    $"{{ %s{tree} }}"
+
+[<Fact>]
+let ``Field merging rule stops after the error limit`` () =
+    // The rule may report the conflicts of the pair it compares when it reaches the limit
+    let context = getContext (conflictingTree 13)
+    let errors =
+        runIsolated (fun () ->
+            validateFieldSelectionMergingWithin DocumentLimitsDefaults.MaxValidationErrors context
+            |> errorMessages)
+    Assert.InRange (errors.Length, DocumentLimitsDefaults.MaxValidationErrors + 1, DocumentLimitsDefaults.MaxValidationErrors + 2)
+    errors
+    |> List.head
+    |> equals "Field name or alias 'x' is referring to fields 'hello' and 'a', but they are different fields in the scope of the parent type."
+
+[<Fact>]
+let ``Field merging rule reports as many errors as validation is asked for`` () =
+    let errors =
+        Parser.parse (conflictingTree 13)
+        |> validateDocumentWithLimits DocumentLimitsDefaults.MaxRecursiveSelections DocumentLimitsDefaults.MaxNestingDepth 200 introspectionSchema
+        |> errorMessages
+    errors |> List.length |> equals 201
+    errors
+    |> List.last
+    |> equals "Too many validation errors, error limit reached. Validation aborted."
+
+[<Fact>]
+let ``Field merging rule reports a conflict between two fields once`` () =
+    // The children of the two fields are compared once from each of them, in the opposite order
+    let errors =
+        getContext "{ field { x: hello } field { x: field { a } } }"
+        |> validateFieldSelectionMerging
+        |> errorMessages
+    errors |> List.distinct |> equals errors
+
+[<Fact>]
+let ``Fragment spread rules look the fragments up by name`` () =
+    // Searching all fragment definitions for every spread is quadratic in the number of fragments
+    let document = StringBuilder ()
+    document.Append "{" |> ignore
+    for i in 0..39_999 do
+        document.Append $" ...F%i{i}" |> ignore
+    document.AppendLine " }" |> ignore
+    for i in 0..39_999 do
+        document.AppendLine $"fragment F%i{i} on Query {{ a }}"
+        |> ignore
+    let context = getContext (document.ToString ())
+    let struct (spreadTargets, labels) =
+        runIsolated (fun () -> struct (validateFragmentSpreadTargetDefined context, validateDeferStreamDirectiveLabels context))
+    spreadTargets |> equals Success
+    labels |> equals Success
+
+[<Fact>]
+let ``Rules that follow fragment spreads do not overflow the stack on a long fragment cycle`` () =
+    // The subscription root field rule and the unused variable rule follow every spread, those of fragments that form a
+    // cycle included, so they must not nest a call for every fragment of the cycle
+    let length = 24_000
+    let document = StringBuilder ()
+    document.AppendLine "subscription S($v: Int) { ...F0 }"
+    |> ignore
+    for i in 0 .. length - 1 do
+        let next = (i + 1) % length
+        let selections =
+            if i = length / 2 then
+                $"ping(v: $v) ...F%i{next}"
+            else
+                $"...F%i{next}"
+        document.AppendLine $"fragment F%i{i} on Subscription {{ %s{selections} }}"
+        |> ignore
+    let context = AstValidationTests.getContext (document.ToString ())
+    let struct (rootFields, variables) =
+        runIsolated (fun () -> struct (validateSubscriptionSingleRootField context, validateAllVariablesUsed context))
+    rootFields |> equals Success
+    variables |> equals Success
+
+[<Fact>]
+let ``Subscription root field rule counts the fields of fragments that form a cycle`` () =
+    let actual =
+        AstValidationTests.getContext "subscription S { ...F } fragment F on Subscription { a: ping b: ping ...F }"
+        |> validateSubscriptionSingleRootField
+    actual
+    |> errorMessages
+    |> equals [ "Subscription operations should have only one root field. Operation 'S' has 2 fields (b, a)." ]
+
+[<Fact>]
+let ``Input value rule checks the values of a fragment once for all the operations spreading it`` () =
+    let items = String.Join (", ", Seq.init 4_000 string)
+    let document = StringBuilder ()
+    for i in 0..11_999 do
+        document.AppendLine $"query Q%i{i}($v: Int) {{ ...B }}"
+        |> ignore
+    document.AppendLine $"fragment B on Query {{ values(list: [%s{items}], v: $v) }}"
+    |> ignore
+    let ast = Parser.parse (document.ToString ())
+    let actual = runIsolated (fun () -> validateDocument introspectionSchema ast)
+    actual |> equals Success
+
+[<Fact>]
+let ``Input value rule checks the default value of each variable used in a value once`` () =
+    // Searching the variable definitions for every use of a variable is quadratic in the number of variables
+    let definitions = String.Join (" ", Seq.init 40_000 (fun i -> $"$v%i{i}: Int = 1"))
+    let usages = String.Join (", ", Seq.init 40_000 (fun i -> $"$v%i{i}"))
+    let ast = Parser.parse $"query Q(%s{definitions}) {{ values(list: [%s{usages}]) }}"
+    let actual = runIsolated (fun () -> validateDocument introspectionSchema ast)
+    actual |> equals Success
+
+[<Fact>]
+let ``Input value rule stops after the error limit`` () =
+    // Every operation spreading the fragment would report each invalid value of it again
+    let strings = String.Join (", ", Seq.init 2_000 (fun i -> $"\"s%i{i}\""))
+    let document = StringBuilder ()
+    for i in 0..1_999 do
+        document.AppendLine $"query Q%i{i} {{ ...B }}" |> ignore
+    document.AppendLine $"fragment B on Query {{ values(list: [%s{strings}]) }}"
+    |> ignore
+    let context = getContext (document.ToString ())
+    let errors = runIsolated (fun () -> validateInputValues context |> errorMessages)
+    // The fragment is checked first, and its own invalid values exceed the limit, so no operation spreading it is checked
+    errors |> List.length |> equals 2_000
+
+[<Fact>]
+let ``Variables whose default value uses a variable are reported instead of followed`` () =
+    // The input value rule followed the default value of a variable used in an argument, and so a variable used in a
+    // default value, forever: both when the default value can be coerced and when it cannot
+    let coercible =
+        runIsolated (fun () -> validate "query Q($a: Int = $a, $b: [Int] = [1, $a]) { values(v: $a) other: values(list: $b) }")
+    coercible
+    |> errorMessages
+    |> equals [
+        "The default value of variable '$a' in operation 'Q' uses a variable. Default values must be constants."
+        "The default value of variable '$b' in operation 'Q' uses a variable. Default values must be constants."
+    ]
+    let invalid = runIsolated (fun () -> validate "query Q($b: [Int] = [\"s\", $b]) { values(list: $b) }")
+    invalid
+    |> errorMessages
+    |> equals [
+        "Argument field or value named 'list' can not be coerced. It does not match a valid literal representation for the type."
+        "The default value of variable '$b' in operation 'Q' uses a variable. Default values must be constants."
+    ]

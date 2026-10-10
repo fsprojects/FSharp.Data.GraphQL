@@ -1,5 +1,6 @@
 namespace FSharp.Data.GraphQL.Server.Middleware
 
+open System
 open System.Collections.Generic
 open System.Collections.Immutable
 open FSharp.Data.GraphQL.Shared
@@ -26,39 +27,75 @@ type internal QueryWeightMiddleware (threshold : float, reportToMetadata : bool)
                     match f.Definition.Metadata.TryFind<float>("queryWeight") with
                     | ValueSome w -> w
                     | ValueNone -> 0.0
-            // let rec getFields = function
-            //     | ResolveValue -> []
-            //     | SelectFields fields -> fields
-            //     | ResolveCollection field -> [ field ]
-            //     | ResolveAbstraction typeFields -> typeFields |> Map.toList |> List.collect snd
-            //     | ResolveDeferred info -> getFields info.Kind
-            //     | ResolveStreamed (info, _) -> getFields info.Kind
-            //     | ResolveLive info -> getFields info.Kind
-            let rec checkThreshold acc fields =
+            // The weights are added field by field in selection order, the weights of every possible type of an
+            // abstract field included, and the plan is rejected as soon as the sum exceeds the threshold.
+            //
+            // A plan shares the plans of the selection sets that are planned the same way, so walking it field by field
+            // would visit a shared plan once for every path to it: exponentially often with the nesting of abstract
+            // fields. Each plan is therefore measured once, as the weight it adds and the highest the sum gets while
+            // adding it, both from the sum before it.
+            let measures = Dictionary<ExecutionInfoKind, struct (float * float)> (HashIdentity.Reference)
+            let rec measureFields (fields : ExecutionInfo list) =
+                let mutable total = 0.0
+                let mutable peak = -infinity
+                for field in fields do
+                    let struct (fieldTotal, fieldPeak) = measureField field
+                    peak <- max peak (total + fieldPeak)
+                    total <- total + fieldTotal
+                struct (total, peak)
+            and measureField (field : ExecutionInfo) =
+                let weight = getWeight field
+                match field.Kind with
+                // The weight of a list field is checked, but its item is measured from the sum before the field
+                | ResolveCollection item ->
+                    let struct (total, peak) = measureField item
+                    struct (total, max weight peak)
+                | kind ->
+                    let struct (total, peak) = measureKind kind
+                    struct (weight + total, max weight (weight + peak))
+            and measureKind (kind : ExecutionInfoKind) =
+                match measures.TryGetValue kind with
+                | true, measure -> measure
+                | false, _ ->
+                    let measure =
+                        match kind with
+                        | ResolveValue -> struct (0.0, -infinity)
+                        | SelectFields fields
+                        | ResolveDeferredFragment (_, _, _, fields) -> measureFields fields
+                        | ResolveAbstraction typeFields -> typeFields |> Map.toList |> List.collect snd |> measureFields
+                        | ResolveCollection item
+                        | ResolveDeferred item
+                        | ResolveStreamed (item, _)
+                        | ResolveLive item -> measureField item
+                    measures.Add (kind, measure)
+                    measure
+            // The sum at the field where it first exceeds the threshold, found by walking into the fields whose peak exceeds it
+            let rec exceedingWeight (sum : float) (fields : ExecutionInfo list) =
                 match fields with
-                | [] -> (true, acc)
-                | x :: xs ->
-                    let current = acc + (getWeight x)
-                    if current > threshold then
-                        (false, current)
+                | [] -> ValueNone
+                | field :: rest ->
+                    let struct (total, peak) = measureField field
+                    if sum + peak <= threshold then
+                        exceedingWeight (sum + total) rest
                     else
-                        match x.Kind with
-                        | ResolveValue -> checkThreshold current xs
-                        | SelectFields fields ->
-                            let (pass, current) = checkThreshold current fields
-                            if pass then checkThreshold current xs else (false, current)
-                        | ResolveCollection field ->
-                            let (pass, current) = checkThreshold acc [ field ]
-                            if pass then checkThreshold current xs else (false, current)
-                        | ResolveAbstraction typeFields ->
-                            let fields = typeFields |> Map.toList |> List.collect (fun (_, v) -> v)
-                            let (pass, current) = checkThreshold current fields
-                            if pass then checkThreshold current xs else (false, current)
-                        | ResolveDeferred info -> checkThreshold current (info :: xs)
-                        | ResolveStreamed (info, _) -> checkThreshold current (info :: xs)
-                        | ResolveLive info -> checkThreshold current (info :: xs)
-                        | ResolveDeferredFragment (_, _, _, fields) -> checkThreshold current [ yield! fields; yield! xs ]
-            checkThreshold 0.0 fields
+                        let current = sum + getWeight field
+                        if current > threshold then
+                            ValueSome current
+                        else
+                            match field.Kind with
+                            | ResolveValue -> ValueSome current
+                            | ResolveCollection item -> exceedingWeight sum [ item ]
+                            | SelectFields fields
+                            | ResolveDeferredFragment (_, _, _, fields) -> exceedingWeight current fields
+                            | ResolveAbstraction typeFields -> exceedingWeight current (typeFields |> Map.toList |> List.collect snd)
+                            | ResolveDeferred item
+                            | ResolveStreamed (item, _)
+                            | ResolveLive item -> exceedingWeight current [ item ]
+            let struct (total, peak) = measureFields fields
+            if peak <= threshold then
+                (true, total)
+            else
+                (false, exceedingWeight 0.0 fields |> ValueOption.defaultValue peak)
         let error (ctx : ExecutionContext) =
             GQLExecutionResult.ErrorAsync (
                 ctx.ExecutionPlan.DocumentId,
@@ -80,6 +117,61 @@ type internal QueryWeightMiddleware (threshold : float, reportToMetadata : bool)
         member _.PostCompileSchema = ValueNone
         member _.PlanOperation = ValueNone
         member _.ExecuteOperationAsync = ValueSome (middleware threshold)
+
+/// <summary>
+/// The path of a field from the root of an operation, by response names, with the plans walked under it.
+/// </summary>
+/// <remarks>
+/// A path has a single instance, which its parent hands out, so that equal paths are compared in constant time however
+/// deep they are.
+/// </remarks>
+[<Sealed; AllowNullLiteral>]
+type internal SelectionPath private (parent : SelectionPath, name : string) =
+    let mutable children : Dictionary<string, SelectionPath> = null
+    let mutable walkedPlans : HashSet<ExecutionInfoKind> = null
+
+    /// The path of the root of an operation, which no field has
+    static member Root () = SelectionPath (null, null)
+
+    member _.Parent = parent
+
+    member _.Name = name
+
+    /// The path of the field with the response name under the field of this path, the same instance every time
+    member this.Child (name : string) =
+        let children =
+            match children with
+            | null ->
+                // Most paths are leaves, so the dictionary is created only for a path that gets a child
+                let created = Dictionary<string, SelectionPath> (StringComparer.Ordinal)
+                children <- created
+                created
+            | children -> children
+        match children.TryGetValue name with
+        | true, child -> child
+        | false, _ ->
+            let child = SelectionPath (this, name)
+            children.Add (name, child)
+            child
+
+    /// Whether the plan is walked under this path for the first time
+    member _.FirstWalkOf (kind : ExecutionInfoKind) =
+        let walkedPlans =
+            match walkedPlans with
+            | null ->
+                let created = HashSet<ExecutionInfoKind> (HashIdentity.Reference)
+                walkedPlans <- created
+                created
+            | walkedPlans -> walkedPlans
+        walkedPlans.Add kind
+
+    /// The response names of the fields of the path from the root of the operation
+    member this.ToList () : obj list =
+        let rec prepend (path : SelectionPath) (names : obj list) =
+            match path.Parent with
+            | null -> names
+            | parent -> prepend parent (box path.Name :: names)
+        prepend this []
 
 type internal ObjectListFilterMiddleware<'ObjectType, 'ListType> (reportToMetadata : bool) =
 
@@ -103,48 +195,71 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType> (reportToMetada
         (ctx : ExecutionContext)
         (next : ExecutionContext -> AsyncVal<GQLExecutionResult>)
         =
-        let rec collectArgs (path : obj list) (acc : KeyValuePair<obj list, ObjectListFilter> list) (fields : ExecutionInfo list) =
-            let fieldArgs currentPath field =
-                let filterResults =
-                    field.Ast.Arguments
-                    |> Seq.map (fun x ->
-                        match x.Name, x.Value with
-                        | "filter", (VariableName variableName) -> Ok (ValueSome (ctx.Variables[variableName] :?> ObjectListFilter))
-                        | "filter", inlineConstant ->
-                            ObjectListFilterType.CoerceInput inputContext (InlineConstant inlineConstant) ctx.Variables
-                            |> Result.map ValueOption.ofObj
-                        | _ -> Ok ValueNone)
-                    |> Seq.toList
-                match filterResults |> splitSeqErrorsList with
-                | Error errs -> Error errs
-                | Ok filters ->
-                    filters
-                    |> Seq.vchoose id
-                    |> Seq.map (fun x -> KeyValuePair (currentPath |> List.rev, x))
-                    |> Seq.toList
-                    |> Ok
-            match fields with
-            | [] -> Ok acc
-            | x :: xs ->
-                let currentPath = box x.Ast.AliasOrName :: path
-                let accResult =
-                    match x.Kind with
-                    | SelectFields fields -> collectArgs currentPath acc fields
-                    | ResolveCollection field -> fieldArgs currentPath field
-                    | ResolveAbstraction typeFields ->
-                        let fields = typeFields |> Map.toList |> List.collect (fun (_, v) -> v)
-                        collectArgs currentPath acc fields
-                    | _ -> Ok acc
-                match accResult with
-                | Error errs -> Error errs
-                | Ok acc -> collectArgs path acc xs
+        // The filters of the filter argument of a list field
+        let fieldFilters (field : ExecutionInfo) =
+            let filterResults =
+                field.Ast.Arguments
+                |> Seq.map (fun x ->
+                    match x.Name, x.Value with
+                    | "filter", (VariableName variableName) -> Ok (ValueSome (ctx.Variables[variableName] :?> ObjectListFilter))
+                    | "filter", inlineConstant ->
+                        ObjectListFilterType.CoerceInput inputContext (InlineConstant inlineConstant) ctx.Variables
+                        |> Result.map ValueOption.ofObj
+                    | _ -> Ok ValueNone)
+                |> Seq.toList
+            filterResults
+            |> splitSeqErrorsList
+            |> Result.map (Seq.vchoose id >> Seq.toList)
+        // The filters of the list fields of the operation by path; the filters of the fields of a list field's items are
+        // not collected.
+        //
+        // A plan shares the plans of the selection sets that are planned the same way, so walking it field by field
+        // would walk a shared plan once for every path through the plans to it: exponentially often with the nesting of
+        // abstract fields. A shared plan is therefore walked once per path of response names, which the plans sharing it
+        // have in common. A path filtered differently under different types of an abstract field keeps its first filter:
+        // the walk of a plan skipped under a path repeats an earlier one, so it never holds the first filter of a path,
+        // while it could hold a later one.
+        let filters = Dictionary<SelectionPath, ObjectListFilter> (HashIdentity.Reference)
+        // The fields selected under a field, those of every possible type of an abstract field included
+        let selectedFields (kind : ExecutionInfoKind) =
+            match kind with
+            | SelectFields fields -> fields
+            | ResolveAbstraction typeFields -> typeFields |> Map.toList |> List.collect snd
+            | _ -> []
+        let rec collectFilters (parent : SelectionPath) (fields : ExecutionInfo list) =
+            let mutable errors = ValueNone
+            let mutable remaining = fields
+            while errors.IsNone && not remaining.IsEmpty do
+                let field = remaining.Head
+                remaining <- remaining.Tail
+                // Only the fields with these plans have an AST: the deferred fragments at the root have none
+                let collected =
+                    match field.Kind with
+                    | SelectFields _
+                    | ResolveAbstraction _ ->
+                        let path = parent.Child field.Ast.AliasOrName
+                        if path.FirstWalkOf field.Kind then collectFilters path (selectedFields field.Kind) else Ok ()
+                    | ResolveCollection item ->
+                        let path = parent.Child field.Ast.AliasOrName
+                        fieldFilters item
+                        |> Result.map (List.iter (fun filter -> filters.TryAdd (path, filter) |> ignore))
+                    | _ -> Ok ()
+                match collected with
+                | Error errs -> errors <- ValueSome errs
+                | Ok () -> ()
+            match errors with
+            | ValueSome errs -> Error errs
+            | ValueNone -> Ok ()
+        let filtersByPath () =
+            let builder = ImmutableDictionary.CreateBuilder<obj list, ObjectListFilter> ()
+            for KeyValue (path, filter) in filters do
+                builder.Add (path.ToList (), filter)
+            builder.ToImmutable ()
         let ctxResult = result {
-            let! args = collectArgs [] [] ctx.ExecutionPlan.Fields
+            do! collectFilters (SelectionPath.Root ()) ctx.ExecutionPlan.Fields
 
             match reportToMetadata with
-            | true ->
-                let filters = ImmutableDictionary.CreateRange args
-                return { ctx with Metadata = ctx.Metadata.Add ("filters", filters) }
+            | true -> return { ctx with Metadata = ctx.Metadata.Add ("filters", filtersByPath ()) }
             | false -> return ctx
         }
         match ctxResult with

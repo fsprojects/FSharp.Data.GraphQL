@@ -324,7 +324,8 @@ module Ast =
 
     type SelectionInfoContext = {
         Schema : SchemaInfo
-        FragmentDefinitions : FragmentDefinition list
+        /// The fragments whose spreads are inlined, by name
+        Fragments : IReadOnlyDictionary<string, FragmentDefinition>
         ParentType : IntrospectionType
         FragmentType : FragmentTypeInfo voption
         Path : FieldPath
@@ -424,8 +425,9 @@ module Ast =
             | FragmentSpread fragSpread ->
                 voption {
                     let! fragDef =
-                        ctx.FragmentDefinitions
-                        |> List.tryFind (fun def -> def.Name.IsSome && def.Name.Value = fragSpread.Name)
+                        match ctx.Fragments.TryGetValue fragSpread.Name with
+                        | true, fragDef -> ValueSome fragDef
+                        | false, _ -> ValueNone
                     let! typeCondition = fragDef.TypeCondition
                     let! fragType = ctx.Schema.TryGetTypeByName typeCondition
                     let fragType = Spread (fragSpread.Name, fragSpread.Directives, fragType)
@@ -652,7 +654,10 @@ module Ast =
     /// Prepare a ValidationContext for the given Document and SchemaInfo to make validation operations easier.
     let internal getValidationContext (schemaInfo : SchemaInfo) (ast : Document) =
         let fragmentDefinitions = getFragmentDefinitions ast
-        let inlinableFragmentDefinitions = getInlinableFragmentDefinitions fragmentDefinitions
+        let inlinableFragments =
+            fragmentDefinitions
+            |> getInlinableFragmentDefinitions
+            |> getFragmentsByName
         let fragmentInfos =
             fragmentDefinitions
             |> List.vchoose (fun def -> voption {
@@ -660,7 +665,7 @@ module Ast =
                 let! fragType = schemaInfo.TryGetTypeByName typeCondition
                 let fragCtx = {
                     Schema = schemaInfo
-                    FragmentDefinitions = inlinableFragmentDefinitions
+                    Fragments = inlinableFragments
                     ParentType = fragType
                     FragmentType = ValueSome (Spread (def.Name.Value, def.Directives, fragType))
                     Path = [ def.Name.Value ]
@@ -675,7 +680,7 @@ module Ast =
                 let path = def.Name |> ValueOption.map box |> ValueOption.toList
                 let opCtx = {
                     Schema = schemaInfo
-                    FragmentDefinitions = inlinableFragmentDefinitions
+                    Fragments = inlinableFragments
                     ParentType = parentType
                     FragmentType = ValueNone
                     Path = path
@@ -689,12 +694,23 @@ module Ast =
             Document = ast
         }
 
+    /// Reports, in the order of their first definition, the operation names defined more than once.
     let internal validateOperationNameUniqueness (ctx : ValidationContext) =
-        let names = ctx.Document.Definitions |> Seq.vchoose _.Name
+        // Counted in one pass: counting every name against all definitions is quadratic in the number of operations
+        let counts = Dictionary<string, int> (StringComparer.Ordinal)
+        let names = ResizeArray<string> ()
+        for operation in getOperationDefinitions ctx.Document do
+            match operation.Name with
+            | ValueSome name ->
+                match counts.TryGetValue name with
+                | true, count -> counts[name] <- count + 1
+                | false, _ ->
+                    counts.Add (name, 1)
+                    names.Add name
+            | ValueNone -> ()
         names
-        |> Seq.map (fun name -> name, names |> Seq.filter (fun x -> x = name) |> Seq.length)
-        |> Seq.distinctBy fst
-        |> ValidationResult.collect (fun (name, count) ->
+        |> ValidationResult.collect (fun name ->
+            let count = counts[name]
             if count <= 1 then
                 Success
             else
@@ -712,27 +728,32 @@ module Ast =
                 "An anonymous operation must be the only operation in a document. This document has at least one anonymous operation and more than one operation."
 
     let internal validateSubscriptionSingleRootField (ctx : ValidationContext) =
-        let fragments =
-            getFragmentDefinitions ctx.Document
-            |> getFragmentsByName
+        let fragments = getFragmentDefinitions ctx.Document |> getFragmentsByName
         ctx.Document.Definitions
         |> ValidationResult.collect (function
             | OperationDefinition def when def.OperationType = Subscription ->
-                // As in CollectFields, each fragment is collected once per operation,
-                // which also stops on fragment spread cycles
+                // As in CollectFields, each fragment is collected once per operation, those that form a cycle included.
+                // The selections are walked depth first with a stack: following the spreads by recursion would nest once
+                // for every fragment of a chain
                 let visitedFragments = HashSet<string> (StringComparer.Ordinal)
-                let rec getFieldNames (names : string list) (selectionSet : Selection list) =
-                    (names, selectionSet)
-                    ||> List.fold (fun acc ->
-                        function
-                        | Field field -> field.AliasOrName :: acc
-                        | InlineFragment frag -> getFieldNames acc frag.SelectionSet
+                let namesInWalkOrder = ResizeArray<string> ()
+                let pending = Stack<Selection list> ()
+                pending.Push def.SelectionSet
+                while pending.Count > 0 do
+                    match pending.Pop () with
+                    | [] -> ()
+                    | selection :: rest ->
+                        pending.Push rest
+                        match selection with
+                        | Field field -> namesInWalkOrder.Add field.AliasOrName
+                        | InlineFragment frag -> pending.Push frag.SelectionSet
                         | FragmentSpread spread when visitedFragments.Add spread.Name ->
                             match fragments.TryGetValue spread.Name with
-                            | true, frag -> getFieldNames acc frag.SelectionSet
-                            | false, _ -> acc
-                        | FragmentSpread _ -> acc)
-                let fieldNames = getFieldNames [] def.SelectionSet
+                            | true, frag -> pending.Push frag.SelectionSet
+                            | false, _ -> ()
+                        | FragmentSpread _ -> ()
+                // The message lists the names last found first
+                let fieldNames = namesInWalkOrder |> Seq.rev |> List.ofSeq
                 if fieldNames.Length <= 1 then
                     Success
                 else
@@ -779,9 +800,57 @@ module Ast =
         let applicableTypes = Set.intersect parentPossibleTypes fragmentPossibleTypes
         applicableTypes.Count > 0
 
-    let rec private sameResponseShape (fieldA : SelectionInfo, fieldB : SelectionInfo) =
-        if fieldA.FieldType = fieldB.FieldType then
-            let fieldsForName = Dictionary<string, SelectionInfo list> ()
+    /// <summary>
+    /// Compares unordered pairs of selections by reference: two selections with equal contents at different places are
+    /// different selections, and the pair of <c>a</c> and <c>b</c> is the same pair whichever of them comes first.
+    /// </summary>
+    let private selectionPairComparer =
+        { new IEqualityComparer<struct (SelectionInfo * SelectionInfo)> with
+            member _.Equals (x, y) =
+                let struct (xA, xB) = x
+                let struct (yA, yB) = y
+                (obj.ReferenceEquals (xA, yA) && obj.ReferenceEquals (xB, yB))
+                || (obj.ReferenceEquals (xA, yB) && obj.ReferenceEquals (xB, yA))
+            member _.GetHashCode pair =
+                let struct (a, b) = pair
+                // Symmetric, so that both orders of a pair hash alike
+                LanguagePrimitives.PhysicalHash a ^^^ LanguagePrimitives.PhysicalHash b
+        }
+
+    /// <summary>
+    /// The state of the field selection merging rule for one document.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Merging the selections of two fields and comparing the merged selections again reaches the same pairs of
+    /// selections over and over, which grows exponentially with the nesting of fields that share a response name.
+    /// Like graphql-js's <c>PairSet</c>, the rule therefore compares each pair once, whichever of its two selections
+    /// comes first, which also reports each conflict once.
+    /// </para>
+    /// <para>
+    /// The rule also stops once it has found more errors than validation reports.
+    /// </para>
+    /// </remarks>
+    type private FieldMergingState
+        /// <param name="maxErrors">The number of errors validation reports; the rule stops once it has found more.</param>
+        (maxErrors : int) =
+        member val ComparedShapes = HashSet<struct (SelectionInfo * SelectionInfo)> (selectionPairComparer)
+        member val ComparedFields = HashSet<struct (SelectionInfo * SelectionInfo)> (selectionPairComparer)
+        member val ErrorCount = 0 with get, set
+        member this.IsOverBudget = this.ErrorCount > maxErrors
+        member this.Report (message : string, path : FieldPath) =
+            this.ErrorCount <- this.ErrorCount + 1
+            AstError.AsResult (message, path)
+
+    let private isSameType (typeA : IntrospectionType) (typeB : IntrospectionType) =
+        // Types are unique by name in a schema; comparing the records structurally compares the whole type
+        String.Equals (typeA.Name, typeB.Name, StringComparison.Ordinal)
+
+    let rec private sameResponseShape (state : FieldMergingState) (fieldA : SelectionInfo, fieldB : SelectionInfo) =
+        if state.IsOverBudget || not (state.ComparedShapes.Add (struct (fieldA, fieldB))) then
+            Success
+        elif fieldA.FieldType = fieldB.FieldType then
+            let fieldsForName = Dictionary<string, SelectionInfo list> (StringComparer.Ordinal)
             fieldA.SelectionSet
             |> List.iter (fun selection -> Dictionary.addWith (List.append) selection.AliasOrName [ selection ] fieldsForName)
             fieldB.SelectionSet
@@ -792,14 +861,14 @@ module Ast =
                     Success
                 else
                     List.pairwise selectionSet
-                    |> ValidationResult.collect sameResponseShape)
+                    |> ValidationResult.collect (sameResponseShape state))
         else
-            AstError.AsResult (
+            state.Report (
                 $"Field name or alias '%s{fieldA.AliasOrName}' appears two times, but they do not have the same return types in the scope of the parent type.",
                 fieldA.Path
             )
 
-    let rec private fieldsInSetCanMerge (set : SelectionInfo list) =
+    let rec private fieldsInSetCanMerge (state : FieldMergingState) (set : SelectionInfo list) =
         let fieldsForName = set |> List.groupBy _.AliasOrName
         fieldsForName
         |> ValidationResult.collect (fun (aliasOrName, selectionSet) ->
@@ -808,33 +877,41 @@ module Ast =
             else
                 List.pairwise selectionSet
                 |> ValidationResult.collect (fun (fieldA, fieldB) ->
-                    let hasSameShape = sameResponseShape (fieldA, fieldB)
-                    if
-                        fieldA.FragmentOrParentType = fieldB.FragmentOrParentType
-                        || fieldA.FragmentOrParentType.Kind <> TypeKind.OBJECT
-                        || fieldB.FragmentOrParentType.Kind <> TypeKind.OBJECT
-                    then
-                        if fieldA.Field.Name <> fieldB.Field.Name then
-                            hasSameShape
-                            @@ AstError.AsResult (
-                                $"Field name or alias '%s{aliasOrName}' is referring to fields '%s{fieldA.Field.Name}' and '%s{fieldB.Field.Name}', but they are different fields in the scope of the parent type.",
-                                fieldA.Path
-                            )
-                        else if fieldA.Field.Arguments <> fieldB.Field.Arguments then
-                            hasSameShape
-                            @@ AstError.AsResult (
-                                $"Field name or alias '%s{aliasOrName}' refers to field '%s{fieldA.Field.Name}' two times, but each reference has different argument sets.",
-                                fieldA.Path
-                            )
-                        else
-                            let mergedSet = fieldA.SelectionSet @ fieldB.SelectionSet
-                            hasSameShape @@ (fieldsInSetCanMerge mergedSet)
+                    if state.IsOverBudget || not (state.ComparedFields.Add (struct (fieldA, fieldB))) then
+                        Success
                     else
-                        hasSameShape))
+                        let hasSameShape = sameResponseShape state (fieldA, fieldB)
+                        if
+                            isSameType fieldA.FragmentOrParentType fieldB.FragmentOrParentType
+                            || fieldA.FragmentOrParentType.Kind <> TypeKind.OBJECT
+                            || fieldB.FragmentOrParentType.Kind <> TypeKind.OBJECT
+                        then
+                            if fieldA.Field.Name <> fieldB.Field.Name then
+                                hasSameShape
+                                @@ state.Report (
+                                    $"Field name or alias '%s{aliasOrName}' is referring to fields '%s{fieldA.Field.Name}' and '%s{fieldB.Field.Name}', but they are different fields in the scope of the parent type.",
+                                    fieldA.Path
+                                )
+                            else if fieldA.Field.Arguments <> fieldB.Field.Arguments then
+                                hasSameShape
+                                @@ state.Report (
+                                    $"Field name or alias '%s{aliasOrName}' refers to field '%s{fieldA.Field.Name}' two times, but each reference has different argument sets.",
+                                    fieldA.Path
+                                )
+                            else
+                                let mergedSet = fieldA.SelectionSet @ fieldB.SelectionSet
+                                hasSameShape @@ (fieldsInSetCanMerge state mergedSet)
+                        else
+                            hasSameShape))
+
+    /// The field selection merging rule, stopping once it has found more than the given number of errors.
+    let internal validateFieldSelectionMergingWithin (maxErrors : int) (ctx : ValidationContext) =
+        let state = FieldMergingState maxErrors
+        ctx.Definitions
+        |> ValidationResult.collect (fun def -> fieldsInSetCanMerge state def.SelectionSet)
 
     let internal validateFieldSelectionMerging (ctx : ValidationContext) =
-        ctx.Definitions
-        |> ValidationResult.collect (fun def -> fieldsInSetCanMerge def.SelectionSet)
+        validateFieldSelectionMergingWithin DocumentLimitsDefaults.MaxValidationErrors ctx
 
     let rec private checkLeafFieldSelection (selection : SelectionInfo) =
         let rec validateByKind (fieldType : IntrospectionTypeRef) (selectionSetLength : int) =
@@ -1083,7 +1160,7 @@ module Ast =
                 AstError.AsResult
                     $"Fragment '%s{def.Name.Value}' is not used in any operation in the document. Fragments must be used in at least one operation.")
 
-    let rec private fragmentSpreadTargetDefinedInSelection (fragmentDefinitionNames : string list) (path : FieldPath) =
+    let rec private fragmentSpreadTargetDefinedInSelection (fragmentDefinitionNames : HashSet<string>) (path : FieldPath) =
         function
         | Field field ->
             let path = box field.AliasOrName :: path
@@ -1093,13 +1170,13 @@ module Ast =
             frag.SelectionSet
             |> ValidationResult.collect (fragmentSpreadTargetDefinedInSelection fragmentDefinitionNames path)
         | FragmentSpread spread ->
-            if List.contains spread.Name fragmentDefinitionNames then
+            if fragmentDefinitionNames.Contains spread.Name then
                 Success
             else
                 AstError.AsResult ($"Fragment spread '%s{spread.Name}' refers to a non-existent fragment definition in the document.", path)
 
     let internal validateFragmentSpreadTargetDefined (ctx : ValidationContext) =
-        let fragmentDefinitionNames = ctx.FragmentDefinitions |> List.vchoose _.Name
+        let fragmentDefinitionNames = HashSet<string> (ctx.FragmentDefinitions |> Seq.vchoose _.Name, StringComparer.Ordinal)
         ctx.Document.Definitions
         |> ValidationResult.collect (function
             | FragmentDefinition frag ->
@@ -1151,9 +1228,139 @@ module Ast =
             |> getFragmentAndParentTypes
             |> ValidationResult.collect (checkFragmentSpreadIsPossibleInSelection))
 
-    let private checkInputValue (schemaInfo : SchemaInfo) (variables : VariableDefinition list voption) (selection : SelectionInfo) =
-        let rec checkIsCoercible (tref : IntrospectionTypeRef) (argName : string) (value : InputValue) =
-            let canNotCoerce =
+    /// The scalar types a string literal cannot be coerced to
+    let private nonStringScalars = [| "Int"; "Float"; "Boolean" |]
+
+    /// Compares the value of an argument by reference, so that it is looked up without being walked, and its type structurally.
+    let private valueTypeComparer =
+        { new IEqualityComparer<struct (InputValue * IntrospectionTypeRef)> with
+            member _.Equals (x, y) =
+                let struct (xValue, xType) = x
+                let struct (yValue, yType) = y
+                obj.ReferenceEquals (xValue, yValue) && xType = yType
+            member _.GetHashCode key =
+                let struct (value, typeRef) = key
+                (LanguagePrimitives.PhysicalHash value * 397) ^^^ typeRef.GetHashCode ()
+        }
+
+    /// <summary>
+    /// The state of the input value rule for one document: the values already found coercible, and the number of errors
+    /// found so far.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every operation checks the argument values of the fragments it spreads, so the values of a fragment spread by
+    /// thousands of operations would be checked thousands of times. Whether a value can be coerced does not depend on
+    /// the operation, except through the default values of the variables used in it, so each value is checked once,
+    /// and each operation checks only the variables used in it.
+    /// </para>
+    /// <para>
+    /// The rule also stops once it has found more errors than validation reports.
+    /// </para>
+    /// </remarks>
+    [<Sealed>]
+    type private InputValueState
+        /// <param name="schemaInfo">The schema the document is validated against.</param>
+        /// <param name="maxErrors">The number of errors validation reports; the rule stops once it has found more.</param>
+        (schemaInfo : SchemaInfo, maxErrors : int) =
+
+        let variableUsages =
+            Dictionary<struct (InputValue * IntrospectionTypeRef), struct (string * string) list voption> (valueTypeComparer)
+
+        // Whether the value can be coerced to the type apart from the variables in it, which are added to the usages
+        // with the name of the argument or input field each is used in, as the errors of checkInputValue name them
+        let rec isCoercible (typeRef : IntrospectionTypeRef) (name : string) (value : InputValue) (usages : ResizeArray<struct (string * string)>) =
+            match value with
+            | NullValue -> typeRef.Kind <> TypeKind.NON_NULL
+            | _ when typeRef.Kind = TypeKind.NON_NULL -> isCoercible typeRef.OfType.Value name value usages
+            | IntValue _ ->
+                match typeRef.Name, typeRef.Kind with
+                | ValueSome ("ID" | "Int" | "Long" | "Float"), TypeKind.SCALAR -> true
+                | _ -> false
+            | FloatValue _ -> typeRef.Kind = TypeKind.SCALAR && typeRef.Name = ValueSome "Float"
+            | BooleanValue _ -> typeRef.Kind = TypeKind.SCALAR && typeRef.Name = ValueSome "Boolean"
+            | StringValue _ ->
+                match typeRef.Name, typeRef.Kind with
+                | ValueSome typeName, TypeKind.SCALAR -> not (Array.contains typeName nonStringScalars)
+                | ValueSome typeName, TypeKind.INPUT_OBJECT -> typeName = FileType.Name
+                | _ -> false
+            | EnumValue _ -> typeRef.Kind = TypeKind.ENUM
+            | ListValue values ->
+                match typeRef.Kind with
+                | TypeKind.LIST when typeRef.OfType.IsSome ->
+                    values
+                    |> List.forall (fun item -> isCoercible typeRef.OfType.Value name item usages)
+                | _ -> false
+            | ObjectValue props ->
+                match typeRef.Kind with
+                | TypeKind.OBJECT
+                | TypeKind.INTERFACE
+                | TypeKind.UNION
+                | TypeKind.INPUT_OBJECT when typeRef.Name.IsSome ->
+                    match schemaInfo.TryGetTypeByRef typeRef with
+                    | ValueSome inputType ->
+                        let fields = inputType.InputFields |> ValueOption.defaultValue [||]
+                        fields
+                        |> Array.forall (fun field -> field.Type.Kind <> TypeKind.NON_NULL || props.ContainsKey field.Name)
+                        && props
+                           |> Seq.forall (fun (KeyValue (fieldName, fieldValue)) ->
+                               match fields |> Array.tryFind (fun field -> field.Name = fieldName) with
+                               | Some field -> isCoercible field.Type fieldName fieldValue usages
+                               | None -> false)
+                    | ValueNone -> false
+                | _ -> false
+            | VariableName variableName ->
+                usages.Add (struct (variableName, name))
+                true
+
+        member _.Schema = schemaInfo
+
+        member val ErrorCount = 0 with get, set
+
+        member this.IsOverBudget = this.ErrorCount > maxErrors
+
+        /// The variables used in a value, each with the name of the argument or input field it is used in, when the value
+        /// can be coerced to the type apart from them, and nothing when it cannot.
+        member _.TryGetVariableUsages (typeRef : IntrospectionTypeRef, name : string, value : InputValue) =
+            let key = struct (value, typeRef)
+            match variableUsages.TryGetValue key with
+            | true, found -> found
+            | false, _ ->
+                let usages = ResizeArray<struct (string * string)> ()
+                let found = if isCoercible typeRef name value usages then ValueSome (List.ofSeq usages) else ValueNone
+                variableUsages.Add (key, found)
+                found
+
+    /// Whether the default value of every variable used in a value can be coerced to the type of the variable, apart from
+    /// the variables in it
+    let private defaultValuesAreCoercible
+        (state : InputValueState)
+        (variables : IReadOnlyDictionary<string, VariableDefinition>)
+        (usages : struct (string * string) list)
+        =
+        usages
+        |> List.forall (fun struct (variableName, name) ->
+            match variables.TryGetValue variableName with
+            | true, definition when definition.DefaultValue.IsSome ->
+                match state.Schema.TryGetInputType definition.Type with
+                // A default value must be a constant: the variables in it are reported by
+                // validateVariableDefaultValuesAreConstant and never followed, so only the rest of the value is checked
+                | Some variableType ->
+                    let usages = state.TryGetVariableUsages (variableType, name, definition.DefaultValue.Value)
+                    usages.IsSome
+                | None -> false
+            | _ -> true)
+
+    let private checkInputValue
+        (state : InputValueState)
+        (variables : IReadOnlyDictionary<string, VariableDefinition>)
+        (selection : SelectionInfo)
+        =
+        let schemaInfo = state.Schema
+        // Reports every error of the value in order: run only once the value or the default value of a variable used in
+        // it is known not to coerce, so that a valid value is walked once per document instead of once per operation
+        let rec checkIsCoercible (inDefaultValue : bool) (tref : IntrospectionTypeRef) (argName : string) (value : InputValue) =
+            let canNotCoerce () =
                 AstError.AsResult (
                     $"Argument field or value named '%s{argName}' can not be coerced. It does not match a valid literal representation for the type.",
                     selection.Path
@@ -1165,35 +1372,34 @@ module Ast =
                     selection.Path
                 )
             | NullValue -> Success
-            | _ when tref.Kind = TypeKind.NON_NULL -> checkIsCoercible tref.OfType.Value argName value
+            | _ when tref.Kind = TypeKind.NON_NULL -> checkIsCoercible inDefaultValue tref.OfType.Value argName value
             | IntValue _ ->
                 match tref.Name, tref.Kind with
                 | ValueSome ("ID" | "Int" | "Long" | "Float"), TypeKind.SCALAR -> Success
-                | _ -> canNotCoerce
+                | _ -> canNotCoerce ()
             | FloatValue _ ->
                 match tref.Name, tref.Kind with
                 | ValueSome "Float", TypeKind.SCALAR -> Success
-                | _ -> canNotCoerce
+                | _ -> canNotCoerce ()
             | BooleanValue _ ->
                 match tref.Name, tref.Kind with
                 | ValueSome "Boolean", TypeKind.SCALAR -> Success
-                | _ -> canNotCoerce
+                | _ -> canNotCoerce ()
             | StringValue _ ->
-                let invalidScalars = [| "Int"; "Float"; "Boolean" |]
                 match tref.Name, tref.Kind with
-                | (ValueSome x, TypeKind.SCALAR) when not (Array.contains x invalidScalars) -> Success
+                | (ValueSome x, TypeKind.SCALAR) when not (Array.contains x nonStringScalars) -> Success
                 | (ValueSome x, TypeKind.INPUT_OBJECT) when x = FileType.Name -> Success
-                | _ -> canNotCoerce
+                | _ -> canNotCoerce ()
             | EnumValue _ ->
                 match tref.Kind with
                 | TypeKind.ENUM -> Success
-                | _ -> canNotCoerce
+                | _ -> canNotCoerce ()
             | ListValue values ->
                 match tref.Kind with
                 | TypeKind.LIST when tref.OfType.IsSome ->
                     values
-                    |> ValidationResult.collect (checkIsCoercible tref.OfType.Value argName)
-                | _ -> canNotCoerce
+                    |> ValidationResult.collect (checkIsCoercible inDefaultValue tref.OfType.Value argName)
+                | _ -> canNotCoerce ()
             | ObjectValue props ->
                 match tref.Kind with
                 | TypeKind.OBJECT
@@ -1223,27 +1429,24 @@ module Ast =
                             props
                             |> ValidationResult.collect (fun kvp ->
                                 match Map.tryFind kvp.Key fieldMap with
-                                | Some fieldTypeRef -> checkIsCoercible fieldTypeRef kvp.Key kvp.Value
+                                | Some fieldTypeRef -> checkIsCoercible inDefaultValue fieldTypeRef kvp.Key kvp.Value
                                 | None ->
                                     AstError.AsResult (
                                         $"Can not coerce argument '%s{argName}'. The field '%s{kvp.Key}' is not a valid field in the argument definition.",
                                         selection.Path
                                     ))
                         canCoerceFields @@ canCoerceProps
-                    | ValueNone -> canNotCoerce
-                | _ -> canNotCoerce
+                    | ValueNone -> canNotCoerce ()
+                | _ -> canNotCoerce ()
+            // A default value must be a constant, so a variable in it is reported by validateVariableDefaultValuesAreConstant
+            // instead of followed: following it could loop forever, as in query ($a: Int = $a)
+            | VariableName _ when inDefaultValue -> Success
             | VariableName varName ->
-                let variableDefinition =
-                    variables
-                    |> ValueOption.defaultValue []
-                    |> List.vtryPick (fun v ->
-                        if v.VariableName = varName then
-                            ValueSome (v, schemaInfo.TryGetInputType (v.Type))
-                        else
-                            ValueNone)
-                match variableDefinition with
-                | ValueSome (vdef, Some vtype) when vdef.DefaultValue.IsSome -> checkIsCoercible vtype argName vdef.DefaultValue.Value
-                | ValueSome (vdef, None) when vdef.DefaultValue.IsSome -> canNotCoerce
+                match variables.TryGetValue varName with
+                | true, vdef when vdef.DefaultValue.IsSome ->
+                    match schemaInfo.TryGetInputType vdef.Type with
+                    | Some vtype -> checkIsCoercible true vtype argName vdef.DefaultValue.Value
+                    | None -> canNotCoerce ()
                 | _ -> Success
         selection.Field.Arguments
         |> ValidationResult.collect (fun arg ->
@@ -1251,18 +1454,41 @@ module Ast =
                 selection.InputValues
                 |> Array.tryPick (fun x -> if x.Name = arg.Name then Some x.Type else None)
             match argumentTypeRef with
-            | Some argumentTypeRef -> checkIsCoercible argumentTypeRef arg.Name arg.Value
+            | Some _ when state.IsOverBudget -> Success
+            | Some argumentTypeRef ->
+                match state.TryGetVariableUsages (argumentTypeRef, arg.Name, arg.Value) with
+                | ValueSome usages when defaultValuesAreCoercible state variables usages -> Success
+                | _ ->
+                    match checkIsCoercible false argumentTypeRef arg.Name arg.Value with
+                    | Success -> Success
+                    | ValidationError errors as result ->
+                        state.ErrorCount <- state.ErrorCount + errors.Length
+                        result
             | None -> Success)
 
-    let internal validateInputValues (ctx : ValidationContext) =
+    /// The variables of an operation by name, the first definition of a name winning as in the rest of validation
+    let private variablesByName (definitions : VariableDefinition list) : IReadOnlyDictionary<string, VariableDefinition> =
+        let variables = Dictionary<string, VariableDefinition> (StringComparer.Ordinal)
+        for definition in definitions do
+            if not (variables.ContainsKey definition.VariableName) then
+                variables.Add (definition.VariableName, definition)
+        variables
+
+    /// The input value rule, stopping once it has found more than the given number of errors.
+    let internal validateInputValuesWithin (maxErrors : int) (ctx : ValidationContext) =
+        let state = InputValueState (ctx.Schema, maxErrors)
+        let noVariables = variablesByName []
         ctx.Definitions
         |> ValidationResult.collect (fun def ->
-            let struct (vars, selectionSet) =
+            let struct (variables, selectionSet) =
                 match def with
-                | OperationDefinitionInfo odef -> struct (ValueSome odef.Definition.VariableDefinitions, odef.SelectionSet)
-                | FragmentDefinitionInfo fdef -> struct (ValueNone, fdef.SelectionSet)
+                | OperationDefinitionInfo odef -> struct (variablesByName odef.Definition.VariableDefinitions, odef.SelectionSet)
+                | FragmentDefinitionInfo fdef -> struct (noVariables, fdef.SelectionSet)
             selectionSet
-            |> ValidationResult.collect (checkInputValue ctx.Schema vars))
+            |> ValidationResult.collect (checkInputValue state variables))
+
+    let internal validateInputValues (ctx : ValidationContext) =
+        validateInputValuesWithin DocumentLimitsDefaults.MaxValidationErrors ctx
 
     let rec private getDistinctDirectiveNamesInSelection (path : FieldPath) (selection : Selection) : (FieldPath * Set<string>) list =
         match selection with
@@ -1517,6 +1743,46 @@ module Ast =
                     | _ -> Success)
             | _ -> Success)
 
+    /// Whether the value holds a variable, walked without recursion
+    let private holdsVariable (value : InputValue) =
+        let pending = Stack<InputValue> ()
+        pending.Push value
+        let mutable found = false
+        while not found && pending.Count > 0 do
+            match pending.Pop () with
+            | VariableName _ -> found <- true
+            | ObjectValue fields ->
+                for KeyValue (_, field) in fields do
+                    pending.Push field
+            | ListValue items ->
+                for item in items do
+                    pending.Push item
+            | _ -> ()
+        found
+
+    /// <summary>
+    /// Reports the variables whose default value uses a variable.
+    /// </summary>
+    /// <remarks>
+    /// The grammar of GraphQL only allows constants as default values, but the parser accepts variables in them. The other
+    /// rules never follow such a variable: following it could loop forever, as in <c>query ($a: Int = $a)</c>.
+    /// </remarks>
+    let internal validateVariableDefaultValuesAreConstant (ctx : ValidationContext) =
+        ctx.Document.Definitions
+        |> ValidationResult.collect (function
+            | OperationDefinition def ->
+                def.VariableDefinitions
+                |> ValidationResult.collect (fun var ->
+                    match var.DefaultValue, def.Name with
+                    | Some value, ValueSome operationName when holdsVariable value ->
+                        AstError.AsResult
+                            $"The default value of variable '$%s{var.VariableName}' in operation '%s{operationName}' uses a variable. Default values must be constants."
+                    | Some value, ValueNone when holdsVariable value ->
+                        AstError.AsResult
+                            $"The default value of variable '$%s{var.VariableName}' uses a variable. Default values must be constants."
+                    | _ -> Success)
+            | _ -> Success)
+
     let private checkVariablesDefinedInDirective (variableDefinitions : Set<string>) (path : FieldPath) (directive : Directive) =
         directive.Arguments
         |> ValidationResult.collect (fun arg ->
@@ -1579,58 +1845,99 @@ module Ast =
                 |> ValidationResult.collect (checkVariablesDefinedInSelection fragmentDefinitions varNames path)
             | _ -> Success)
 
-    let private argumentsContains (name : string) (args : Argument list) =
-        let rec go xs =
-            xs
-            |> List.exists (function
-                | VariableName varName -> varName = name
-                | ObjectValue obj -> go (Map.toList obj |> List.map snd)
-                | ListValue xs -> go xs
-                | _ -> false)
-        go (args |> List.map _.Value)
-
     /// <summary>
-    /// Whether the variable is used in the selection set, following its fragment spreads.
+    /// The names of the variables a selection set uses itself, in the arguments and directives of its selections and in
+    /// the given directives, and the names of the fragments it spreads, whose variables are not followed.
     /// </summary>
     /// <remarks>
-    /// Each fragment is searched once: a fragment that has already been searched without finding the variable cannot contain it.
-    /// Searching each fragment once per path instead grows exponentially with nested spreads and factorially with spread cycles.
+    /// One iterative pass, which does not depend on the number of variables: searching for each variable separately is
+    /// quadratic in the size of the document.
     /// </remarks>
-    let private variableIsUsed (name : string) (fragments : Dictionary<string, FragmentDefinition>) (selectionSet : Selection list) =
-        let searchedFragments = HashSet<string> (StringComparer.Ordinal)
-        let usedInDirectives (directives : Directive list) =
-            directives
-            |> List.exists (fun directive -> argumentsContains name directive.Arguments)
-        let rec usedInSelection =
-            function
-            | Field field ->
-                argumentsContains name field.Arguments
-                || List.exists usedInSelection field.SelectionSet
-                || usedInDirectives field.Directives
-            | InlineFragment frag ->
-                List.exists usedInSelection frag.SelectionSet
-                || usedInDirectives frag.Directives
-            | FragmentSpread spread ->
-                let usedInFragment () =
-                    searchedFragments.Add spread.Name
-                    && (match fragments.TryGetValue spread.Name with
-                        | true, frag ->
-                            List.exists usedInSelection frag.SelectionSet
-                            || usedInDirectives frag.Directives
-                        | false, _ -> false)
-                usedInFragment () || usedInDirectives spread.Directives
-        List.exists usedInSelection selectionSet
+    let private getOwnVariableUsages (directives : Directive list) (selectionSet : Selection list) =
+        let used = HashSet<string> (StringComparer.Ordinal)
+        let spreads = ResizeArray<string> ()
+        let pendingValues = Stack<InputValue> ()
+        let pendingSelectionSets = Stack<Selection list> ()
+        let addDirectives (directives : Directive list) =
+            for directive in directives do
+                for argument in directive.Arguments do
+                    pendingValues.Push argument.Value
+        addDirectives directives
+        pendingSelectionSets.Push selectionSet
+        while pendingSelectionSets.Count > 0 do
+            for selection in pendingSelectionSets.Pop () do
+                match selection with
+                | Field field ->
+                    for argument in field.Arguments do
+                        pendingValues.Push argument.Value
+                    addDirectives field.Directives
+                    pendingSelectionSets.Push field.SelectionSet
+                | InlineFragment fragment ->
+                    addDirectives fragment.Directives
+                    pendingSelectionSets.Push fragment.SelectionSet
+                | FragmentSpread spread ->
+                    addDirectives spread.Directives
+                    spreads.Add spread.Name
+            while pendingValues.Count > 0 do
+                match pendingValues.Pop () with
+                | VariableName name -> used.Add name |> ignore
+                | ObjectValue fields ->
+                    for KeyValue (_, value) in fields do
+                        pendingValues.Push value
+                | ListValue values ->
+                    for value in values do
+                        pendingValues.Push value
+                | _ -> ()
+        struct (used, spreads)
+
+    /// <summary>
+    /// The names of the variables used in the selection set of an operation, following its fragment spreads.
+    /// </summary>
+    /// <remarks>
+    /// Each fragment is followed once, even when it is part of a cycle, without recursion. The variables a fragment uses
+    /// itself are found once per document: walking the values of a fragment for every operation that spreads it is
+    /// multiplicative in the number of operations and the size of the fragment.
+    /// </remarks>
+    let private getUsedVariables
+        (fragmentUsages : string -> struct (HashSet<string> * ResizeArray<string>) voption)
+        (selectionSet : Selection list)
+        =
+        let struct (used, spreads) = getOwnVariableUsages [] selectionSet
+        let followedFragments = HashSet<string> (StringComparer.Ordinal)
+        let pendingFragments = Stack<string> (spreads)
+        while pendingFragments.Count > 0 do
+            let name = pendingFragments.Pop ()
+            if followedFragments.Add name then
+                match fragmentUsages name with
+                | ValueSome (struct (fragmentUsed, fragmentSpreads)) ->
+                    used.UnionWith fragmentUsed
+                    for spread in fragmentSpreads do
+                        pendingFragments.Push spread
+                | ValueNone -> ()
+        used
 
     let internal validateAllVariablesUsed (ctx : ValidationContext) =
         let fragments =
             getFragmentDefinitions ctx.Document
             |> getFragmentsByName
+        let ownUsagesOfFragments = Dictionary<string, struct (HashSet<string> * ResizeArray<string>)> (StringComparer.Ordinal)
+        let fragmentUsages (name : string) =
+            match ownUsagesOfFragments.TryGetValue name with
+            | true, usages -> ValueSome usages
+            | false, _ ->
+                match fragments.TryGetValue name with
+                | true, fragment ->
+                    let usages = getOwnVariableUsages fragment.Directives fragment.SelectionSet
+                    ownUsagesOfFragments.Add (name, usages)
+                    ValueSome usages
+                | false, _ -> ValueNone
         ctx.Document.Definitions
         |> ValidationResult.collect (function
             | OperationDefinition def ->
+                let usedVariables = getUsedVariables fragmentUsages def.SelectionSet
                 def.VariableDefinitions
                 |> ValidationResult.collect (fun varDef ->
-                    let isUsed = variableIsUsed varDef.VariableName fragments def.SelectionSet
+                    let isUsed = usedVariables.Contains varDef.VariableName
                     match def.Name, isUsed with
                     | _, true -> Success
                     | ValueSome operationName, _ ->
@@ -1774,7 +2081,7 @@ module Ast =
     /// its own is not counted twice.
     /// </summary>
     let rec private incrementalDirectiveUsages
-        (fragmentDefinitions : FragmentDefinition list)
+        (fragments : Dictionary<string, FragmentDefinition>)
         (followSpreads : bool)
         (visitedFragments : string list)
         (path : FieldPath)
@@ -1789,18 +2096,18 @@ module Ast =
             | Field field ->
                 let fieldPath = box field.AliasOrName :: path
                 usagesOf field.Directives fieldPath
-                @ incrementalDirectiveUsages fragmentDefinitions followSpreads visitedFragments fieldPath field.SelectionSet
+                @ incrementalDirectiveUsages fragments followSpreads visitedFragments fieldPath field.SelectionSet
             | InlineFragment fragment ->
                 usagesOf fragment.Directives path
-                @ incrementalDirectiveUsages fragmentDefinitions followSpreads visitedFragments path fragment.SelectionSet
+                @ incrementalDirectiveUsages fragments followSpreads visitedFragments path fragment.SelectionSet
             | FragmentSpread spread ->
                 let own = usagesOf spread.Directives path
                 if followSpreads && not (visitedFragments |> List.contains spread.Name) then
-                    match fragmentDefinitions |> List.tryFind (fun fragment -> fragment.Name = ValueSome spread.Name) with
-                    | Some fragment ->
+                    match fragments.TryGetValue spread.Name with
+                    | true, fragment ->
                         own
-                        @ incrementalDirectiveUsages fragmentDefinitions followSpreads (spread.Name :: visitedFragments) path fragment.SelectionSet
-                    | None -> own
+                        @ incrementalDirectiveUsages fragments followSpreads (spread.Name :: visitedFragments) path fragment.SelectionSet
+                    | false, _ -> own
                 else
                     own)
 
@@ -1809,7 +2116,7 @@ module Ast =
     /// fragments spread at its root.
     /// </summary>
     let rec private rootIncrementalDirectiveUsages
-        (fragmentDefinitions : FragmentDefinition list)
+        (fragments : Dictionary<string, FragmentDefinition>)
         (visitedFragments : string list)
         (selectionSet : Selection list)
         : (FieldPath * Directive) list =
@@ -1819,11 +2126,11 @@ module Ast =
                 field.Directives
                 |> List.filter isIncrementalDirective
                 |> List.map (fun directive -> [ box field.AliasOrName ], directive)
-            | InlineFragment fragment -> rootIncrementalDirectiveUsages fragmentDefinitions visitedFragments fragment.SelectionSet
+            | InlineFragment fragment -> rootIncrementalDirectiveUsages fragments visitedFragments fragment.SelectionSet
             | FragmentSpread spread when not (visitedFragments |> List.contains spread.Name) ->
-                match fragmentDefinitions |> List.tryFind (fun fragment -> fragment.Name = ValueSome spread.Name) with
-                | Some fragment -> rootIncrementalDirectiveUsages fragmentDefinitions (spread.Name :: visitedFragments) fragment.SelectionSet
-                | None -> []
+                match fragments.TryGetValue spread.Name with
+                | true, fragment -> rootIncrementalDirectiveUsages fragments (spread.Name :: visitedFragments) fragment.SelectionSet
+                | false, _ -> []
             | FragmentSpread _ -> [])
 
     /// <summary>
@@ -1853,13 +2160,14 @@ module Ast =
     /// (<see href="https://github.com/graphql/graphql-spec/pull/1110">Defer And Stream Directives Are Used On Valid Operations</see>).
     /// </summary>
     let internal validateDeferStreamDirectivesOnValidOperations (ctx : ValidationContext) =
-        let fragmentDefinitions =
+        let fragments =
             getFragmentDefinitions ctx.Document
             |> getInlinableFragmentDefinitions
+            |> getFragmentsByName
         ctx.Document.Definitions
         |> ValidationResult.collect (function
             | OperationDefinition def when def.OperationType = Subscription ->
-                incrementalDirectiveUsages fragmentDefinitions true [] [] def.SelectionSet
+                incrementalDirectiveUsages fragments true [] [] def.SelectionSet
                 |> List.filter (fun (_, directive) -> not (isDisabledIncrementalDirective directive))
                 |> ValidationResult.collect (fun (path, directive) ->
                     AstError.AsResult (
@@ -1873,9 +2181,10 @@ module Ast =
     /// (<see href="https://github.com/graphql/graphql-spec/pull/1110">Defer And Stream Directives Are Used On Valid Root Field</see>).
     /// </summary>
     let internal validateDeferStreamDirectivesOnRootFields (ctx : ValidationContext) =
-        let fragmentDefinitions =
+        let fragments =
             getFragmentDefinitions ctx.Document
             |> getInlinableFragmentDefinitions
+            |> getFragmentsByName
         let mutationTypeName =
             ctx.Schema.MutationType
             |> ValueOption.map _.Name
@@ -1883,7 +2192,7 @@ module Ast =
         ctx.Document.Definitions
         |> ValidationResult.collect (function
             | OperationDefinition def when def.OperationType = Mutation ->
-                rootIncrementalDirectiveUsages fragmentDefinitions [] def.SelectionSet
+                rootIncrementalDirectiveUsages fragments [] def.SelectionSet
                 |> List.filter (fun (_, directive) -> not (isDisabledIncrementalDirective directive))
                 |> ValidationResult.collect (fun (path, directive) ->
                     AstError.AsResult (
@@ -1898,9 +2207,10 @@ module Ast =
     /// (<see href="https://github.com/graphql/graphql-spec/pull/1110">Defer And Stream Directive Labels Are Unique</see>).
     /// </summary>
     let internal validateDeferStreamDirectiveLabels (ctx : ValidationContext) =
-        let fragmentDefinitions =
+        let fragments =
             getFragmentDefinitions ctx.Document
             |> getInlinableFragmentDefinitions
+            |> getFragmentsByName
         let labelOf (directive : Directive) =
             directive.Arguments
             |> List.vtryFind (fun argument -> argument.Name = "label")
@@ -1908,7 +2218,7 @@ module Ast =
         // A variable label is rejected wherever it is written, a fragment definition included
         let literalErrors =
             ctx.Document.Definitions
-            |> List.collect (fun def -> incrementalDirectiveUsages [] false [] [] def.SelectionSet)
+            |> List.collect (fun def -> incrementalDirectiveUsages fragments false [] [] def.SelectionSet)
             |> ValidationResult.collect (fun (path, directive) ->
                 match labelOf directive with
                 | ValueSome (VariableName _) ->
@@ -1920,7 +2230,7 @@ module Ast =
             |> ValidationResult.collect (function
                 | OperationDefinition def ->
                     let seenLabels = HashSet<string> ()
-                    incrementalDirectiveUsages fragmentDefinitions true [] [] def.SelectionSet
+                    incrementalDirectiveUsages fragments true [] [] def.SelectionSet
                     |> ValidationResult.collect (fun (path, directive) ->
                         match labelOf directive with
                         | ValueSome (StringValue label) when not (seenLabels.Add label) ->
@@ -1932,13 +2242,15 @@ module Ast =
                 | _ -> Success)
         literalErrors @@ uniquenessErrors
 
-    let private allValidations = [
+    /// The rules, in the order they run; the rules that can find more errors than the size of the document stop once
+    /// they have found more than <c>maxErrors</c>.
+    let private allValidations (maxErrors : int) = [
         validateFragmentsMustNotFormCycles
         validateOperationNameUniqueness
         validateLoneAnonymousOperation
         validateSubscriptionSingleRootField
         validateSelectionFieldTypes
-        validateFieldSelectionMerging
+        validateFieldSelectionMergingWithin maxErrors
         validateLeafFieldSelections
         validateArgumentNames
         validateArgumentUniqueness
@@ -1949,7 +2261,7 @@ module Ast =
         validateFragmentsMustBeUsed
         validateFragmentSpreadTargetDefined
         validateFragmentSpreadIsPossible
-        validateInputValues
+        validateInputValuesWithin maxErrors
         validateDirectivesDefined
         validateDirectivesAreInValidLocations
         validateUniqueDirectivesPerLocation
@@ -1959,6 +2271,7 @@ module Ast =
         validateDeferStreamDirectiveLabels
         validateVariableUniqueness
         validateVariablesAsInputTypes
+        validateVariableDefaultValuesAreConstant
         validateVariablesUsesDefined
         validateAllVariablesUsed
         validateVariableUsagesAllowed
@@ -1986,7 +2299,7 @@ module Ast =
             let context = getValidationContext schemaInfo ast
             let errors = ResizeArray<GQLProblemDetails> ()
             let mutable failed = false
-            let mutable validations = allValidations
+            let mutable validations = allValidations maxErrors
             while not validations.IsEmpty && errors.Count <= maxErrors do
                 match validations.Head context with
                 | Success -> ()
