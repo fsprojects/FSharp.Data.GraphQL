@@ -108,10 +108,19 @@ let private createFieldContext objdef inputContext argDefs ctx (info : Execution
 }
 
 let private resolveField (execute : ExecuteField) (ctx : ResolveFieldContext) (parentValue : obj) =
+    // A resolver can throw before it returns its value, as an asynchronous resolver throwing instead of returning its
+    // computation does: that is an error of its own field, like a failed value. Thrown on, it would fail the whole
+    // operation for a root field, discarding the root fields of a mutation already executed, and fail the parent field
+    // instead of this one for a nested field
+    let value =
+        try
+            execute ctx parentValue
+        with e ->
+            AsyncVal.Failure e
     if ctx.ExecutionInfo.IsNullable then
-        execute ctx parentValue |> AsyncVal.map (objectOptionCast)
+        value |> AsyncVal.map (objectOptionCast)
     else
-        execute ctx parentValue
+        value
         |> AsyncVal.map (fun v -> if isNull v then ValueNone else ValueSome v)
 
 
@@ -1047,9 +1056,10 @@ let private executeQueryOrMutation
                 match ctx.ExecutionPlan.Strategy with
                 | Parallel -> operations |> Array.map execute |> collectFields Parallel
                 // Serial execution, as the root fields of a mutation require: a root field is started, its resolver
-                // called, only once the previous one has completed with all of its nested fields. Creating every
-                // root field up front and awaiting them in order would already run the synchronous resolvers and
-                // start the tasks of the later ones while an earlier one is still pending
+                // called, only once the previous one has completed with its nested fields, apart from those deferred
+                // with @defer or streamed with @stream, which are delivered later. Creating every root field up front
+                // and awaiting them in order would already run the synchronous resolvers and start the tasks of the
+                // later ones while an earlier one is still pending
                 | Sequential ->
                     operations
                     |> AsyncVal.collectSequentialWith execute

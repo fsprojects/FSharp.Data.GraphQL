@@ -201,6 +201,11 @@ let syncResolution (log : ResolutionLog) (name : string) =
     log.Record $"finish %s{name}"
     { Name = name; Log = log }
 
+/// A resolution that throws before it returns its computation, as a resolver checking its arguments eagerly does.
+let throwingResolution (log : ResolutionLog) (name : string) : Async<'Result> =
+    log.Record $"throw %s{name}"
+    raise (InvalidOperationException $"%s{name} throws before returning")
+
 /// A nested field resolved through a task, so the field selecting it completes only after it has.
 let startDetailsResolution (account : Account) : Task<string> = task {
     let! details = startTaskResolution account.Log $"%s{account.Name}.details"
@@ -213,6 +218,7 @@ let AccountType =
         [
             Define.Field ("name", StringType, fun _ account -> account.Name)
             Define.AsyncField ("details", StringType, fun _ account -> startDetailsResolution account |> Async.AwaitTask)
+            Define.AsyncField ("broken", Nullable StringType, fun _ account -> throwingResolution account.Log $"%s{account.Name}.broken")
         ]
     )
 
@@ -226,6 +232,12 @@ let resolutionFields : FieldDef<ResolutionLog> list = [
     )
     Define.AsyncField ("asyncBased", AccountType, [ Define.Input ("name", StringType) ], fun ctx log -> asyncResolution log (ctx.Arg "name"))
     Define.Field ("syncBased", AccountType, [ Define.Input ("name", StringType) ], fun ctx log -> syncResolution log (ctx.Arg "name"))
+    Define.AsyncField (
+        "throwingBased",
+        Nullable AccountType,
+        [ Define.Input ("name", StringType) ],
+        fun ctx log -> throwingResolution log (ctx.Arg "name")
+    )
 ]
 
 let resolutionOrderSchema =
@@ -322,6 +334,40 @@ let ``Execute resolves mutation root fields with disabled defer directives seria
     | Direct (ValueNone, errors) -> fail $"Expected a 'Direct' GQLResponse with data but got null data and errors %A{errors}"
     | response -> fail $"Expected a 'Direct' GQLResponse but got\n{response}"
 }
+
+[<Fact>]
+let ``Execute reports a root resolver throwing before it returns its value as an error of its field`` () =
+    // The mutation fields executed before it keep their results, and the ones after it are still executed
+    let query = """mutation {
+      first: syncBased(name: "first") { name }
+      second: throwingBased(name: "second") { name }
+      third: syncBased(name: "third") { name }
+    }"""
+    let log = ResolutionLog ()
+    let result = Executor(resolutionOrderSchema).AsyncExecute (parse query, getMockInputContext, log) |> sync
+
+    Assert.Equal<string list> ([ "start first"; "finish first"; "throw second"; "start third"; "finish third" ], log.Events)
+    let expected = NameValueLookup.ofList [ "first", accountOf "first"; "second", null; "third", accountOf "third" ]
+    ensureDirect result
+    <| fun data errors ->
+        data |> equals (upcast expected)
+        errors |> List.length |> equals 1
+        errors |> hasErrorAtPath [ box "second" ] "second throws before returning"
+
+[<Fact>]
+let ``Execute reports a nested resolver throwing before it returns its value as an error of its field`` () =
+    // The field is nullable, so the error leaves its parent with the rest of its fields
+    let query = """mutation { first: syncBased(name: "first") { name broken } }"""
+    let log = ResolutionLog ()
+    let result = Executor(resolutionOrderSchema).AsyncExecute (parse query, getMockInputContext, log) |> sync
+
+    let expected =
+        NameValueLookup.ofList [ "first", upcast NameValueLookup.ofList [ "name", box "first"; "broken", null ] ]
+    ensureDirect result
+    <| fun data errors ->
+        data |> equals (upcast expected)
+        errors |> List.length |> equals 1
+        errors |> hasErrorAtPath [ box "first"; box "broken" ] "first.broken throws before returning"
 
 [<Fact>]
 let ``Execute resolves query root fields concurrently`` () : Task = task {
