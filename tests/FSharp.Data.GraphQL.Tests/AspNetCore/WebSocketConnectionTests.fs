@@ -217,7 +217,7 @@ let ``Connection is closed with 4408 when connection_init does not arrive in tim
     use _ = session.Scope
     do! waitForTask timeout "The connection did not end after the initialization timeout" session.Run
     do! session.Run
-    session.Socket.ServerCloseStatus |> equals (ValueSome (enum<WebSocketCloseStatus> 4408))
+    session.Socket.ServerCloseStatus |> equals (ValueSome (enum<WebSocketCloseStatus> CustomWebSocketStatus.ConnectionTimeout))
 }
 
 [<Fact>]
@@ -227,7 +227,7 @@ let ``Subscribe before connection_init closes the connection with 4401`` () : Ta
     subscribe session "1" """{ hero(id: "1000") { name } }"""
     do! waitForTask timeout "The connection did not end after the unauthorized subscribe" session.Run
     do! session.Run
-    session.Socket.ServerCloseStatus |> equals (ValueSome (enum<WebSocketCloseStatus> 4401))
+    session.Socket.ServerCloseStatus |> equals (ValueSome (enum<WebSocketCloseStatus> CustomWebSocketStatus.Unauthorized))
 }
 
 [<Fact>]
@@ -238,7 +238,7 @@ let ``A second connection_init closes the connection with 4429`` () : Task = tas
     session.Socket.EnqueueText """{"type":"connection_init"}"""
     do! waitForTask timeout "The connection did not end after the second connection_init" session.Run
     do! session.Run
-    session.Socket.ServerCloseStatus |> equals (ValueSome (enum<WebSocketCloseStatus> 4429))
+    session.Socket.ServerCloseStatus |> equals (ValueSome (enum<WebSocketCloseStatus> CustomWebSocketStatus.TooManyInitializationRequests))
 }
 
 [<Fact>]
@@ -298,7 +298,7 @@ let ``A duplicate subscription id closes the connection with 4409`` () : Task = 
     subscribe session "1" """subscription { watchMoon(id: "2") { id isMoon } }"""
     do! waitForTask timeout "The connection did not end after the duplicate subscription id" session.Run
     do! session.Run
-    session.Socket.ServerCloseStatus |> equals (ValueSome (enum<WebSocketCloseStatus> 4409))
+    session.Socket.ServerCloseStatus |> equals (ValueSome (enum<WebSocketCloseStatus> CustomWebSocketStatus.SubscriberAlreadyExists))
 }
 
 [<Fact>]
@@ -389,10 +389,8 @@ let ``A message over the maximum size closes the connection with 1009 without be
     do! session.Run
     session.Socket.ServerCloseStatus |> equals (ValueSome WebSocketCloseStatus.MessageTooBig)
     let read = session.Socket.DeliveredBytes - deliveredBefore
-    Assert.True (
-        read <= int64 smallSizeLimit + 1L,
-        $"The server read %d{read} of the %d{size} bytes of a message over the limit of %d{smallSizeLimit} bytes instead of stopping one byte past it"
-    )
+    // The server stops reading one byte past the limit instead of reading the whole message
+    Assert.InRange (read, 0L, int64 smallSizeLimit + 1L)
     match session.Socket.Sent.TryRead () with
     | true, answer -> fail $"The message over the size limit was answered with %s{answer}"
     | false, _ -> ()
@@ -411,7 +409,8 @@ let ``A message over the default maximum size of 4 MiB closes the connection wit
     do! session.Run
     session.Socket.ServerCloseStatus |> equals (ValueSome WebSocketCloseStatus.MessageTooBig)
     let read = session.Socket.DeliveredBytes - deliveredBefore
-    Assert.True (read <= int64 limit + 1L, $"The server read %d{read} bytes of a message over the limit of %d{limit} bytes instead of stopping one byte past it")
+    // The server stops reading one byte past the limit instead of reading the whole message
+    Assert.InRange (read, 0L, int64 limit + 1L)
 }
 
 [<Fact>]
@@ -454,10 +453,8 @@ let ``The reader stops reading from the socket while the inbox is full`` () : Ta
     // Whatever more the reader would read, it reads in this time: every message the client sent is already in the socket
     do! Task.Delay 200
     let read = session.Socket.DeliveredMessages
-    Assert.True (
-        (read = readerWaiting),
-        $"The server read %d{read} of the %d{sent + 1} messages the client sent while its control loop was busy, instead of stopping at %d{readerWaiting}"
-    )
+    // The server stops reading while its control loop is busy, however many messages the client has sent
+    Assert.Equal (readerWaiting, read)
     // Once the control loop catches up, every message is read and answered: none was dropped
     gate.SetResult ()
     for _ in 1..sent do
@@ -485,7 +482,7 @@ let ``The connection ends when its control loop stops while the reader waits for
     gate.SetResult ()
     do! waitForTask timeout "The connection did not end after its control loop stopped while the reader was waiting for room in the inbox" session.Run
     do! session.Run
-    session.Socket.ServerCloseStatus |> equals (ValueSome (enum<WebSocketCloseStatus> 4429))
+    session.Socket.ServerCloseStatus |> equals (ValueSome (enum<WebSocketCloseStatus> CustomWebSocketStatus.TooManyInitializationRequests))
 }
 
 /// A schema whose slow field resolves only once the test opens its gate
