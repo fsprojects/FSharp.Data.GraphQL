@@ -201,13 +201,14 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType> (reportToMetada
             |> splitSeqErrorsList
             |> Result.map (Seq.vchoose id >> Seq.toList)
         // The filters of the list fields of the operation by path; the filters of the fields of a list field's items are
-        // not collected, and a path filtered differently under different types of an abstract field keeps the last
-        // filter.
+        // not collected.
         //
         // A plan shares the plans of the selection sets that are planned the same way, so walking it field by field
         // would walk a shared plan once for every path through the plans to it: exponentially often with the nesting of
         // abstract fields. A shared plan is therefore walked once per path of response names, which the plans sharing it
-        // have in common.
+        // have in common. A path filtered differently under different types of an abstract field keeps its first filter:
+        // the walk of a plan skipped under a path repeats an earlier one, so it never holds the first filter of a path,
+        // while it could hold a later one.
         let filters = Dictionary<SelectionPath, ObjectListFilter> (HashIdentity.Reference)
         // The fields selected under a field, those of every possible type of an abstract field included
         let selectedFields (kind : ExecutionInfoKind) =
@@ -231,7 +232,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType> (reportToMetada
                     | ResolveCollection item ->
                         let path = parent.Child field.Ast.AliasOrName
                         fieldFilters item
-                        |> Result.map (List.iter (fun filter -> filters[path] <- filter))
+                        |> Result.map (List.iter (fun filter -> filters.TryAdd (path, filter) |> ignore))
                     | _ -> Ok ()
                 match collected with
                 | Error errs -> errors <- ValueSome errs

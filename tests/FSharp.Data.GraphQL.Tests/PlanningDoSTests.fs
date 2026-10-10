@@ -327,18 +327,22 @@ let ``Object list filter middleware collects many filters nested deeply quickly`
     filters.Count |> equals 24_000
 
 [<Fact>]
-let ``Object list filter middleware reports one filter for a list field filtered differently under different types`` () =
-    // The filters are reported by path, and the field has the same path under both types
-    let executor = Executor (nodeSchema (), [ Define.ObjectListFilterMiddleware<Node, Node>(true) ])
-    let plan =
-        planIsolated executor "{ node { ... on A { items(filter: { id: 1 }) { id } } ... on B { items(filter: { id: 2 }) { id } } } }"
-    let result = executeIsolated executor plan noVariables
-    ensureDirect result <| fun _ errors -> empty errors
-    result.Metadata.TryFind<ObjectListFilters> "filters"
-    |> wantValueSome
-    |> Seq.map (fun (KeyValue (path, _)) -> path |> List.map string)
-    |> List.ofSeq
-    |> equals [ [ "node"; "items" ] ]
+let ``Object list filter middleware reports the first filter of a list field filtered differently under different types`` () =
+    // The filters are reported by path, and the field has the same path under both types. In the second document, the
+    // plan of A's child is reached again under C after the merged plan of B's child, whose last filter is the second one
+    let filtersOf (query : string) =
+        let executor = Executor (nodeSchema (), [ Define.ObjectListFilterMiddleware<Node, Node>(true) ])
+        let result = executeIsolated executor (planIsolated executor query) noVariables
+        ensureDirect result <| fun _ errors -> empty errors
+        result.Metadata.TryFind<ObjectListFilters> "filters"
+        |> wantValueSome
+        |> Seq.map (fun (KeyValue (path, filter)) -> path |> List.map string, filter)
+        |> List.ofSeq
+    filtersOf "{ node { ... on A { items(filter: { id: 1 }) { id } } ... on B { items(filter: { id: 2 }) { id } } } }"
+    |> equals [ [ "node"; "items" ], Equals ({ FieldName = "id"; Value = 1L }, null) ]
+    filtersOf
+        "{ node { child { ... on A { items(filter: { id: 1 }) { id } } } ... on B { child { ... on C { items(filter: { id: 2 }) { id } } } } } }"
+    |> equals [ [ "node"; "child"; "items" ], Equals ({ FieldName = "id"; Value = 1L }, null) ]
 
 [<Fact>]
 let ``Object list filter middleware accepts a deferred fragment at the root`` () =
