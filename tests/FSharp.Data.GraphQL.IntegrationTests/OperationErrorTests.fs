@@ -26,18 +26,17 @@ module ErrorOperation =
 [<Fact; Trait("OperationError", "Unit")>]
 let ``Should parse operation error fields from raw response`` () =
     let result =
-        OperationResultBase (
+        new OperationResultBase (
             rawResponse = new HttpResponseMessage (),
             responseJson =
-                JsonValue.Parse
-                    """{
-                        "errors": [{
-                            "message": "unit-test error",
-                            "path": ["alwaysError", 0],
-                            "locations": [{ "line": 2, "column": 13 }],
-                            "extensions": { "code": "UNIT_TEST", "retryable": false, "severity": 7 }
-                        }]
-                    }""",
+                """{
+                    "errors": [{
+                        "message": "unit-test error",
+                        "path": ["alwaysError", 0],
+                        "locations": [{ "line": 2, "column": 13 }],
+                        "extensions": { "code": "UNIT_TEST", "retryable": false, "severity": 7 }
+                    }]
+                }""",
             operationFields = [||],
             operationTypeName = "Query"
         )
@@ -79,9 +78,9 @@ let ``Should parse all combinations of optional operation error fields`` () =
         let responseJson = $"""{{"errors":[{{{errorObjectJson}}}]}}"""
 
         let result =
-            OperationResultBase (
+            new OperationResultBase (
                 rawResponse = new HttpResponseMessage (),
-                responseJson = JsonValue.Parse responseJson,
+                responseJson = responseJson,
                 operationFields = [||],
                 operationTypeName = "Query"
             )

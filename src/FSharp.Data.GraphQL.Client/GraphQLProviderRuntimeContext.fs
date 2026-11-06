@@ -4,6 +4,7 @@
 namespace FSharp.Data.GraphQL
 
 open System
+open System.Text.Json
 
 /// Contains information about a GraphQLRuntimeContext.
 type GraphQLRuntimeContextInfo =
@@ -17,6 +18,9 @@ type GraphQLProviderRuntimeContext =
       /// Gets the HTTP headers used for calls to the server that this context refers to.
       HttpHeaders : seq<string * string>
       /// Gets the connection component used to make calls to the server.
-      Connection : GraphQLClientConnection }
+      Connection : GraphQLClientConnection
+      /// Gets the JSON serializer options used for serializing request variables and
+      /// deserializing scalar values. Pass a customized instance to support custom scalar types.
+      JsonSerializerOptions : JsonSerializerOptions }
     interface IDisposable with
         member x.Dispose() = (x.Connection :> IDisposable).Dispose()
