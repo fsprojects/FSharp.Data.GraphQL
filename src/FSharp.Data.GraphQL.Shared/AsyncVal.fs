@@ -125,11 +125,18 @@ module AsyncVal =
             })
         | Failure f -> Failure (f)
 
+    /// <summary>
     /// Converts array of AsyncVals into AsyncVal with array results.
     /// In case when are non-immediate values in provided array, they are
     /// executed asynchronously, one by one with regard to their order in array.
     /// Returned array maintain order of values.
     /// If the array contains a Failure, then the entire array will not resolve
+    /// </summary>
+    /// <remarks>
+    /// The values exist before they are collected, so whatever work creating them did or started (a synchronous
+    /// computation, a running <see cref="Task"/>) is not held back; <see cref="collectSequentialWith"/> creates each
+    /// value only once the previous one has completed.
+    /// </remarks>
     let collectSequential (values : AsyncVal<'T>[]) : AsyncVal<'T[]> =
         if values.Length = 0 then Value [||]
         elif values |> Array.exists isAsync then
@@ -159,6 +166,52 @@ module AsyncVal =
             | 0 -> Value (values |> Array.map (fun (Value v) -> v))
             | 1 -> Failure (exceptions.First ())
             | _ -> Failure (AggregateException exceptions)
+
+    /// <summary>
+    /// Maps the items to AsyncVals one after another and collects their results in the order of the items: an item is
+    /// mapped only once the AsyncVal of the previous one has completed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Unlike <see cref="collectSequential"/>, which receives values that already exist, nothing is done for an item
+    /// before the previous one has completed, neither the mapping itself nor any work it starts, such as a
+    /// <see cref="Task"/>.
+    /// </para>
+    /// <para>
+    /// The result is immediate when every item maps to an immediate value. The first item that maps to a Failure, or
+    /// whose asynchronous computation raises an exception, ends the collection with that failure, and the items after
+    /// it are not mapped.
+    /// </para>
+    /// </remarks>
+    let collectSequentialWith (mapping : 'T -> AsyncVal<'U>) (items : 'T[]) : AsyncVal<'U[]> =
+        let immediateResults = Array.zeroCreate items.Length
+
+        /// The results of the items from index on, collected inside an asynchronous computation once the pending
+        /// result of the item at index is available.
+        let collectAsync (index : int) (pending : Async<'U>) =
+            Async (async {
+                // Copied, so that every run of the computation fills an array of its own, as an Async may run more than once
+                let results = Array.copy immediateResults
+                let! result = pending
+                results[index] <- result
+                for i = index + 1 to items.Length - 1 do
+                    let! result = mapping items[i] |> toAsync
+                    results[i] <- result
+                return results
+            })
+
+        let rec collectFrom (index : int) =
+            if index = items.Length then
+                Value immediateResults
+            else
+                match mapping items[index] with
+                | Value result ->
+                    immediateResults[index] <- result
+                    collectFrom (index + 1)
+                | Async pending -> collectAsync index pending
+                | Failure error -> Failure error
+
+        collectFrom 0
 
     /// Converts array of AsyncVals into AsyncVal with array results.
     /// In case when are non-immediate values in provided array, they are

@@ -1546,6 +1546,30 @@ let ``Validation should grant that defer and stream are not used on mutation roo
     )
 
 [<Fact>]
+let ``Validation should grant that defer is not used on fragments selecting mutation root fields`` () =
+    let query =
+        """mutation {
+  ... @defer {
+    first: convert(value: 1)
+  }
+  ...Conversion @defer
+}
+
+fragment Conversion on Mutation {
+  second: convert(value: 2)
+}"""
+    let expected =
+        GQLProblemDetails.CreateValidationFor
+            []
+            "Directive 'defer' cannot be applied to a fragment selecting root fields of the mutation type 'Mutation'."
+    match validateWholeDocument query with
+    | ValidationError errors ->
+        let deferErrors = errors |> List.filter ((=) expected)
+        // Both the inline fragment and the fragment spread are rejected
+        Assert.Equal (2, deferErrors.Length)
+    | Success -> fail $"Expected the validation error '%s{expected.Message}' but the document was accepted"
+
+[<Fact>]
 let ``Validation should grant that defer and stream labels are unique in the document`` () =
     let query =
         """{

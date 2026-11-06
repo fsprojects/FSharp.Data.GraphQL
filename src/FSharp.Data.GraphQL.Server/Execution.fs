@@ -108,10 +108,19 @@ let private createFieldContext objdef inputContext argDefs ctx (info : Execution
 }
 
 let private resolveField (execute : ExecuteField) (ctx : ResolveFieldContext) (parentValue : obj) =
+    // A resolver can throw before it returns its value, as an asynchronous resolver throwing instead of returning its
+    // computation does: that is an error of its own field, like a failed value. Thrown on, it would fail the whole
+    // operation for a root field, discarding the root fields of a mutation already executed, and fail the parent field
+    // instead of this one for a nested field
+    let value =
+        try
+            execute ctx parentValue
+        with e ->
+            AsyncVal.Failure e
     if ctx.ExecutionInfo.IsNullable then
-        execute ctx parentValue |> AsyncVal.map (objectOptionCast)
+        value |> AsyncVal.map (objectOptionCast)
     else
-        execute ctx parentValue
+        value
         |> AsyncVal.map (fun v -> if isNull v then ValueNone else ValueSome v)
 
 
@@ -378,7 +387,32 @@ let rec private rootFieldsOfFragment (info : ExecutionInfo) =
     | ResolveDeferredFragment (_, _, _, fragmentFields) -> fragmentFields |> Seq.collect rootFieldsOfFragment
     | _ -> Seq.singleton info
 
+/// The results of the fields merged together in the order of the fields: their data, their deferred parts and their
+/// errors, or the errors of every field that failed.
+let private mergeFieldResults (collected : ResolverResult<KeyValuePair<string, obj>>[]) : ResolverResult<KeyValuePair<string, obj>[]> =
+    let data = Array.zeroCreate (collected.Length)
+
+    let merge r acc =
+        match (r, acc) with
+        | Ok (field, d, e), Ok (i, deferred, errs) ->
+            Array.set data i field
+            // Folded from the last field back, so the current field comes before the ones already merged
+            Ok (i - 1, ValueOption.mergeWith (fun later current -> AnnouncedEvents.merge current later) deferred d, e @ errs)
+        | Error e, Ok (_, _, errs) -> Error (e @ errs)
+        | Ok (_, _, e), Error errs -> Error (e @ errs)
+        | Error e, Error errs -> Error (e @ errs)
+    Array.foldBack merge collected (Ok (data.Length - 1, ValueNone, []))
+    |> ResolverResult.mapValue (fun _ -> data)
+
+/// <summary>
 /// Collect together an array of results using the appropriate execution strategy.
+/// </summary>
+/// <remarks>
+/// The results already exist, so with <see cref="ExecutionStrategy.Sequential"/> they are only awaited one after
+/// another: whatever creating them ran or started is not held back. Fields that must not start before the previous
+/// ones have completed, as the root fields of a mutation, are executed through
+/// <see cref="AsyncVal.collectSequentialWith"/> instead.
+/// </remarks>
 let collectFields
     (strategy : ExecutionStrategy)
     (rs : AsyncVal<ResolverResult<KeyValuePair<string, obj>>>[])
@@ -389,21 +423,7 @@ let collectFields
             match strategy with
             | Parallel -> AsyncVal.collectParallel rs
             | Sequential -> AsyncVal.collectSequential rs
-
-        let data = Array.zeroCreate (collected.Length)
-
-        let merge r acc =
-            match (r, acc) with
-            | Ok (field, d, e), Ok (i, deferred, errs) ->
-                Array.set data i field
-                // Folded from the last field back, so the current field comes before the ones already merged
-                Ok (i - 1, ValueOption.mergeWith (fun later current -> AnnouncedEvents.merge current later) deferred d, e @ errs)
-            | Error e, Ok (_, _, errs) -> Error (e @ errs)
-            | Ok (_, _, e), Error errs -> Error (e @ errs)
-            | Error e, Error errs -> Error (e @ errs)
-        return
-            Array.foldBack merge collected (Ok (data.Length - 1, ValueNone, []))
-            |> ResolverResult.mapValue (fun _ -> data)
+        return mergeFieldResults collected
     }
 
 let rec private direct
@@ -1029,9 +1049,22 @@ let private executeQueryOrMutation
         else
             let operations =
                 coerced
-                |> Seq.map (fun (KeyValue (i, struct (args, _))) -> executeRootOperation rootFields[i] args)
+                |> Seq.map (fun (KeyValue (i, struct (args, _))) -> struct (rootFields[i], args))
                 |> Seq.toArray
-            match! operations |> collectFields ctx.ExecutionPlan.Strategy with
+            let execute (struct (field, args)) = executeRootOperation field args
+            let collected =
+                match ctx.ExecutionPlan.Strategy with
+                | Parallel -> operations |> Array.map execute |> collectFields Parallel
+                // Serial execution, as the root fields of a mutation require: a root field is started, its resolver
+                // called, only once the previous one has completed with its nested fields, apart from those deferred
+                // with @defer or streamed with @stream, which are delivered later. Creating every root field up front
+                // and awaiting them in order would already run the synchronous resolvers and start the tasks of the
+                // later ones while an earlier one is still pending
+                | Sequential ->
+                    operations
+                    |> AsyncVal.collectSequentialWith execute
+                    |> AsyncVal.map mergeFieldResults
+            match! collected with
             | Ok (data, nested, errs) ->
                 let deferred =
                     (nested, deferredFragments)
