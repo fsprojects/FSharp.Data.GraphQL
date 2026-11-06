@@ -99,6 +99,10 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         | Success -> ()
         | ValidationError errors -> raise (GQLMessageException (System.String.Join("\n", errors)))
 
+    // Read once, after the compile middlewares above have run: documents are validated against this instance, and the
+    // validation cache identifies the schema by it instead of hashing the whole introspected schema on every request
+    let introspectedSchema = schema.Introspected
+
     let eval (executionPlan: ExecutionPlan, data: 'Root voption, variables: ImmutableDictionary<string, JsonElement>, getInputContext : InputExecutionContextProvider): Async<GQLExecutionResult> =
         let documentId = executionPlan.DocumentId
         let prepareOutput res =
@@ -159,9 +163,9 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                             ErrorKind.Validation
                         )]
                 do!
-                    let schemaId = schema.Introspected.GetHashCode()
-                    let key = { DocumentId = documentId; SchemaId = schemaId }
-                    let producer = fun () -> Validation.Ast.validateDocument schema.Introspected ast
+                    // The document itself is the key, not its documentId: that is a hash code, which another document can share
+                    let key = ValidationResultKey (introspectedSchema, ast)
+                    let producer = fun () -> Validation.Ast.validateDocument introspectedSchema ast
                     validationCache.GetOrAdd producer key
                 let planningCtx =
                     { Schema = schema
@@ -183,9 +187,9 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     /// <summary>
     /// Asynchronously executes a provided execution plan. In case of repetitive queries, execution plan may be preprocessed
-    /// and cached using `documentId` as an identifier.
+    /// and cached, keyed by the document itself rather than by its `documentId`.
     /// Returned value is a readonly dictionary consisting of following top level entries:
-    /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
+    /// 'documentId' (hash code of current document's AST, which different documents can share, so it identifies neither a document nor its ExecutionPlan),
     /// 'data' (GraphQL response matching the structure provided in GraphQL query string), and
     /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>
@@ -198,7 +202,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     /// <summary>
     /// Asynchronously executes parsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
-    /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
+    /// 'documentId' (hash code of current document's AST, which different documents can share, so it identifies neither a document nor its ExecutionPlan),
     /// 'data' (GraphQL response matching the structure provided in GraphQL query string), and
     /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>
@@ -216,7 +220,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     /// <summary>
     /// Asynchronously executes unparsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
-    /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
+    /// 'documentId' (hash code of current document's AST, which different documents can share, so it identifies neither a document nor its ExecutionPlan),
     /// 'data' (GraphQL response matching the structure provided in GraphQL query string), and
     /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>
@@ -233,10 +237,17 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         | Ok executionPlan -> execute (executionPlan, data, variables, getInputContext)
         | Error (documentId, errors) -> async.Return <| GQLExecutionResult.Invalid(documentId, errors, meta)
 
+    /// <summary>
     /// Creates an execution plan for provided GraphQL document AST without
     /// executing it. This is useful in cases when you have the same query executed
     /// multiple times with different parameters. In that case, query can be used
-    /// to construct execution plan, which then is cached (using DocumentId as a key) and reused when needed.
+    /// to construct execution plan, which then is cached and reused when needed.
+    /// </summary>
+    /// <remarks>
+    /// Key a cache of execution plans by the document itself, not by <see cref="ExecutionPlan.DocumentId"/> alone: that is
+    /// a hash code, which different documents can share, so a cache keyed by it could execute a document that was never
+    /// validated with the plan of another.
+    /// </remarks>
     /// <param name="ast">The parsed GraphQL query string.</param>
     /// <param name="operationName">The name of the operation that should be executed on the parsed document.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution plan customizations.</param>
@@ -244,10 +255,17 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         let meta = defaultValueArg meta Metadata.Empty
         createExecutionPlan (ast, operationName, meta)
 
+    /// <summary>
     /// Creates an execution plan for provided GraphQL query string without
     /// executing it. This is useful in cases when you have the same query executed
     /// multiple times with different parameters. In that case, query can be used
-    /// to construct execution plan, which then is cached (using DocumentId as a key) and reused when needed.
+    /// to construct execution plan, which then is cached and reused when needed.
+    /// </summary>
+    /// <remarks>
+    /// Key a cache of execution plans by the query string itself, not by <see cref="ExecutionPlan.DocumentId"/> alone: that
+    /// is a hash code, which different documents can share, so a cache keyed by it could execute a document that was never
+    /// validated with the plan of another.
+    /// </remarks>
     /// <param name="queryOrMutation">The GraphQL query string.</param>
     /// <param name="operationName">The name of the operation that should be executed on the parsed document.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution plan customizations.</param>

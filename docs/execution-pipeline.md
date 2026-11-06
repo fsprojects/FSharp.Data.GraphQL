@@ -29,7 +29,7 @@ As the name suggests, `ExecutionPlan` and its components (a tree of objects know
 - Combining information from the query AST (resolved fields / aliases) with server-side information about them (field and type definitions);
 - Preparation of the hooks in the execution chain that will be supplied with potential variables upon execution.
 
-Splitting planning and execution phases is a good idea when you have the same GraphQL query requested many times (with potentially different variables). This way you can compute the execution plan once and cache it. You can use `executionPlan.DocumentId` as a cache identifier. `DocumentId` is also returned as one of the top level fields in the response, so it can be used from the client side. Other GraphQL implementations describe that technique as **persistent queries**.
+Splitting planning and execution phases is a good idea when you have the same GraphQL query requested many times (with potentially different variables). This way you can compute the execution plan once and cache it. Key the cache by the query text or the parsed document itself, not by `executionPlan.DocumentId` alone: that is a hash code, which different documents can share, so a cache keyed by it could execute a document that was never validated with the plan of another. `DocumentId` is also returned as one of the top level fields in the response, but for the same reason a client must not treat it as the identity of a document. Other GraphQL implementations build **persisted queries** on this technique, and identify a document by a cryptographic hash of its text.
 
 ## Execution phase 
 
@@ -52,7 +52,7 @@ The execution phase can be performed using one of the two strategies:
 
 The result of a GraphQL query execution is a `GQLResponse` object with the following fields:
 
-- `documentId`: which is the hash code of the query's AST document - it can be used to implement execution plan caching (persistent queries).
+- `documentId`: which is the hash code of the query's AST document. Different documents can share it, so on its own it identifies neither a document nor its execution plan.
 - `data`: optional, a formatted GraphQL response matching the requested query (`KeyValuePair seq`). Absent in case of an error that does not allow continuing processing and returning any GraphQL results.
 - `errors`: optional, contains a list of errors (`GQLProblemDetails`) that occurred during query execution.
 

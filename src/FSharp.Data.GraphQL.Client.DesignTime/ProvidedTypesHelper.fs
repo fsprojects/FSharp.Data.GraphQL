@@ -799,9 +799,9 @@ module internal Provider =
                                     match validationResult with
                                     | ValidationError msgs -> failwith (formatValidationExceptionMessage msgs)
                                     | Success -> ()
-                                let key = { DocumentId = queryAst.GetHashCode(); SchemaId = schema.GetHashCode() }
                                 let refMaker = lazy Validation.Ast.validateDocument schema queryAst
                                 if clientQueryValidation then
+                                    let key = ValidationResultKey (schema, queryAst)
                                     refMaker.Force
                                     |> QueryValidationDesignTimeCache.getOrAdd key
                                     |> throwExceptionIfValidationFailed
