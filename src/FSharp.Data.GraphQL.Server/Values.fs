@@ -19,7 +19,7 @@ open FSharp.Data.GraphQL.Validation
 
 let private wrapOptionalNone (outputType : Type) (inputType : Type) =
     if inputType.Name <> outputType.Name then
-        if outputType.FullName.StartsWith ReflectionHelper.ValueOptionTypeName then
+        if ReflectionHelper.isValueOptionType outputType then
             let _, valueNone, _ = ReflectionHelper.vOptionOfType outputType.GenericTypeArguments[0]
             valueNone
         elif outputType.IsValueType then
@@ -38,13 +38,13 @@ let normalizeOptional (outputType : Type) value =
             // Use only when option or voption so must not be null
             let expectedOutputType = outputType.GenericTypeArguments.FirstOrDefault ()
             if
-                outputType.FullName.StartsWith ReflectionHelper.OptionTypeName
+                ReflectionHelper.isOptionType outputType
                 && expectedOutputType.IsAssignableFrom inputType
             then
                 let some, _, _ = ReflectionHelper.optionOfType expectedOutputType
                 some value
             elif
-                outputType.FullName.StartsWith ReflectionHelper.ValueOptionTypeName
+                ReflectionHelper.isValueOptionType outputType
                 && expectedOutputType.IsAssignableFrom inputType
             then
                 let valueSome, _, _ = ReflectionHelper.vOptionOfType expectedOutputType
@@ -53,14 +53,14 @@ let normalizeOptional (outputType : Type) value =
                 // Use only when option or voption so must not be null
                 let actualInputType = inputType.GenericTypeArguments.FirstOrDefault ()
                 if
-                    inputType.FullName.StartsWith ReflectionHelper.OptionTypeName
+                    ReflectionHelper.isOptionType inputType
                     && outputType.IsAssignableFrom actualInputType
                 then
                     let _, _, getValue = ReflectionHelper.optionOfType actualInputType
                     // none is null so it is already covered above
                     getValue value
                 elif
-                    inputType.FullName.StartsWith ReflectionHelper.ValueOptionTypeName
+                    ReflectionHelper.isValueOptionType inputType
                     && outputType.IsAssignableFrom actualInputType
                 then
                     let _, valueNone, getValue = ReflectionHelper.vOptionOfType actualInputType
@@ -313,7 +313,7 @@ let rec internal compileByType
                         let ty = found.GetType ()
                         if
                             ty = objType
-                            || (ty.FullName.StartsWith "Microsoft.FSharp.Core.FSharpOption`1"
+                            || (ReflectionHelper.isOptionType ty
                                 && ty.GetGenericArguments().[0] = objType)
                         then
                             return found
@@ -483,7 +483,7 @@ let rec internal coerceVariableValue (ctx : CoerceVariableContext, inputContext 
                 let ``type`` = value.GetType ()
                 if
                     ``type``.IsValueType
-                    && ``type``.FullName.StartsWith ReflectionHelper.ValueOptionTypeName
+                    && ReflectionHelper.isValueOptionType ``type``
                     && value = Activator.CreateInstance ``type``
                 then
                     createNullError ctx.OriginalTypeDef
@@ -614,7 +614,7 @@ let rec internal coerceVariableValue (ctx : CoerceVariableContext, inputContext 
                 let ``type`` = value.GetType ()
                 if
                     ``type``.IsValueType
-                    && ``type``.FullName.StartsWith ReflectionHelper.ValueOptionTypeName
+                    && ReflectionHelper.isValueOptionType ``type``
                     && value = Activator.CreateInstance ``type``
                 then
                     createNullError ctx.OriginalTypeDef

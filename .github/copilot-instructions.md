@@ -97,6 +97,7 @@ Agents discover servers from #file:'.mcp.json'; these are only hints on when to 
 * When casting sequence items use `Seq.cast<TargetType>` instead of `Seq.map (fun item -> item :> TargetType)`.
 * When concatenating two sequences or lists, prefer `seq { yield! xs; yield! ys }` (or `[ yield! xs; yield! ys ]` for lists) over the `@` operator or `Seq.append`.
 * When pipe operators are used on a materializable collection multiple times in a row, prefer `Seq` module for the chain and materialize at the end.
+* Compare `System.Type` values with `Type.(=) (a, b)`, the `Type.op_Equality` operator. The F# `=` goes through generic equality and is several times slower, and comparing names is both slow and wrong: `FullName.StartsWith` is culture-sensitive without a `StringComparison`, and the full name of an array of a generic type, such as ``FSharpOption`1[[System.Int32, ...]][]``, starts with the name of the generic type. To recognize a generic type, check `t.IsGenericType` and compare `t.GetGenericTypeDefinition ()` with its definition, such as `typedefof<_ option>`, through `Type.(=)`.
 
 ### Functions, Lambdas and Strings
 
