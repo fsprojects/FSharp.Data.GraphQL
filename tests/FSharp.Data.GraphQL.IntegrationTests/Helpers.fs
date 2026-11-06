@@ -13,8 +13,6 @@ let normalize (x : string) =
 
 let equals (expected : 'T) (actual : 'T) = Assert.Equal<'T> (expected, actual)
 
-let hasItems (seq : seq<'T>) = Assert.True (Seq.length seq > 0)
-
 let map fn x = fn x
 
 let checkRequestTypeHeader requestType (operationResult : OperationResultBase) =

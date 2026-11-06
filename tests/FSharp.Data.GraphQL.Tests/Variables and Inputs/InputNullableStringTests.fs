@@ -16,12 +16,6 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Shared
 open ErrorHelpers
 
-let stringifyArg name (ctx : ResolveFieldContext) () =
-    let arg = ctx.TryArg name |> ValueOption.toObj
-    JsonSerializer.Serialize (arg, serializerOptions)
-
-let stringifyInput = stringifyArg "input"
-
 let TestType =
     Define.Object<unit> (
         name = "TestType",

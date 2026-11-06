@@ -15,23 +15,13 @@ open Xunit
 
 let serializerOptions = Shared.Json.getWSSerializerOptions Seq.empty
 
-let isType<'a> actual = Assert.IsAssignableFrom<'a>(actual)
-let isSeq<'a> actual = isType<'a seq> actual
-let isDict<'k, 'v> actual = isSeq<KeyValuePair<'k, 'v>> actual
-let isNameValueDict actual = isDict<string, obj> actual
 let fail (message: string) = Assert.Fail message
-let wantSome opt = match opt with | Some value -> value | None -> fail "Expected Some but got None"; Unchecked.defaultof<_>
-let wantNone opt = match opt with | None -> () | Some _ -> fail "Expected None but got Some"
 let wantValueSome opt = match opt with | ValueSome value -> value | _ -> fail "Expected ValueSome but got ValueNone"; Unchecked.defaultof<_>
 let wantValueNone opt = match opt with | ValueNone -> () | _ -> fail "Expected ValueNone but got ValueSome"
 let equals (expected : 'x) (actual : 'x) =
     if not (actual = expected) then fail <| $"expected %A{expected}\nbut got %A{actual}"
 let notEquals (expected : 'x) (actual : 'x) =
     if actual = expected then fail <| $"unexpected %+A{expected}"
-let noErrors (result: IDictionary<string, obj>) =
-    match result.TryGetValue("errors") with
-    | true, errors -> fail <| sprintf "expected ExecutionResult to have no errors but got %+A" errors
-    | false, _ -> ()
 let nonEmpty (xs : 'a seq) =
     Assert.False(Seq.isEmpty xs, sprintf "expected non-empty sequence, but got %A" xs)
 let empty (xs: 'a seq) =
@@ -42,7 +32,6 @@ let single (xs : 'a seq) =
     then fail <| sprintf "Expected single item in sequence, but found %i items.\n%A" length xs
     Seq.head xs
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
-let throwsAsync<'e when 'e :> exn> (action : unit Async) = Assert.ThrowsAsync<'e>(fun () -> Async.StartImmediateAsTask action)
 let throwsAsyncVal<'e when 'e :> exn> (action : unit AsyncVal) = Assert.ThrowsAsync<'e>(fun () -> Async.StartImmediateAsTask (action |> AsyncVal.toAsync))
 let sync = Async.RunSynchronously
 let is<'t> (o: obj) = o :? 't
@@ -60,12 +49,6 @@ let hasErrorAtPath path (errMsg : string) (errors: GQLProblemDetails seq) =
     | None ->
         Assert.Fail ($"Expected to contain message '%s{errMsg}', but no such message was found. Messages found: %A{errors}")
 
-let (<??) opt other =
-    match opt with
-    | None -> Some other
-    | _ -> opt
-let undefined (value: 't) =
-    Assert.True((value = Unchecked.defaultof<'t>), sprintf "Expected value to be undefined, but was: %A" value)
 let contains (expected : 'a) (xs : 'a seq) =
     Assert.Contains(expected, xs); xs
 let itemEquals (index : int) (expected : 'a) (xs : 'a seq) =
@@ -94,16 +77,6 @@ open FSharp.Data.GraphQL.Parser
 let asts query =
     ["defer"; "stream"]
     |> Seq.map (query >> parse)
-
-let setEvent (mre : ManualResetEvent) =
-    mre.Set() |> ignore
-
-let resetEvent (mre : ManualResetEvent) =
-    mre.Reset() |> ignore
-
-let waitEvent (mre : ManualResetEvent) errorMsg =
-    if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
-    then fail errorMsg
 
 let rec waitFor (condition : unit -> bool) (times : int) errorMsg =
     Thread.Sleep 100 // Wait a bit before checking condition

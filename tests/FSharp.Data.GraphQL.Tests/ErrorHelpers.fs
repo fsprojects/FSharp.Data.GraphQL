@@ -43,13 +43,6 @@ let ensureValidationError (message : string) (path : FieldPath) (error : GQLProb
     | Skip -> fail "Expected extensions to be present"
     | Include extensions -> equals Validation (unbox extensions[CustomErrorFields.Kind])
 
-let ensureExecutionError (message : string) (path : FieldPath) (error : GQLProblemDetails) =
-    equals message error.Message
-    equals (Include path) error.Path
-    match error.Extensions with
-    | Skip -> fail "Expected extensions to be present"
-    | Include extensions -> equals Execution (unbox extensions[CustomErrorFields.Kind])
-
 let ensureInputCoercionError (errorSource : ErrorSource) (message : string) (``type`` : string) (error : GQLProblemDetails) =
     equals message error.Message
     match error.Extensions with

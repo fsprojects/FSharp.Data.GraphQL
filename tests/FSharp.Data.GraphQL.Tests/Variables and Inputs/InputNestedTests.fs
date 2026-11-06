@@ -5,7 +5,6 @@ module FSharp.Data.GraphQL.Tests.InputNestedTests
 
 open Xunit
 open System
-open System.Text.Json
 
 #nowarn "25"
 
@@ -56,12 +55,6 @@ let rec TestRecursiveInputObject =
                 Define.Input ("rvo", Nullable TestRecursiveInputObject)
             ]
     )
-
-let stringifyArg name (ctx : ResolveFieldContext) () =
-    let arg = ctx.TryArg name |> ValueOption.toObj
-    JsonSerializer.Serialize (arg, serializerOptions)
-
-let stringifyInput = stringifyArg "input"
 
 let TestType =
     Define.Object<unit> (
