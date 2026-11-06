@@ -5,8 +5,6 @@ module FSharp.Data.GraphQL.Tests.ValidationDoSTests
 
 open System
 open System.Text
-open System.Threading
-open System.Threading.Tasks
 open Xunit
 
 open FSharp.Data.GraphQL
@@ -60,22 +58,7 @@ let private validate = Parser.parse >> validateDocument introspectionSchema
 /// Generous enough for slow CI machines, yet far below the minutes or hours that an exponential validation takes
 let private timeout = TimeSpan.FromSeconds 10.0
 
-/// <summary>
-/// Runs the function on a thread with a 1 MiB stack, the smallest default thread stack among the supported platforms,
-/// and fails when the function does not complete within the timeout.
-/// </summary>
-let private runIsolated (f : unit -> 'T) : 'T =
-    let completion = TaskCompletionSource<'T>(TaskCreationOptions.RunContinuationsAsynchronously)
-    let run () =
-        try
-            completion.SetResult (f ())
-        with ex ->
-            completion.SetException ex
-    let thread = Thread (ThreadStart run, 1024 * 1024, IsBackground = true)
-    thread.Start ()
-    if not (completion.Task.Wait timeout) then
-        fail $"The validation did not complete within %O{timeout}."
-    completion.Task.Result
+let private runIsolated (f : unit -> 'T) : 'T = runOnSmallStack timeout f
 
 let private errorMessages (result : ValidationResult<GQLProblemDetails>) =
     match result with

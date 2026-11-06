@@ -296,6 +296,26 @@ let waitForTask (timeout : TimeSpan) (message : string) (awaited : Task) : Task 
         fail message
 }
 
+/// <summary>
+/// Runs the function on a thread with a 1 MiB stack, the smallest default thread stack among the supported platforms,
+/// and fails the test when the function does not complete within the timeout.
+/// </summary>
+/// <remarks>
+/// A stack overflow still terminates the test process, which fails the test run.
+/// </remarks>
+let runOnSmallStack (timeout : TimeSpan) (f : unit -> 'T) : 'T =
+    let completion = TaskCompletionSource<'T> (TaskCreationOptions.RunContinuationsAsynchronously)
+    let run () =
+        try
+            completion.SetResult (f ())
+        with ex ->
+            completion.SetException ex
+    let thread = Thread (ThreadStart run, 1024 * 1024, IsBackground = true)
+    thread.Start ()
+    if not (completion.Task.Wait timeout) then
+        fail $"The call did not complete within %O{timeout}."
+    completion.Task.Result
+
 open FSharp.Control
 
 /// Returns the value after the scaled delay

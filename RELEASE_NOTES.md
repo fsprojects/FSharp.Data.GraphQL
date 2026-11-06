@@ -334,3 +334,6 @@
 * Fixed validation error accumulation, which was quadratic in the number of errors
 * Fixed the subscription single root field rule ignoring the fields selected before a fragment spread and counting a fragment spread twice when it is spread twice
 * Added `AstError.Create`, which creates a validation error
+* **Breaking Change** `Parser.parse` and `Parser.tryParse` now reject a document whose braces, brackets and parentheses, outside of strings and comments, are nested deeper than `DocumentLimitsDefaults.MaxNestingDepth` (128), with a syntax error giving the line and column of the first one too deep. Deeper documents used to overflow the stack, which terminated the process
+* Fixed parsing time growing exponentially with the nesting of list types in variable definitions: a 100-deep `[[…Int…]]` never finished parsing
+* Fixed `Parser.tryParse` throwing `OverflowException`, and so an HTTP server answering with an unhandled exception, for an integer out of the range of 64-bit integers; it is now a syntax error

@@ -1,13 +1,17 @@
 namespace FSharp.Data.GraphQL
 
-/// Default limits on the work that an untrusted document can cause while it is validated.
+/// Default limits on the work that an untrusted document can cause while it is parsed and validated.
 [<RequireQualifiedAccess>]
 module DocumentLimitsDefaults =
 
     /// <summary>
-    /// The maximum nesting depth of a document once its fragment spreads are inlined.
+    /// The maximum nesting depth of a document.
     /// <para>
-    /// Every selection set of a field, every inline fragment and every fragment spread adds one level.
+    /// The parser counts nested braces, brackets and parentheses outside of strings and comments, before it parses the document.
+    /// </para>
+    /// <para>
+    /// Validation counts nesting once fragment spreads are inlined: every selection set of a field, every inline fragment and
+    /// every fragment spread adds one level.
     /// </para>
     /// </summary>
     [<Literal>]
@@ -20,7 +24,7 @@ module DocumentLimitsDefaults =
     /// operations and fragment definitions of the document.
     /// </para>
     /// <para>
-    /// Validation and planning take time in proportion to this number, so a higher limit lets a small document
+    /// The work of validating and planning a document grows with this number, so a higher limit lets a small document
     /// keep a server busy for longer.
     /// </para>
     /// </summary>
