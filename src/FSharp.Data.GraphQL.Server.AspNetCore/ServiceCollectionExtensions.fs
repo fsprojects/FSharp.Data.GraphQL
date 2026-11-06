@@ -22,6 +22,7 @@ module ServiceCollectionExtensions =
             EndpointUrl = endpointUrl
             ConnectionInitTimeout = TimeSpan.FromMilliseconds (GraphQLOptionsDefaults.WebSocketConnectionInitTimeoutInMs)
             CustomPingHandler = ValueNone
+            MaxReceiveMessageSize = GraphQLOptionsDefaults.WebSocketMaxReceiveMessageSize
         }
     }
 

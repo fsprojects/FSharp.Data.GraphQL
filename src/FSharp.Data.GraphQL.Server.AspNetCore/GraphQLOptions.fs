@@ -14,6 +14,8 @@ module GraphQLOptionsDefaults =
     let [<Literal>] ReadBufferSize = 4096
     let [<Literal>] WebSocketEndpoint = "/ws"
     let [<Literal>] WebSocketConnectionInitTimeoutInMs = 3000.0
+    /// <summary>The default of <see cref="GraphQLTransportWSOptions.MaxReceiveMessageSize"/>: 4 MiB.</summary>
+    let [<Literal>] WebSocketMaxReceiveMessageSize = 4 * 1024 * 1024
 
 module GraphQLOptions =
 
@@ -23,6 +25,15 @@ type GraphQLTransportWSOptions = {
     EndpointUrl : string
     ConnectionInitTimeout : TimeSpan
     CustomPingHandler : PingHandler voption
+    /// <summary>
+    /// The maximum size in bytes of a message a client may send, <see cref="GraphQLOptionsDefaults.WebSocketMaxReceiveMessageSize"/> by default.
+    /// <para>
+    /// A message is only buffered up to this size: as soon as a message exceeds it, no more of it is buffered and the connection is closed with
+    /// <see cref="System.Net.WebSockets.WebSocketCloseStatus.MessageTooBig"/> (1009); closing the socket may still read and discard the rest of it.
+    /// Must be positive, which the middleware checks when the application starts.
+    /// </para>
+    /// </summary>
+    MaxReceiveMessageSize : int
 }
 
 type IGraphQLOptions =
