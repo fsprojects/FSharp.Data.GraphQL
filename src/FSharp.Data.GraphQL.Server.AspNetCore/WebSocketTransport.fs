@@ -16,6 +16,7 @@ open Collections.Pooled
 open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL.Shared.WebSockets
+open FSharp.Data.GraphQL.Server.AspNetCore.ErrorMasking
 open FSharp.Data.GraphQL.Server.AspNetCore.ServerMessageSerialization
 
 /// The socket states relevant to a connection's loops.
@@ -107,16 +108,19 @@ type internal WebSocketMessageReader
 /// <remarks>
 /// Messages are sent in the order they were queued. The first <see cref="OutboundMessage.Close"/> closes the socket gracefully, aborting it when the
 /// handshake does not complete within the timeout; whatever is queued after it is dropped. A failed send also marks the connection closed, since the
-/// socket is gone.
+/// socket is gone. Being the only way out to the client, it is where errors caused by unexpected exceptions are masked, so that no message can bypass
+/// the masking.
 /// </remarks>
 type internal WebSocketMessageSender
     /// <param name="socket">The socket to write to.</param>
     /// <param name="serializerOptions">The options server messages are serialized with.</param>
     /// <param name="gracefulCloseTimeout">How long a close handshake may take before the socket is aborted.</param>
+    /// <param name="maskUnexpectedErrors">Whether errors caused by unexpected exceptions are masked before they are sent.</param>
     /// <param name="logger">The logger of the connection.</param>
-    (socket : WebSocket, serializerOptions : JsonSerializerOptions, gracefulCloseTimeout : TimeSpan, logger : ILogger) =
+    (socket : WebSocket, serializerOptions : JsonSerializerOptions, gracefulCloseTimeout : TimeSpan, maskUnexpectedErrors : bool, logger : ILogger) =
 
     let sendMessage (message : ServerMessage) : Task = task {
+        let message = if maskUnexpectedErrors then maskServerMessage logger message else message
         logger.LogTrace ("<- Response: {response}", message)
         let serialized = serializeServerMessage serializerOptions message
         let segment = ArraySegment<byte>(Encoding.UTF8.GetBytes serialized)

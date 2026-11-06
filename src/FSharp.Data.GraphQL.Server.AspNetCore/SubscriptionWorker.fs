@@ -46,6 +46,7 @@ type internal SubscriptionWorker<'T>
     /// <param name="payloads">Translates the events into the payloads of the subscription's <c>next</c> messages.</param>
     /// <param name="outbound">The connection's sender queue, where every message of the subscription is written.</param>
     /// <param name="inbox">The connection's control loop queue, where the end of the subscription is reported.</param>
+    /// <param name="maskUnexpectedErrors">Whether a failure of the source that is not GraphQL-facing is reported with a generic message.</param>
     /// <param name="logger">The logger of the connection.</param>
     (
         id : SubscriptionId,
@@ -54,6 +55,7 @@ type internal SubscriptionWorker<'T>
         payloads : ISubscriptionPayloads<'T>,
         outbound : ChannelWriter<OutboundMessage>,
         inbox : ChannelWriter<ConnectionEvent>,
+        maskUnexpectedErrors : bool,
         logger : ILogger
     ) =
 
@@ -92,7 +94,7 @@ type internal SubscriptionWorker<'T>
             | Faulted ex ->
                 sendInitialOnce ()
                 logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
-                sendMessage (ServerError (id, problemDetailsOfObservableError ex))
+                sendMessage (ServerError (id, problemDetailsOfObservableError maskUnexpectedErrors ex))
                 finished <- true
         use subscription = new SingleAssignmentDisposable ()
         try
@@ -111,7 +113,7 @@ type internal SubscriptionWorker<'T>
             | ex ->
                 // Subscribing threw, or a translation did: reported as the subscription's terminal error
                 logger.LogError (ex, "Error on subscription with Id = '{id}'", id)
-                sendMessage (ServerError (id, problemDetailsOfObservableError ex))
+                sendMessage (ServerError (id, problemDetailsOfObservableError maskUnexpectedErrors ex))
         finally
             // Unsubscribed before the end is reported, so the id is freed only once the source has stopped
             try

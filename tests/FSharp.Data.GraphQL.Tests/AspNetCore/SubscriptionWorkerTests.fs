@@ -23,11 +23,12 @@ let private subscriptionId = "1"
 let private generation = 7
 let private timeout = TimeSpan.FromSeconds 10.0
 
-type private Harness<'T> (source : IObservable<'T>, payloads : ISubscriptionPayloads<'T>) =
+type private Harness<'T> (source : IObservable<'T>, payloads : ISubscriptionPayloads<'T>, maskUnexpectedErrors : bool) =
     let outbound = Channel.CreateUnbounded<OutboundMessage> ()
     let inbox = Channel.CreateUnbounded<ConnectionEvent> ()
     let cancellation = new CancellationTokenSource ()
-    let worker = SubscriptionWorker<'T> (subscriptionId, generation, source, payloads, outbound.Writer, inbox.Writer, NullLogger.Instance)
+    let worker =
+        SubscriptionWorker<'T> (subscriptionId, generation, source, payloads, outbound.Writer, inbox.Writer, maskUnexpectedErrors, NullLogger.Instance)
 
     let drain (reader : ChannelReader<'Event>) =
         let events = ResizeArray<'Event> ()
@@ -37,6 +38,9 @@ type private Harness<'T> (source : IObservable<'T>, payloads : ISubscriptionPayl
             | true, event -> events.Add event
             | false, _ -> more <- false
         List.ofSeq events
+
+    /// A harness of a worker masking the errors that unexpected exceptions caused, as by default
+    new (source, payloads) = Harness<'T> (source, payloads, true)
 
     member _.Run () = worker.RunAsync cancellation.Token
     member _.Cancel () = cancellation.Cancel ()
@@ -121,6 +125,16 @@ let ``A source failing before any event still sends the initial payload first, t
         (errors |> single).Message |> equals UnexpectedObservableErrorMessage
     | messages -> fail $"Unexpected messages %A{messages}"
     harness.InboxEvents () |> equals [ SubscriptionEnded (subscriptionId, generation) ]
+}
+
+[<Fact>]
+let ``A source failing with an unexpected exception reports its message when masking is disabled`` () : Task = task {
+    let harness =
+        Harness (Observable.Throw<GQLDeferredResponseContent> (InvalidOperationException "sensitive backend failure"), deferredPayloads (), false)
+    do! runToEnd harness
+    match harness.SentMessages () with
+    | [ Send (Next _); Send (ServerError (_, errors)) ] -> (errors |> single).Message |> equals "sensitive backend failure"
+    | messages -> fail $"Unexpected messages %A{messages}"
 }
 
 [<Fact>]

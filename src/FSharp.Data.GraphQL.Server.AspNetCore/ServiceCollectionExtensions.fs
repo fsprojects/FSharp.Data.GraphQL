@@ -23,6 +23,7 @@ module ServiceCollectionExtensions =
             ConnectionInitTimeout = TimeSpan.FromMilliseconds (GraphQLOptionsDefaults.WebSocketConnectionInitTimeoutInMs)
             CustomPingHandler = ValueNone
         }
+        MaskUnexpectedErrors = GraphQLOptionsDefaults.MaskUnexpectedErrors
     }
 
     // See https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.mvc.jsonoptions
