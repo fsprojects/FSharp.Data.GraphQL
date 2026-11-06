@@ -9,7 +9,9 @@ open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Hosting
+open Microsoft.Net.Http.Headers
 open Oxpecker
+open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Server.AspNetCore
 open FSharp.Data.GraphQL.Server.AspNetCore.Oxpecker
 open FSharp.Data.GraphQL.Samples.StarWarsApi.Authorization
@@ -61,8 +63,9 @@ type Startup private () =
                 // Simple declaration
                 //endpoints.MapOxpeckerEndpoint (HttpEndpoints.graphQL<Root>("/", id))
                 let handler =
-                    setHttpHeader "Access-Control-Allow-Origin" "*"
-                    >=> setHttpHeader "Access-Control-Allow-Headers" "content-type"
+                    setHttpHeader HeaderNames.AccessControlAllowOrigin "*"
+                    // A browser client sending a file upload or a GET needs the GraphQL-Preflight header to pass CSRF prevention
+                    >=> setHttpHeader HeaderNames.AccessControlAllowHeaders $"{HeaderNames.ContentType}, {CsrfPreventionHeaders.GraphQLPreflight}"
                     >=> (setHttpHeader "Request-Type" "Classic") // For integration testing purposes
                     >=> HttpEndpointHandlers.graphQL<Root>
                 endpoints.MapOxpeckerEndpoint (route "/" handler))
